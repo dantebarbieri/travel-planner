@@ -236,9 +236,9 @@ a {
 }
 
 /* Color by Stay Mode */
-[data-color-mode='by-stay'] .item-card {
-	/* Colors are set via inline styles from stayColors map */
-}
+/* [data-color-mode='by-stay'] .item-card {
+	// Colors are set via inline styles from stayColors map
+} */
 
 /* ============ :has() Utility Classes ============ */
 
