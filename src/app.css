@@ -1,0 +1,588 @@
+/* ============================================
+   TRAVEL PLANNER - GLOBAL STYLES
+   ============================================ */
+
+/* System Font Stack */
+:root {
+	--font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+		Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+		monospace;
+
+	/* Brand Colors */
+	--color-primary: oklch(0.6 0.2 250);
+	--color-primary-light: color-mix(in oklch, var(--color-primary), white 30%);
+	--color-primary-dark: color-mix(in oklch, var(--color-primary), black 20%);
+
+	/* Semantic Colors */
+	--color-success: oklch(0.65 0.19 145);
+	--color-warning: oklch(0.75 0.18 80);
+	--color-error: oklch(0.6 0.22 25);
+	--color-info: oklch(0.65 0.15 230);
+
+	/* Neutral Palette */
+	--color-gray-50: oklch(0.985 0 0);
+	--color-gray-100: oklch(0.965 0 0);
+	--color-gray-200: oklch(0.92 0 0);
+	--color-gray-300: oklch(0.87 0 0);
+	--color-gray-400: oklch(0.7 0 0);
+	--color-gray-500: oklch(0.55 0 0);
+	--color-gray-600: oklch(0.4 0 0);
+	--color-gray-700: oklch(0.3 0 0);
+	--color-gray-800: oklch(0.2 0 0);
+	--color-gray-900: oklch(0.13 0 0);
+
+	/* Item Kind Colors (Default) */
+	--color-kind-stay: oklch(0.7 0.15 280);
+	--color-kind-activity: oklch(0.65 0.2 145);
+	--color-kind-food: oklch(0.7 0.18 50);
+	--color-kind-transport: oklch(0.6 0.15 230);
+	--color-kind-flight: oklch(0.55 0.2 260);
+
+	/* Surfaces */
+	--surface-primary: white;
+	--surface-secondary: var(--color-gray-50);
+	--surface-tertiary: var(--color-gray-100);
+
+	/* Borders */
+	--border-color: var(--color-gray-200);
+	--border-color-strong: var(--color-gray-300);
+
+	/* Text */
+	--text-primary: var(--color-gray-900);
+	--text-secondary: var(--color-gray-600);
+	--text-tertiary: var(--color-gray-500);
+	--text-inverse: white;
+
+	/* Shadows */
+	--shadow-sm: 0 1px 2px oklch(0 0 0 / 0.05);
+	--shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.1);
+	--shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
+
+	/* Spacing Scale */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.25rem;
+	--space-6: 1.5rem;
+	--space-8: 2rem;
+	--space-10: 2.5rem;
+	--space-12: 3rem;
+	--space-16: 4rem;
+
+	/* Border Radius */
+	--radius-sm: 0.25rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+	--radius-xl: 1rem;
+	--radius-full: 9999px;
+
+	/* Transitions */
+	--transition-fast: 150ms ease;
+	--transition-normal: 250ms ease;
+	--transition-slow: 350ms ease;
+
+	/* Z-Index Scale */
+	--z-dropdown: 100;
+	--z-sticky: 200;
+	--z-modal-backdrop: 300;
+	--z-modal: 400;
+	--z-toast: 500;
+
+	/* Layout */
+	--header-height: 60px;
+	--sidebar-width: 280px;
+	--margin-column-width: 100px;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+	:root {
+		--surface-primary: var(--color-gray-900);
+		--surface-secondary: var(--color-gray-800);
+		--surface-tertiary: var(--color-gray-700);
+
+		--border-color: var(--color-gray-700);
+		--border-color-strong: var(--color-gray-600);
+
+		--text-primary: var(--color-gray-50);
+		--text-secondary: var(--color-gray-300);
+		--text-tertiary: var(--color-gray-400);
+	}
+}
+
+/* ============ Base Styles ============ */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	font-family: var(--font-sans);
+	font-size: 16px;
+	line-height: 1.5;
+	color: var(--text-primary);
+	background: var(--surface-secondary);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+}
+
+/* ============ Typography ============ */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0;
+	font-weight: 600;
+	line-height: 1.25;
+}
+
+h1 {
+	font-size: 2.25rem;
+}
+h2 {
+	font-size: 1.875rem;
+}
+h3 {
+	font-size: 1.5rem;
+}
+h4 {
+	font-size: 1.25rem;
+}
+h5 {
+	font-size: 1.125rem;
+}
+h6 {
+	font-size: 1rem;
+}
+
+p {
+	margin: 0 0 var(--space-4);
+}
+
+a {
+	color: var(--color-primary);
+	text-decoration: none;
+
+	&:hover {
+		text-decoration: underline;
+	}
+}
+
+/* ============ Container Queries ============ */
+.itinerary-container {
+	container-type: inline-size;
+	container-name: itinerary;
+}
+
+@container itinerary (max-width: 600px) {
+	.itinerary-day {
+		--day-padding: var(--space-3);
+		--margin-width: 0;
+	}
+
+	.travel-margin {
+		display: none;
+	}
+}
+
+@container itinerary (min-width: 601px) {
+	.itinerary-day {
+		--day-padding: var(--space-6);
+		--margin-width: 80px;
+	}
+}
+
+@container itinerary (min-width: 900px) {
+	.itinerary-day {
+		--margin-width: 120px;
+	}
+}
+
+/* ============ Item Card Colors ============ */
+.item-card {
+	--item-color: var(--color-gray-200);
+	border-left: 4px solid var(--item-color);
+	background: color-mix(in oklch, var(--item-color), white 90%);
+
+	&[data-kind='stay'] {
+		--item-color: var(--color-kind-stay);
+	}
+
+	&[data-kind='activity'] {
+		--item-color: var(--color-kind-activity);
+	}
+
+	&[data-kind='food'] {
+		--item-color: var(--color-kind-food);
+	}
+
+	&[data-kind='transport'] {
+		--item-color: var(--color-kind-transport);
+	}
+
+	&[data-kind='flight'] {
+		--item-color: var(--color-kind-flight);
+	}
+}
+
+/* Color by Stay Mode */
+[data-color-mode='by-stay'] .item-card {
+	/* Colors are set via inline styles from stayColors map */
+}
+
+/* ============ :has() Utility Classes ============ */
+
+/* Card with image gets different layout */
+.item-card:has(img) {
+	display: grid;
+	grid-template-columns: 100px 1fr;
+	gap: var(--space-4);
+}
+
+/* Day with no items shows empty state */
+.itinerary-day:not(:has(.item-card)) {
+	& .day-content {
+		display: none;
+	}
+
+	& .empty-state {
+		display: block;
+	}
+}
+
+/* Form validation styling */
+.form-field:has(input:invalid:not(:placeholder-shown)) {
+	& .error-message {
+		display: block;
+	}
+
+	& input {
+		border-color: var(--color-error);
+	}
+}
+
+/* ============ Layout Utilities ============ */
+.flex {
+	display: flex;
+}
+.flex-col {
+	flex-direction: column;
+}
+.items-center {
+	align-items: center;
+}
+.justify-between {
+	justify-content: space-between;
+}
+.gap-1 {
+	gap: var(--space-1);
+}
+.gap-2 {
+	gap: var(--space-2);
+}
+.gap-3 {
+	gap: var(--space-3);
+}
+.gap-4 {
+	gap: var(--space-4);
+}
+
+/* ============ Utility Classes ============ */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	border: 0;
+}
+
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.text-sm {
+	font-size: 0.875rem;
+}
+.text-xs {
+	font-size: 0.75rem;
+}
+.text-secondary {
+	color: var(--text-secondary);
+}
+.text-tertiary {
+	color: var(--text-tertiary);
+}
+.font-medium {
+	font-weight: 500;
+}
+.font-semibold {
+	font-weight: 600;
+}
+
+/* Focus styles */
+:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}
+
+/* ============ Button Base ============ */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-4);
+	font-size: 0.875rem;
+	font-weight: 500;
+	line-height: 1.5;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	transition:
+		background-color var(--transition-fast),
+		border-color var(--transition-fast),
+		color var(--transition-fast);
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+}
+
+.btn-primary {
+	background: var(--color-primary);
+	color: var(--text-inverse);
+
+	&:hover:not(:disabled) {
+		background: var(--color-primary-dark);
+	}
+}
+
+.btn-secondary {
+	background: var(--surface-primary);
+	color: var(--text-primary);
+	border-color: var(--border-color);
+
+	&:hover:not(:disabled) {
+		background: var(--surface-secondary);
+		border-color: var(--border-color-strong);
+	}
+}
+
+.btn-ghost {
+	background: transparent;
+	color: var(--text-primary);
+
+	&:hover:not(:disabled) {
+		background: var(--surface-secondary);
+	}
+}
+
+.btn-danger {
+	background: var(--color-error);
+	color: var(--text-inverse);
+
+	&:hover:not(:disabled) {
+		background: color-mix(in oklch, var(--color-error), black 15%);
+	}
+}
+
+.btn-sm {
+	padding: var(--space-1) var(--space-2);
+	font-size: 0.75rem;
+}
+
+.btn-lg {
+	padding: var(--space-3) var(--space-6);
+	font-size: 1rem;
+}
+
+.btn-icon {
+	padding: var(--space-2);
+	aspect-ratio: 1;
+}
+
+/* ============ Form Elements ============ */
+.input {
+	display: block;
+	width: 100%;
+	padding: var(--space-2) var(--space-3);
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--text-primary);
+	background: var(--surface-primary);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+	transition:
+		border-color var(--transition-fast),
+		box-shadow var(--transition-fast);
+
+	&::placeholder {
+		color: var(--text-tertiary);
+	}
+
+	&:focus {
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary), transparent 75%);
+		outline: none;
+	}
+
+	&:disabled {
+		background: var(--surface-secondary);
+		cursor: not-allowed;
+	}
+}
+
+.label {
+	display: block;
+	margin-bottom: var(--space-1);
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+/* ============ Card Base ============ */
+.card {
+	background: var(--surface-primary);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-lg);
+	padding: var(--space-4);
+	box-shadow: var(--shadow-sm);
+}
+
+.card-hover {
+	transition:
+		box-shadow var(--transition-fast),
+		border-color var(--transition-fast);
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+		border-color: var(--border-color-strong);
+	}
+}
+
+/* ============ Badge ============ */
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	padding: var(--space-1) var(--space-2);
+	font-size: 0.75rem;
+	font-weight: 500;
+	line-height: 1;
+	border-radius: var(--radius-full);
+	background: var(--surface-secondary);
+	color: var(--text-secondary);
+}
+
+.badge-success {
+	background: color-mix(in oklch, var(--color-success), white 80%);
+	color: color-mix(in oklch, var(--color-success), black 30%);
+}
+
+.badge-warning {
+	background: color-mix(in oklch, var(--color-warning), white 80%);
+	color: color-mix(in oklch, var(--color-warning), black 30%);
+}
+
+.badge-error {
+	background: color-mix(in oklch, var(--color-error), white 80%);
+	color: color-mix(in oklch, var(--color-error), black 30%);
+}
+
+.badge-info {
+	background: color-mix(in oklch, var(--color-info), white 80%);
+	color: color-mix(in oklch, var(--color-info), black 30%);
+}
+
+/* ============ Print Styles ============ */
+@media print {
+	:root {
+		--surface-primary: white;
+		--text-primary: black;
+	}
+
+	.no-print {
+		display: none !important;
+	}
+
+	.item-card {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+
+	.itinerary-day {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+}
+
+/* ============ Animations ============ */
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes slideUp {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes slideDown {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.animate-fade-in {
+	animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.animate-slide-up {
+	animation: slideUp var(--transition-normal) ease-out;
+}
+
+.animate-slide-down {
+	animation: slideDown var(--transition-normal) ease-out;
+}
+
+/* ============ Reduced Motion ============ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
