@@ -42,7 +42,7 @@ class StorageService {
 			localStorage.setItem(STORAGE_KEYS.LAST_SAVE, new Date().toISOString());
 		} catch (e) {
 			console.error('Failed to save trips:', e);
-			if (e instanceof DOMException && e.code === 22) {
+			if (e instanceof DOMException && e.name === 'QuotaExceededError') {
 				this.handleStorageQuotaExceeded();
 			}
 		}
