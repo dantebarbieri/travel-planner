@@ -342,6 +342,44 @@
 		return city?.location;
 	});
 
+	// Get the selected day's date for default check-in
+	const addItemSelectedDate = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		return day?.date;
+	});
+
+	// Get the default check-out date: end of city, or end of span without city, or end of trip
+	const addItemDefaultCheckOutDate = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day) return undefined;
+
+		// If day has a city, use the city's end date
+		if (day.cityIds.length > 0) {
+			const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+			if (city) {
+				return city.endDate;
+			}
+		}
+
+		// Day has no city - find the end of the span without a city
+		// Look forward through days until we find one with a city or reach end of trip
+		const dayIndex = trip.itinerary.findIndex((d) => d.id === addItemDayId);
+		if (dayIndex === -1) return trip.endDate;
+
+		for (let i = dayIndex + 1; i < trip.itinerary.length; i++) {
+			const futureDay = trip.itinerary[i];
+			if (futureDay.cityIds.length > 0) {
+				// Found a day with a city - return the day before it
+				return trip.itinerary[i - 1].date;
+			}
+		}
+
+		// No city found until end of trip - use trip end date
+		return trip.endDate;
+	});
+
 	function handleReorder(dayId: string, items: DailyItem[]) {
 		if (trip) {
 			tripStore.reorderDayItems(trip.id, dayId, items);
@@ -580,6 +618,8 @@
 		onAddFoodVenue={handleAddFoodVenueToDay}
 		onAddStay={handleAddStayToDay}
 		cityLocation={addItemCityLocation}
+		selectedDate={addItemSelectedDate}
+		defaultCheckOutDate={addItemDefaultCheckOutDate}
 	/>
 
 	<MoveItemModal

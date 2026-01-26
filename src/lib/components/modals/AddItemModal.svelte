@@ -18,9 +18,13 @@
 		onAddFoodVenue: (venue: FoodVenue) => void;
 		onAddStay?: (stay: Stay) => void;
 		cityLocation?: GeoLocation;
+		/** The date of the selected day (for default check-in) */
+		selectedDate?: string;
+		/** The default check-out date (end of city, span, or trip) */
+		defaultCheckOutDate?: string;
 	}
 
-	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, cityLocation }: Props = $props();
+	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, cityLocation, selectedDate, defaultCheckOutDate }: Props = $props();
 
 	let selectedKind = $state<'activity' | 'food' | 'stay'>('activity');
 	let activitySearchQuery = $state('');
@@ -50,6 +54,12 @@
 	let customNotes = $state('');
 	let showCustomForm = $state(false);
 
+	// Set default dates when modal opens or when switching to stay kind
+	function setDefaultStayDates() {
+		stayCheckIn = selectedDate || '';
+		stayCheckOut = defaultCheckOutDate || selectedDate || '';
+	}
+
 	$effect(() => {
 		if (!isOpen) {
 			// Reset state when modal closes
@@ -68,6 +78,9 @@
 			customAddress = '';
 			customNotes = '';
 			showCustomForm = false;
+		} else {
+			// Set default dates when modal opens
+			setDefaultStayDates();
 		}
 	});
 
@@ -259,6 +272,10 @@
 						onclick={() => {
 							selectedKind = option.value;
 							resetKindSelection();
+							// Set default dates when switching to stay
+							if (option.value === 'stay') {
+								setDefaultStayDates();
+							}
 						}}
 					>
 						<Icon name={option.icon} size={20} />
