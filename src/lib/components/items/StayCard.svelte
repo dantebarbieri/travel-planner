@@ -208,26 +208,4 @@
 		padding: 2px 6px;
 		color: var(--text-tertiary);
 	}
-
-	.remove-btn {
-		position: absolute;
-		top: var(--space-2);
-		right: var(--space-2);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		background: var(--surface-primary);
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-
-		&:hover {
-			background: var(--color-error);
-			border-color: var(--color-error);
-			color: white;
-		}
-	}
 </style>

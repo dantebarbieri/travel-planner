@@ -4,7 +4,8 @@
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
-	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode } from '$lib/types/travel';
+	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem } from '$lib/types/travel';
+	import { isStayItem } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
@@ -294,14 +295,15 @@
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
-		if (day) {
-			const hasStayBookends = day.items.length >= 2 &&
-				day.items[0].kind === 'stay' &&
-				day.items[day.items.length - 1].kind === 'stay' &&
-				!('isCheckIn' in day.items[0] && day.items[0].isCheckIn) &&
-				!('isCheckOut' in day.items[0] && day.items[0].isCheckOut) &&
-				!('isCheckIn' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckIn) &&
-				!('isCheckOut' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckOut);
+		if (day && day.items.length >= 2) {
+			const firstItem = day.items[0];
+			const lastItem = day.items[day.items.length - 1];
+			
+			// Check if both first and last items are stays without check-in/check-out flags
+			const hasStayBookends = 
+				isStayItem(firstItem) && isStayItem(lastItem) &&
+				!firstItem.isCheckIn && !firstItem.isCheckOut &&
+				!lastItem.isCheckIn && !lastItem.isCheckOut;
 
 			if (hasStayBookends) {
 				// Insert before the last item (the end-of-day stay bookend)
@@ -328,14 +330,15 @@
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
-		if (day) {
-			const hasStayBookends = day.items.length >= 2 &&
-				day.items[0].kind === 'stay' &&
-				day.items[day.items.length - 1].kind === 'stay' &&
-				!('isCheckIn' in day.items[0] && day.items[0].isCheckIn) &&
-				!('isCheckOut' in day.items[0] && day.items[0].isCheckOut) &&
-				!('isCheckIn' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckIn) &&
-				!('isCheckOut' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckOut);
+		if (day && day.items.length >= 2) {
+			const firstItem = day.items[0];
+			const lastItem = day.items[day.items.length - 1];
+			
+			// Check if both first and last items are stays without check-in/check-out flags
+			const hasStayBookends = 
+				isStayItem(firstItem) && isStayItem(lastItem) &&
+				!firstItem.isCheckIn && !firstItem.isCheckOut &&
+				!lastItem.isCheckIn && !lastItem.isCheckOut;
 
 			if (hasStayBookends) {
 				// Insert before the last item (the end-of-day stay bookend)
