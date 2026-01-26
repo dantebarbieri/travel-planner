@@ -5,7 +5,8 @@
 		Activity,
 		FoodVenue,
 		TransportLeg,
-		ColorScheme
+		ColorScheme,
+		TravelMode
 	} from '$lib/types/travel';
 	import { isStayItem, isActivityItem, isFoodItem, isTransportItem } from '$lib/types/travel';
 	import StayCard from '$lib/components/items/StayCard.svelte';
@@ -13,6 +14,9 @@
 	import FoodCard from '$lib/components/items/FoodCard.svelte';
 	import TransportCard from '$lib/components/items/TransportCard.svelte';
 	import TravelMargin from '$lib/components/travel/TravelMargin.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
+	import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
+	import ContextMenuItem from '$lib/components/ui/ContextMenuItem.svelte';
 
 	interface Props {
 		items: DailyItem[];
@@ -25,6 +29,8 @@
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
+		onMoveItem?: (itemId: string) => void;
+		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
 	}
 
 	let {
@@ -37,8 +43,20 @@
 		isEditing = false,
 		onReorder,
 		onItemClick,
-		onRemoveItem
+		onRemoveItem,
+		onMoveItem,
+		onTravelModeChange
 	}: Props = $props();
+
+	// Context menu state
+	let contextMenuOpen = $state(false);
+	let contextMenuX = $state(0);
+	let contextMenuY = $state(0);
+	let contextMenuItemId = $state<string | null>(null);
+
+	// Drag and drop state
+	let draggedIndex = $state<number | null>(null);
+	let dragOverIndex = $state<number | null>(null);
 
 	function getStay(id: string): Stay | undefined {
 		return stays.find((s) => s.id === id);
@@ -79,6 +97,95 @@
 		}
 		return colorScheme.kindColors[item.kind] || colorScheme.kindColors.activity;
 	}
+
+	// Drag and drop handlers
+	function handleDragStart(event: DragEvent, index: number) {
+		if (!isEditing) return;
+		draggedIndex = index;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', index.toString());
+		}
+	}
+
+	function handleDragOver(event: DragEvent, index: number) {
+		if (!isEditing || draggedIndex === null) return;
+		event.preventDefault();
+		dragOverIndex = index;
+	}
+
+	function handleDragLeave() {
+		dragOverIndex = null;
+	}
+
+	function handleDrop(event: DragEvent, dropIndex: number) {
+		if (!isEditing || draggedIndex === null) return;
+		event.preventDefault();
+
+		if (draggedIndex !== dropIndex) {
+			const newItems = [...items];
+			const [removed] = newItems.splice(draggedIndex, 1);
+			newItems.splice(dropIndex, 0, removed);
+			onReorder?.(newItems);
+		}
+
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	function handleDragEnd() {
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	function handleModeChange(itemId: string, mode: TravelMode) {
+		onTravelModeChange?.(itemId, mode);
+	}
+
+	// Context menu handlers
+	function openContextMenu(e: MouseEvent, itemId: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		contextMenuX = e.clientX;
+		contextMenuY = e.clientY;
+		contextMenuItemId = itemId;
+		contextMenuOpen = true;
+	}
+
+	function closeContextMenu() {
+		contextMenuOpen = false;
+		contextMenuItemId = null;
+	}
+
+	function handleRemoveFromMenu() {
+		if (contextMenuItemId) {
+			onRemoveItem?.(contextMenuItemId);
+		}
+		closeContextMenu();
+	}
+
+	function handleMoveFromMenu() {
+		if (contextMenuItemId) {
+			onMoveItem?.(contextMenuItemId);
+		}
+		closeContextMenu();
+	}
+
+	function getItemName(item: DailyItem): string {
+		if (isStayItem(item)) {
+			return getStay(item.stayId)?.name ?? 'Stay';
+		}
+		if (isActivityItem(item)) {
+			return getActivity(item.activityId)?.name ?? 'Activity';
+		}
+		if (isFoodItem(item)) {
+			return getFoodVenue(item.foodVenueId)?.name ?? 'Food';
+		}
+		if (isTransportItem(item)) {
+			return getTransportLeg(item.transportLegId)?.carrier ?? 'Transport';
+		}
+		return 'Item';
+	}
 </script>
 
 <div class="item-list">
@@ -86,6 +193,8 @@
 		{@const prevItem = index > 0 ? items[index - 1] : null}
 		{@const prevLocation = prevItem ? getItemLocation(prevItem) : null}
 		{@const currentLocation = getItemLocation(item)}
+		{@const isDragging = draggedIndex === index}
+		{@const isDragOver = dragOverIndex === index}
 
 		{#if index > 0 && prevLocation && currentLocation}
 			<TravelMargin
@@ -93,57 +202,95 @@
 				toLocation={currentLocation}
 				selectedMode={item.travelMode || 'driving'}
 				estimates={item.travelFromPrevious ? [item.travelFromPrevious] : []}
+				onModeChange={(mode) => handleModeChange(item.id, mode)}
 			/>
 		{/if}
 
-		<div class="item-wrapper" style="--item-color: {getItemColor(item)}">
-			{#if isStayItem(item)}
-				{@const stay = getStay(item.stayId)}
-				{#if stay}
-					<StayCard
-						{stay}
-						isCheckIn={item.isCheckIn}
-						isCheckOut={item.isCheckOut}
-						{isEditing}
-						onclick={() => onItemClick?.(item)}
-						onRemove={() => onRemoveItem?.(item.id)}
-					/>
+		<div
+			class="item-wrapper"
+			class:dragging={isDragging}
+			class:drag-over={isDragOver}
+			class:has-actions={isEditing}
+			style="--item-color: {getItemColor(item)}"
+			draggable={isEditing}
+			ondragstart={(e) => handleDragStart(e, index)}
+			ondragover={(e) => handleDragOver(e, index)}
+			ondragleave={handleDragLeave}
+			ondrop={(e) => handleDrop(e, index)}
+			ondragend={handleDragEnd}
+			oncontextmenu={(e) => openContextMenu(e, item.id)}
+			role={isEditing ? 'listitem' : undefined}
+		>
+			{#if isEditing}
+				<div class="drag-handle" title="Drag to reorder">
+					<Icon name="menu" size={16} />
+				</div>
+			{/if}
+			<div class="item-content">
+				{#if isStayItem(item)}
+					{@const stay = getStay(item.stayId)}
+					{#if stay}
+						<StayCard
+							{stay}
+							isCheckIn={item.isCheckIn}
+							isCheckOut={item.isCheckOut}
+							{isEditing}
+							onclick={() => onItemClick?.(item)}
+							onRemove={() => onRemoveItem?.(item.id)}
+						/>
+					{/if}
+				{:else if isActivityItem(item)}
+					{@const activity = getActivity(item.activityId)}
+					{#if activity}
+						<ActivityCard
+							{activity}
+							{isEditing}
+							onclick={() => onItemClick?.(item)}
+							onRemove={() => onRemoveItem?.(item.id)}
+						/>
+					{/if}
+				{:else if isFoodItem(item)}
+					{@const venue = getFoodVenue(item.foodVenueId)}
+					{#if venue}
+						<FoodCard
+							{venue}
+							mealSlot={item.mealSlot}
+							{isEditing}
+							onclick={() => onItemClick?.(item)}
+							onRemove={() => onRemoveItem?.(item.id)}
+						/>
+					{/if}
+				{:else if isTransportItem(item)}
+					{@const leg = getTransportLeg(item.transportLegId)}
+					{#if leg}
+						<TransportCard
+							{leg}
+							{isEditing}
+							onclick={() => onItemClick?.(item)}
+							onRemove={() => onRemoveItem?.(item.id)}
+						/>
+					{/if}
 				{/if}
-			{:else if isActivityItem(item)}
-				{@const activity = getActivity(item.activityId)}
-				{#if activity}
-					<ActivityCard
-						{activity}
-						{isEditing}
-						onclick={() => onItemClick?.(item)}
-						onRemove={() => onRemoveItem?.(item.id)}
-					/>
-				{/if}
-			{:else if isFoodItem(item)}
-				{@const venue = getFoodVenue(item.foodVenueId)}
-				{#if venue}
-					<FoodCard
-						{venue}
-						mealSlot={item.mealSlot}
-						{isEditing}
-						onclick={() => onItemClick?.(item)}
-						onRemove={() => onRemoveItem?.(item.id)}
-					/>
-				{/if}
-			{:else if isTransportItem(item)}
-				{@const leg = getTransportLeg(item.transportLegId)}
-				{#if leg}
-					<TransportCard
-						{leg}
-						{isEditing}
-						onclick={() => onItemClick?.(item)}
-						onRemove={() => onRemoveItem?.(item.id)}
-					/>
-				{/if}
+			</div>
+			{#if isEditing}
+				<button
+					type="button"
+					class="more-button"
+					title="More options"
+					onclick={(e) => openContextMenu(e, item.id)}
+				>
+					<Icon name="more" size={16} />
+				</button>
 			{/if}
 		</div>
 	{/each}
 </div>
+
+<!-- Context Menu -->
+<ContextMenu isOpen={contextMenuOpen} x={contextMenuX} y={contextMenuY} onclose={closeContextMenu}>
+	<ContextMenuItem label="Move to another day" icon="move" onclick={handleMoveFromMenu} />
+	<ContextMenuItem label="Remove from day" icon="delete" variant="danger" onclick={handleRemoveFromMenu} />
+</ContextMenu>
 
 <style>
 	.item-list {
@@ -154,5 +301,82 @@
 
 	.item-wrapper {
 		--item-color: var(--color-gray-300);
+		display: flex;
+		align-items: stretch;
+		border-radius: var(--radius-md);
+		transition: opacity var(--transition-fast), transform var(--transition-fast);
+	}
+
+	.item-wrapper.dragging {
+		opacity: 0.5;
+	}
+
+	.item-wrapper.drag-over {
+		transform: translateY(4px);
+	}
+
+	.item-wrapper.drag-over::before {
+		content: '';
+		position: absolute;
+		top: -4px;
+		left: 0;
+		right: 0;
+		height: 3px;
+		background: var(--color-primary);
+		border-radius: var(--radius-full);
+	}
+
+	.drag-handle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		flex-shrink: 0;
+		color: var(--text-tertiary);
+		cursor: grab;
+		border-radius: var(--radius-md) 0 0 var(--radius-md);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-right: none;
+		margin-right: -1px;
+
+		&:hover {
+			color: var(--text-secondary);
+			background: var(--surface-tertiary);
+		}
+
+		&:active {
+			cursor: grabbing;
+		}
+	}
+
+	.item-content {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.more-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		flex-shrink: 0;
+		color: var(--text-tertiary);
+		cursor: pointer;
+		border-radius: 0 var(--radius-md) var(--radius-md) 0;
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-left: none;
+		margin-left: -1px;
+		transition: color var(--transition-fast), background-color var(--transition-fast);
+
+		&:hover {
+			color: var(--text-secondary);
+			background: var(--surface-tertiary);
+		}
+	}
+
+	.item-wrapper.has-actions .item-content :global(.card) {
+		border-radius: 0;
 	}
 </style>

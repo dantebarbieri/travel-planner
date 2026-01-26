@@ -10,12 +10,16 @@
 		title?: string;
 		cityName: string;
 		weather?: WeatherCondition;
+		weatherList?: WeatherCondition[]; // For multiple cities
 	}
 
-	let { dayNumber, date, title, cityName, weather }: Props = $props();
+	let { dayNumber, date, title, cityName, weather, weatherList = [] }: Props = $props();
 
 	const dayOfWeek = $derived(formatDayOfWeek(date));
 	const formattedDate = $derived(formatDate(date, { month: 'short', day: 'numeric' }));
+
+	// Use weatherList if provided, otherwise wrap single weather in array
+	const allWeather = $derived(weatherList.length > 0 ? weatherList : weather ? [weather] : []);
 </script>
 
 <header class="day-header">
@@ -33,15 +37,19 @@
 				<span class="day-of-week">{dayOfWeek}</span>
 				<span class="separator">·</span>
 				<time class="date" datetime={date}>{formattedDate}</time>
-				{#if title}
+				{#if title && cityName !== 'No city assigned'}
 					<span class="separator">·</span>
 					<span class="city-name">{cityName}</span>
 				{/if}
 			</div>
 		</div>
 	</div>
-	{#if weather}
-		<WeatherBadge {weather} />
+	{#if allWeather.length > 0}
+		<div class="weather-section">
+			{#each allWeather as w (w.location.name)}
+				<WeatherBadge weather={w} showDetails={allWeather.length === 1} />
+			{/each}
+		</div>
 	{/if}
 </header>
 
@@ -95,10 +103,21 @@
 		color: var(--text-tertiary);
 	}
 
+	.weather-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
 	@container day (max-width: 500px) {
 		.day-header {
 			flex-direction: column;
 			gap: var(--space-3);
+		}
+
+		.weather-section {
+			flex-direction: row;
+			flex-wrap: wrap;
 		}
 	}
 </style>

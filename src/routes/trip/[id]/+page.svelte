@@ -4,8 +4,10 @@
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween } from '$lib/utils/dates';
-	import type { WeatherCondition, City, DailyItem, ItineraryDay } from '$lib/types/travel';
+	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, TravelMode } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
+	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
+	import MoveItemModal from '$lib/components/modals/MoveItemModal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
@@ -27,6 +29,16 @@
 	let newCityEndDate = $state('');
 	let showExportModal = $state(false);
 	let isExporting = $state(false);
+	let showEditCityModal = $state(false);
+	let editingCity = $state<City | null>(null);
+	let editCityStartDate = $state('');
+	let editCityEndDate = $state('');
+	let showAddItemModal = $state(false);
+	let addItemDayId = $state<string | null>(null);
+	let addItemKind = $state<'activity' | 'food' | 'stay' | 'transport'>('activity');
+	let showMoveItemModal = $state(false);
+	let moveItemId = $state<string | null>(null);
+	let moveItemFromDayId = $state<string | null>(null);
 
 	onMount(async () => {
 		if (trip) {
@@ -127,9 +139,70 @@
 	}
 
 	function handleAddItem(day: ItineraryDay) {
-		// For now, just log - we'll implement the add item modal later
-		console.log('Add item to day:', day.id);
+		addItemDayId = day.id;
+		addItemKind = 'activity';
+		showAddItemModal = true;
 	}
+
+	function openEditCityModal(city: City) {
+		editingCity = city;
+		editCityStartDate = city.startDate;
+		editCityEndDate = city.endDate;
+		showEditCityModal = true;
+	}
+
+	function saveCityDates() {
+		if (!trip || !editingCity || !editCityStartDate || !editCityEndDate) return;
+		tripStore.updateCity(trip.id, editingCity.id, {
+			startDate: editCityStartDate,
+			endDate: editCityEndDate
+		});
+		showEditCityModal = false;
+		editingCity = null;
+	}
+
+	function deleteCity(cityId: string) {
+		if (!trip) return;
+		if (confirm('Are you sure you want to remove this city?')) {
+			tripStore.removeCity(trip.id, cityId);
+		}
+	}
+
+	function handleAddActivityToDay(activity: Activity) {
+		if (!trip || !addItemDayId) return;
+
+		// Add the activity to the trip
+		tripStore.addActivity(trip.id, activity);
+
+		// Add it to the day's items
+		tripStore.addDayItem(trip.id, addItemDayId, {
+			kind: 'activity',
+			activityId: activity.id
+		});
+	}
+
+	function handleAddFoodVenueToDay(venue: FoodVenue) {
+		if (!trip || !addItemDayId) return;
+
+		// Add the food venue to the trip
+		tripStore.addFoodVenue(trip.id, venue);
+
+		// Add it to the day's items
+		tripStore.addDayItem(trip.id, addItemDayId, {
+			kind: 'food',
+			foodVenueId: venue.id,
+			mealSlot: venue.mealType
+		});
+	}
+
+	// Get the city location for the current add item day
+	const addItemCityLocation = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return undefined;
+		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+		return city?.location;
+	});
 
 	function handleReorder(dayId: string, items: DailyItem[]) {
 		if (trip) {
@@ -140,6 +213,27 @@
 	function handleRemoveItem(dayId: string, itemId: string) {
 		if (trip) {
 			tripStore.removeDayItem(trip.id, dayId, itemId);
+		}
+	}
+
+	function handleMoveItem(dayId: string, itemId: string) {
+		moveItemFromDayId = dayId;
+		moveItemId = itemId;
+		showMoveItemModal = true;
+	}
+
+	function handleMoveItemConfirm(toDayId: string) {
+		if (trip && moveItemFromDayId && moveItemId) {
+			tripStore.moveDayItem(trip.id, moveItemFromDayId, toDayId, moveItemId);
+		}
+		showMoveItemModal = false;
+		moveItemId = null;
+		moveItemFromDayId = null;
+	}
+
+	function handleTravelModeChange(dayId: string, itemId: string, mode: TravelMode) {
+		if (trip) {
+			tripStore.updateDayItem(trip.id, dayId, itemId, { travelMode: mode });
 		}
 	}
 
@@ -202,7 +296,26 @@
 			</div>
 		{:else}
 			{#if isEditing}
-				<div class="edit-actions">
+				<div class="cities-manager">
+					<h3>Destinations</h3>
+					<div class="cities-list">
+						{#each trip.cities as city (city.id)}
+							<div class="city-item">
+								<div class="city-info">
+									<span class="city-name">{city.name}, {city.country}</span>
+									<span class="city-dates">{formatDate(city.startDate, { month: 'short', day: 'numeric' })} - {formatDate(city.endDate, { month: 'short', day: 'numeric' })}</span>
+								</div>
+								<div class="city-actions">
+									<button type="button" class="icon-btn" onclick={() => openEditCityModal(city)} title="Edit dates">
+										<Icon name="edit" size={14} />
+									</button>
+									<button type="button" class="icon-btn danger" onclick={() => deleteCity(city.id)} title="Remove city">
+										<Icon name="delete" size={14} />
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
 					<Button variant="secondary" size="sm" onclick={openAddCityModal}>
 						<Icon name="add" size={16} />
 						Add City
@@ -225,6 +338,8 @@
 						onAddItem={() => handleAddItem(day)}
 						onReorder={(items) => handleReorder(day.id, items)}
 						onRemoveItem={(itemId) => handleRemoveItem(day.id, itemId)}
+						onMoveItem={(itemId) => handleMoveItem(day.id, itemId)}
+						onTravelModeChange={(itemId, mode) => handleTravelModeChange(day.id, itemId, mode)}
 					/>
 				{/each}
 			</div>
@@ -243,8 +358,6 @@
 						id="city-start"
 						class="input"
 						bind:value={newCityStartDate}
-						min={trip.startDate}
-						max={trip.endDate}
 						required
 					/>
 				</div>
@@ -255,18 +368,77 @@
 						id="city-end"
 						class="input"
 						bind:value={newCityEndDate}
-						min={newCityStartDate || trip.startDate}
-						max={trip.endDate}
+						min={newCityStartDate}
 						required
 					/>
 				</div>
 			</div>
+			<p class="date-hint">Dates outside current trip range will extend the trip.</p>
 			<div class="form-actions">
 				<Button variant="secondary" onclick={() => (showAddCityModal = false)}>Cancel</Button>
 				<Button type="submit" disabled={!newCityName || !newCityCountry}>Add City</Button>
 			</div>
 		</form>
 	</Modal>
+
+	<Modal isOpen={showEditCityModal} title="Edit City Dates" onclose={() => (showEditCityModal = false)}>
+		{#if editingCity}
+			<form class="city-form" onsubmit={(e) => { e.preventDefault(); saveCityDates(); }}>
+				<p class="city-name-display">{editingCity.name}, {editingCity.country}</p>
+				<div class="date-row">
+					<div class="form-field">
+						<label class="label" for="edit-city-start">Start Date</label>
+						<input
+							type="date"
+							id="edit-city-start"
+							class="input"
+							bind:value={editCityStartDate}
+							required
+						/>
+					</div>
+					<div class="form-field">
+						<label class="label" for="edit-city-end">End Date</label>
+						<input
+							type="date"
+							id="edit-city-end"
+							class="input"
+							bind:value={editCityEndDate}
+							min={editCityStartDate}
+							required
+						/>
+					</div>
+				</div>
+				<p class="date-hint">Changing dates may extend or shorten the overall trip.</p>
+				<div class="form-actions">
+					<Button variant="secondary" onclick={() => (showEditCityModal = false)}>Cancel</Button>
+					<Button type="submit">Save Changes</Button>
+				</div>
+			</form>
+		{/if}
+	</Modal>
+
+	<AddItemModal
+		isOpen={showAddItemModal}
+		onclose={() => {
+			showAddItemModal = false;
+			addItemDayId = null;
+		}}
+		onAddActivity={handleAddActivityToDay}
+		onAddFoodVenue={handleAddFoodVenueToDay}
+		cityLocation={addItemCityLocation}
+	/>
+
+	<MoveItemModal
+		isOpen={showMoveItemModal}
+		days={trip.itinerary}
+		currentDayId={moveItemFromDayId || ''}
+		onclose={() => {
+			showMoveItemModal = false;
+			moveItemId = null;
+			moveItemFromDayId = null;
+		}}
+		onMove={handleMoveItemConfirm}
+	/>
 
 	<Modal isOpen={showExportModal} title="Export Trip" onclose={() => (showExportModal = false)}>
 		<div class="export-options">
@@ -405,10 +577,94 @@
 		}
 	}
 
-	.edit-actions {
+	.cities-manager {
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-lg);
+		padding: var(--space-4);
+		margin-bottom: var(--space-6);
+
+		& h3 {
+			font-size: 0.875rem;
+			font-weight: 600;
+			color: var(--text-secondary);
+			margin: 0 0 var(--space-3);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+	}
+
+	.cities-list {
 		display: flex;
+		flex-direction: column;
 		gap: var(--space-2);
-		margin-bottom: var(--space-4);
+		margin-bottom: var(--space-3);
+	}
+
+	.city-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-2) var(--space-3);
+		background: var(--surface-primary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-md);
+	}
+
+	.city-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.city-info .city-name {
+		font-weight: 500;
+	}
+
+	.city-info .city-dates {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+	}
+
+	.city-actions {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--text-tertiary);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--surface-secondary);
+			color: var(--text-primary);
+		}
+
+		&.danger:hover {
+			background: color-mix(in oklch, var(--color-error), transparent 90%);
+			color: var(--color-error);
+		}
+	}
+
+	.city-name-display {
+		font-size: 1.125rem;
+		font-weight: 600;
+		margin: 0 0 var(--space-4);
+	}
+
+	.date-hint {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		margin: 0;
+		font-style: italic;
 	}
 
 	.itinerary-container {

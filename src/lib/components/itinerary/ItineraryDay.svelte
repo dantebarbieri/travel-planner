@@ -8,7 +8,8 @@
 		TransportLeg,
 		ColorScheme,
 		WeatherCondition,
-		DailyItem
+		DailyItem,
+		TravelMode
 	} from '$lib/types/travel';
 	import { formatDate, formatDayOfWeek } from '$lib/utils/dates';
 	import DayHeader from './DayHeader.svelte';
@@ -30,6 +31,8 @@
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
+		onMoveItem?: (itemId: string) => void;
+		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
 	}
 
 	let {
@@ -45,11 +48,41 @@
 		onAddItem,
 		onReorder,
 		onItemClick,
-		onRemoveItem
+		onRemoveItem,
+		onMoveItem,
+		onTravelModeChange
 	}: Props = $props();
 
 	const dayCities = $derived(cities.filter((c) => day.cityIds.includes(c.id)));
-	const cityNames = $derived(dayCities.map((c) => c.name).join(' - ') || 'No city assigned');
+
+	// Determine if this is a transition day (leaving one city, arriving at another)
+	// Check if any city's end date matches today (leaving) and another city's start date matches (arriving)
+	const transitionInfo = $derived.by(() => {
+		if (dayCities.length !== 2) return null;
+
+		const [city1, city2] = dayCities;
+		// If city1 ends today and city2 starts today, it's a transition from city1 to city2
+		if (city1.endDate === day.date && city2.startDate === day.date) {
+			return { from: city1, to: city2 };
+		}
+		// If city2 ends today and city1 starts today, it's a transition from city2 to city1
+		if (city2.endDate === day.date && city1.startDate === day.date) {
+			return { from: city2, to: city1 };
+		}
+		return null;
+	});
+
+	const cityNames = $derived.by(() => {
+		if (dayCities.length === 0) return 'No city assigned';
+		if (transitionInfo) {
+			return `${transitionInfo.from.name} → ${transitionInfo.to.name}`;
+		}
+		if (dayCities.length === 1) {
+			return dayCities[0].name;
+		}
+		// Multiple cities but not a clear transition - use ampersand
+		return dayCities.map((c) => c.name).join(' & ');
+	});
 
 	const sortedItems = $derived([...day.items].sort((a, b) => a.sortOrder - b.sortOrder));
 </script>
@@ -76,6 +109,8 @@
 				{onReorder}
 				{onItemClick}
 				{onRemoveItem}
+				{onMoveItem}
+				{onTravelModeChange}
 			/>
 		{:else}
 			<div class="empty-state">

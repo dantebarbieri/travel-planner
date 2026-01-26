@@ -8,9 +8,12 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { goto } from '$app/navigation';
-	import type { Location } from '$lib/types/travel';
+	import { storageService } from '$lib/services/storageService';
+	import type { Location, Trip } from '$lib/types/travel';
 
 	let showCreateModal = $state(false);
+	let fileInput: HTMLInputElement;
+	let importError = $state<string | null>(null);
 	let newTripName = $state('');
 	let newTripStartDate = $state('');
 	let newTripEndDate = $state('');
@@ -73,6 +76,29 @@
 		if (today > endDate) return 'past';
 		return 'ongoing';
 	}
+
+	function triggerImport() {
+		importError = null;
+		fileInput?.click();
+	}
+
+	async function handleFileSelect(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		try {
+			const importedTrip = await storageService.readJsonFile(file);
+			const trip = tripStore.importTrip(importedTrip);
+			goto(`/trip/${trip.id}`);
+		} catch (error) {
+			importError = error instanceof Error ? error.message : 'Failed to import trip';
+			console.error('Import failed:', error);
+		}
+
+		// Reset input
+		input.value = '';
+	}
 </script>
 
 <div class="home-page">
@@ -81,11 +107,32 @@
 			<h1>My Trips</h1>
 			<p class="subtitle">Plan and organize your travel adventures</p>
 		</div>
-		<Button onclick={openCreateModal}>
-			<Icon name="add" size={18} />
-			New Trip
-		</Button>
+		<div class="header-actions">
+			<Button variant="secondary" onclick={triggerImport}>
+				<Icon name="import" size={18} />
+				Import
+			</Button>
+			<Button onclick={openCreateModal}>
+				<Icon name="add" size={18} />
+				New Trip
+			</Button>
+		</div>
+		<input
+			type="file"
+			accept=".json"
+			class="hidden-input"
+			bind:this={fileInput}
+			onchange={handleFileSelect}
+		/>
 	</header>
+
+	{#if importError}
+		<div class="import-error">
+			<Icon name="close" size={16} />
+			{importError}
+			<button type="button" class="dismiss-btn" onclick={() => (importError = null)}>Dismiss</button>
+		</div>
+	{/if}
 
 	{#if trips.length === 0}
 		<div class="empty-state">
@@ -227,9 +274,45 @@
 		}
 	}
 
+	.header-actions {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.hidden-input {
+		display: none;
+	}
+
 	.subtitle {
 		color: var(--text-secondary);
 		margin: 0;
+	}
+
+	.import-error {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		background: color-mix(in oklch, var(--color-error), transparent 90%);
+		border: 1px solid var(--color-error);
+		border-radius: var(--radius-md);
+		color: var(--color-error);
+		margin-bottom: var(--space-4);
+		font-size: 0.875rem;
+	}
+
+	.dismiss-btn {
+		margin-left: auto;
+		background: none;
+		border: none;
+		color: var(--color-error);
+		cursor: pointer;
+		font-size: 0.75rem;
+		text-decoration: underline;
+
+		&:hover {
+			opacity: 0.8;
+		}
 	}
 
 	.empty-state {

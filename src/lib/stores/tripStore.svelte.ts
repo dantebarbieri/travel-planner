@@ -110,6 +110,21 @@ function deleteTrip(id: string): void {
 	saveTrips();
 }
 
+function importTrip(trip: Trip): Trip {
+	// Generate new ID to avoid conflicts
+	const importedTrip: Trip = {
+		...trip,
+		id: generateTripId(),
+		name: trip.name + ' (Imported)',
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString()
+	};
+
+	state.trips = [...state.trips, importedTrip];
+	saveTrips();
+	return importedTrip;
+}
+
 function setCurrentTrip(id: string | null): void {
 	state.currentTripId = id;
 }
@@ -128,8 +143,22 @@ function addCity(
 
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
+
+		// Extend trip dates if city dates are outside current range
+		let newStartDate = t.startDate;
+		let newEndDate = t.endDate;
+
+		if (cityData.startDate < t.startDate) {
+			newStartDate = cityData.startDate;
+		}
+		if (cityData.endDate > t.endDate) {
+			newEndDate = cityData.endDate;
+		}
+
 		const updatedTrip = {
 			...t,
+			startDate: newStartDate,
+			endDate: newEndDate,
 			cities: [...t.cities, city],
 			updatedAt: new Date().toISOString()
 		};
@@ -144,9 +173,27 @@ function addCity(
 function updateCity(tripId: string, cityId: string, updates: Partial<City>): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
+
+		const updatedCities = t.cities.map((c) => (c.id === cityId ? { ...c, ...updates } : c));
+
+		// Recalculate trip dates based on all cities
+		let newStartDate = t.startDate;
+		let newEndDate = t.endDate;
+
+		for (const city of updatedCities) {
+			if (city.startDate < newStartDate) {
+				newStartDate = city.startDate;
+			}
+			if (city.endDate > newEndDate) {
+				newEndDate = city.endDate;
+			}
+		}
+
 		const updatedTrip = {
 			...t,
-			cities: t.cities.map((c) => (c.id === cityId ? { ...c, ...updates } : c)),
+			startDate: newStartDate,
+			endDate: newEndDate,
+			cities: updatedCities,
 			updatedAt: new Date().toISOString()
 		};
 		return regenerateItinerary(updatedTrip);
@@ -428,6 +475,51 @@ function updateDayTitle(tripId: string, dayId: string, title: string): void {
 	saveTrips();
 }
 
+function moveDayItem(tripId: string, fromDayId: string, toDayId: string, itemId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+
+		let itemToMove: DailyItem | undefined;
+
+		// Find and remove the item from the source day
+		const updatedItinerary = t.itinerary.map((day) => {
+			if (day.id === fromDayId) {
+				const item = day.items.find((i) => i.id === itemId);
+				if (item) {
+					itemToMove = { ...item };
+				}
+				return {
+					...day,
+					items: day.items
+						.filter((i) => i.id !== itemId)
+						.map((item, idx) => ({ ...item, sortOrder: idx }))
+				};
+			}
+			return day;
+		});
+
+		// Add the item to the target day
+		if (itemToMove) {
+			return {
+				...t,
+				itinerary: updatedItinerary.map((day) => {
+					if (day.id === toDayId) {
+						return {
+							...day,
+							items: [...day.items, { ...itemToMove!, sortOrder: day.items.length }]
+						};
+					}
+					return day;
+				}),
+				updatedAt: new Date().toISOString()
+			};
+		}
+
+		return t;
+	});
+	saveTrips();
+}
+
 // ============ Color Scheme ============
 
 function updateColorScheme(tripId: string, colorScheme: ColorScheme): void {
@@ -485,17 +577,39 @@ function regenerateItinerary(trip: Trip): Trip {
 }
 
 function getCityIdsForDate(trip: Trip, date: string): string[] {
-	const cityIds: string[] = [];
+	// First, get cities based on their date range (fallback)
+	const citiesFromRange: string[] = [];
+	for (const city of trip.cities) {
+		if (date >= city.startDate && date <= city.endDate) {
+			citiesFromRange.push(city.id);
+		}
+	}
+
+	// Then, get cities based on lodging (overrides range if present)
+	const citiesFromLodging: string[] = [];
 	for (const city of trip.cities) {
 		for (const stay of city.stays) {
+			// Include check-in day and all days up to (but not including) check-out
 			if (date >= stay.checkIn && date < stay.checkOut) {
-				if (!cityIds.includes(city.id)) {
-					cityIds.push(city.id);
+				if (!citiesFromLodging.includes(city.id)) {
+					citiesFromLodging.push(city.id);
+				}
+			}
+			// Also include check-out day for that city (last day at the hotel)
+			if (date === stay.checkOut) {
+				if (!citiesFromLodging.includes(city.id)) {
+					citiesFromLodging.push(city.id);
 				}
 			}
 		}
 	}
-	return cityIds;
+
+	// If we have lodging for this date, use that; otherwise use the city date range
+	if (citiesFromLodging.length > 0) {
+		return citiesFromLodging;
+	}
+
+	return citiesFromRange;
 }
 
 // ============ Export Store ============
@@ -522,6 +636,7 @@ export const tripStore = {
 	createTrip,
 	updateTrip,
 	deleteTrip,
+	importTrip,
 	setCurrentTrip,
 
 	// City
@@ -554,6 +669,7 @@ export const tripStore = {
 	updateDayItem,
 	removeDayItem,
 	reorderDayItems,
+	moveDayItem,
 	updateDayTitle,
 
 	// Color Scheme
