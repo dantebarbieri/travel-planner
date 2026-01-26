@@ -322,15 +322,100 @@
 
 		const cityId = day.cityIds[0];
 
+		// Check if stay extends beyond trip end date
+		if (stay.checkOut > trip.endDate) {
+			const confirmed = confirm(
+				`This stay's check-out date (${formatDate(stay.checkOut)}) extends beyond the trip end date (${formatDate(trip.endDate)}). Would you like to extend the trip to accommodate this stay?`
+			);
+			if (!confirmed) return;
+			// Extend the trip dates
+			tripStore.extendTripDates(trip.id, stay.checkOut);
+		}
+
+		// Check for conflicts with existing stays (overlapping dates aside from check-in/check-out transitions)
+		const allStays = trip.cities.flatMap((c) => c.stays);
+		const conflictingStays = allStays.filter((existingStay) => {
+			// Stays overlap if they share any night (check-in to day before check-out)
+			// Allow check-in on another stay's check-out day (transition day)
+			const newStayFirstNight = stay.checkIn;
+			const newStayLastNight = getDatesInRange(stay.checkIn, stay.checkOut).slice(0, -1).pop() || stay.checkIn;
+			const existingFirstNight = existingStay.checkIn;
+			const existingLastNight = getDatesInRange(existingStay.checkIn, existingStay.checkOut).slice(0, -1).pop() || existingStay.checkIn;
+
+			// Check if the night ranges overlap
+			return newStayFirstNight <= existingLastNight && newStayLastNight >= existingFirstNight;
+		});
+
+		if (conflictingStays.length > 0) {
+			const conflictNames = conflictingStays.map((s) => s.name).join(', ');
+			const confirmed = confirm(
+				`This stay overlaps with existing stay(s): ${conflictNames}. Are you sure you want to add it anyway?`
+			);
+			if (!confirmed) return;
+		}
+
 		// Add the stay to the city
 		tripStore.addStay(trip.id, cityId, stay);
 
-		// Add it to the day's items (check-in on this day)
-		tripStore.addDayItem(trip.id, addItemDayId, {
-			kind: 'stay',
-			stayId: stay.id,
-			isCheckIn: true
-		});
+		// Get all dates for this stay
+		const stayDates = getDatesInRange(stay.checkIn, stay.checkOut);
+
+		// Need to re-fetch trip after extending dates (itinerary may have changed)
+		const updatedTrip = tripStore.state.trips.find((t) => t.id === trip.id);
+		if (!updatedTrip) return;
+
+		// Add stay items to each day
+		for (const date of stayDates) {
+			const dayForDate = updatedTrip.itinerary.find((d) => d.date === date);
+			if (!dayForDate) continue;
+
+			const isCheckInDay = date === stay.checkIn;
+			const isCheckOutDay = date === stay.checkOut;
+
+			if (isCheckInDay) {
+				// Check-in day: add at end of day
+				tripStore.addDayItem(trip.id, dayForDate.id, {
+					kind: 'stay',
+					stayId: stay.id,
+					isCheckIn: true
+				});
+			} else if (isCheckOutDay) {
+				// Check-out day: add at beginning of day
+				// We need to insert at position 0, so we'll add and then reorder
+				tripStore.addDayItem(trip.id, dayForDate.id, {
+					kind: 'stay',
+					stayId: stay.id,
+					isCheckOut: true
+				});
+				// Move the checkout item to the beginning
+				const currentDay = tripStore.state.trips.find((t) => t.id === trip.id)?.itinerary.find((d) => d.id === dayForDate.id);
+				if (currentDay && currentDay.items.length > 1) {
+					const checkoutItem = currentDay.items[currentDay.items.length - 1];
+					const reorderedItems = [checkoutItem, ...currentDay.items.slice(0, -1)];
+					tripStore.reorderDayItems(trip.id, dayForDate.id, reorderedItems);
+				}
+			} else {
+				// Intermediate day: add at beginning and end for route timing calculations
+				// Add at beginning
+				tripStore.addDayItem(trip.id, dayForDate.id, {
+					kind: 'stay',
+					stayId: stay.id
+				});
+				// Move to beginning
+				let currentDay = tripStore.state.trips.find((t) => t.id === trip.id)?.itinerary.find((d) => d.id === dayForDate.id);
+				if (currentDay && currentDay.items.length > 1) {
+					const stayItem = currentDay.items[currentDay.items.length - 1];
+					const reorderedItems = [stayItem, ...currentDay.items.slice(0, -1)];
+					tripStore.reorderDayItems(trip.id, dayForDate.id, reorderedItems);
+				}
+
+				// Add at end
+				tripStore.addDayItem(trip.id, dayForDate.id, {
+					kind: 'stay',
+					stayId: stay.id
+				});
+			}
+		}
 	}
 
 	// Get the city location for the current add item day

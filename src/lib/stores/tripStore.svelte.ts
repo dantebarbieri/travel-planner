@@ -103,6 +103,21 @@ function updateTrip(id: string, updates: Partial<Trip>): void {
 	saveTrips();
 }
 
+function extendTripDates(tripId: string, newEndDate: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		if (newEndDate <= t.endDate) return t;
+
+		const updatedTrip = {
+			...t,
+			endDate: newEndDate,
+			updatedAt: new Date().toISOString()
+		};
+		return regenerateItinerary(updatedTrip);
+	});
+	saveTrips();
+}
+
 function deleteTrip(id: string): void {
 	state.trips = state.trips.filter((t) => t.id !== id);
 	if (state.currentTripId === id) {
@@ -645,6 +660,7 @@ export const tripStore = {
 	deleteTrip,
 	importTrip,
 	setCurrentTrip,
+	extendTripDates,
 
 	// City
 	addCity,
