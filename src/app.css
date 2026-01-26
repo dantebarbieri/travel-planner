@@ -94,6 +94,10 @@
 	--header-height: 60px;
 	--sidebar-width: 280px;
 	--margin-column-width: 100px;
+
+	/* Item card background mixing (light mode defaults) */
+	--item-bg-mix: white;
+	--item-bg-mix-amount: 90%;
 }
 
 /* Dark Mode */
@@ -110,16 +114,16 @@
 		--text-secondary: var(--color-gray-300);
 		--text-tertiary: var(--color-gray-400);
 
-		/* Kind colors - lighter for dark backgrounds */
-		--color-kind-stay: oklch(0.8 0.12 280);
-		--color-kind-activity: oklch(0.75 0.16 145);
-		--color-kind-food: oklch(0.8 0.14 50);
-		--color-kind-transport: oklch(0.75 0.12 230);
-		--color-kind-flight: oklch(0.7 0.16 260);
+		/* Kind colors - keep same hue but adjust for dark mode contrast */
+		--color-kind-stay: oklch(0.7 0.15 280);
+		--color-kind-activity: oklch(0.65 0.2 145);
+		--color-kind-food: oklch(0.7 0.18 50);
+		--color-kind-transport: oklch(0.6 0.15 230);
+		--color-kind-flight: oklch(0.55 0.2 260);
 
-		/* Mixing base for item backgrounds in dark mode */
-		--item-bg-mix: var(--surface-primary);
-		--item-bg-mix-amount: 85%;
+		/* Mixing base for item backgrounds in dark mode - mix with dark surface */
+		--item-bg-mix: oklch(0.13 0 0);
+		--item-bg-mix-amount: 80%;
 	}
 }
 
@@ -220,11 +224,6 @@ a {
 }
 
 /* ============ Item Card Colors ============ */
-:root {
-	--item-bg-mix: white;
-	--item-bg-mix-amount: 90%;
-}
-
 .item-card {
 	--item-color: var(--color-gray-200);
 	border-left: 4px solid var(--item-color);

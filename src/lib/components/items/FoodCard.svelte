@@ -176,6 +176,7 @@
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
+		color: var(--text-primary);
 
 		&:disabled {
 			cursor: default;
