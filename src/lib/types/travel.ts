@@ -433,6 +433,8 @@ export interface AttractionAdapter {
 export interface WeatherAdapter {
 	getForecast(location: Location, dates: string[]): Promise<WeatherCondition[]>;
 	getHistorical(location: Location, dates: string[]): Promise<WeatherCondition[]>;
+	/** Smart fetch - uses forecast for near dates (within 2 weeks), historical estimates otherwise */
+	getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]>;
 }
 
 export interface TransportAdapter {

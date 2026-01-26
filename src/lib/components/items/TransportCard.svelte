@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { TransportLeg } from '$lib/types/travel';
-	import { formatTime, formatDuration, formatDateShort } from '$lib/utils/dates';
+	import { formatTime, formatDuration, formatDateShort, getTimezoneAbbreviation, getTimezoneOffset, calculateRealDuration, parseISODate } from '$lib/utils/dates';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getDirectionsUrl } from '$lib/services/mapService';
@@ -55,6 +55,55 @@
 	const isFlight = $derived(leg.mode === 'flight');
 	const isLongDistance = $derived(['flight', 'train', 'bus', 'ferry'].includes(leg.mode));
 
+	// Timezone info for departure
+	const departureTimezone = $derived(leg.origin.timezone || 'UTC');
+	const departureTzAbbr = $derived.by(() => {
+		if (!leg.origin.timezone) return null;
+		const date = leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneAbbreviation(leg.origin.timezone, date);
+	});
+	const departureTzOffset = $derived.by(() => {
+		if (!leg.origin.timezone) return null;
+		const date = leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneOffset(leg.origin.timezone, date);
+	});
+
+	// Timezone info for arrival
+	const arrivalTimezone = $derived(leg.destination.timezone || 'UTC');
+	const arrivalTzAbbr = $derived.by(() => {
+		if (!leg.destination.timezone) return null;
+		const date = leg.arrivalDate ? parseISODate(leg.arrivalDate) : leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneAbbreviation(leg.destination.timezone, date);
+	});
+	const arrivalTzOffset = $derived.by(() => {
+		if (!leg.destination.timezone) return null;
+		const date = leg.arrivalDate ? parseISODate(leg.arrivalDate) : leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneOffset(leg.destination.timezone, date);
+	});
+
+	// Calculate real duration accounting for timezone changes
+	const realDuration = $derived.by(() => {
+		if (!leg.departureTime || !leg.arrivalTime || !leg.departureDate) return leg.duration;
+		if (!leg.origin.timezone || !leg.destination.timezone) return leg.duration;
+
+		const arrivalDate = leg.arrivalDate || leg.departureDate;
+		return calculateRealDuration(
+			leg.departureTime,
+			leg.origin.timezone,
+			leg.arrivalTime,
+			leg.destination.timezone,
+			leg.departureDate,
+			arrivalDate
+		);
+	});
+
+	// Are timezones different?
+	const timezonesAreDifferent = $derived(
+		leg.origin.timezone &&
+		leg.destination.timezone &&
+		leg.origin.timezone !== leg.destination.timezone
+	);
+
 	function openDirections() {
 		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving'), '_blank');
 	}
@@ -78,20 +127,30 @@
 			<div class="route-point">
 				<span class="route-name">{leg.origin.name}</span>
 				{#if leg.departureTime}
-					<span class="route-time">{formatTime(leg.departureTime)}</span>
+					<span class="route-time">
+						{formatTime(leg.departureTime)}
+						{#if departureTzAbbr}
+							<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
+						{/if}
+					</span>
 				{/if}
 			</div>
 			<div class="route-line">
 				<span class="route-duration">
-					{#if leg.duration}
-						{formatDuration(leg.duration)}
+					{#if realDuration}
+						{formatDuration(realDuration)}
 					{/if}
 				</span>
 			</div>
 			<div class="route-point">
 				<span class="route-name">{leg.destination.name}</span>
 				{#if leg.arrivalTime}
-					<span class="route-time">{formatTime(leg.arrivalTime)}</span>
+					<span class="route-time">
+						{formatTime(leg.arrivalTime)}
+						{#if arrivalTzAbbr}
+							<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
+						{/if}
+					</span>
 				{/if}
 			</div>
 		</div>
@@ -206,6 +265,23 @@
 	.route-time {
 		font-size: 0.75rem;
 		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.timezone {
+		font-size: 0.625rem;
+		color: var(--text-tertiary);
+		cursor: help;
+		padding: 1px 3px;
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
+
+		&.different {
+			color: var(--color-warning);
+			background: color-mix(in oklch, var(--color-warning), transparent 90%);
+		}
 	}
 
 	.route-line {

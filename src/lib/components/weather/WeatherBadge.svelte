@@ -22,12 +22,12 @@
 	const weatherIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
 			sunny: 'sunny',
-			partly_cloudy: 'cloudy',
+			partly_cloudy: 'partlyCloudy',
 			cloudy: 'cloudy',
 			rain: 'rain',
-			snow: 'cloudy',
-			storm: 'rain',
-			fog: 'cloudy'
+			snow: 'snow',
+			storm: 'storm',
+			fog: 'fog'
 		};
 		return iconMap[weather.condition] || 'sunny';
 	});

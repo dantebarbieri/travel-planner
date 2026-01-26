@@ -111,3 +111,140 @@ export function isPast(isoDate: string): boolean {
 export function isFuture(isoDate: string): boolean {
 	return parseISODate(isoDate).getTime() > new Date().setHours(23, 59, 59, 999);
 }
+
+/**
+ * Get timezone abbreviation for a given IANA timezone (e.g., "America/New_York" -> "EST" or "EDT")
+ * Uses a specific date to account for daylight saving time
+ */
+export function getTimezoneAbbreviation(timezone: string, date?: Date): string {
+	const d = date || new Date();
+	try {
+		// Get timezone name parts from the formatted string
+		const formatter = new Intl.DateTimeFormat('en-US', {
+			timeZone: timezone,
+			timeZoneName: 'short'
+		});
+		const parts = formatter.formatToParts(d);
+		const tzPart = parts.find((p) => p.type === 'timeZoneName');
+		return tzPart?.value || timezone;
+	} catch {
+		// Fallback to the timezone identifier if formatting fails
+		return timezone.split('/').pop() || timezone;
+	}
+}
+
+/**
+ * Get UTC offset for a timezone (e.g., "America/New_York" -> "UTC-5" or "UTC-4")
+ * Uses a specific date to account for daylight saving time
+ */
+export function getTimezoneOffset(timezone: string, date?: Date): string {
+	const d = date || new Date();
+	try {
+		const formatter = new Intl.DateTimeFormat('en-US', {
+			timeZone: timezone,
+			timeZoneName: 'longOffset'
+		});
+		const parts = formatter.formatToParts(d);
+		const tzPart = parts.find((p) => p.type === 'timeZoneName');
+		// Typical output is "GMT-05:00" - convert to "UTC-5"
+		if (tzPart?.value) {
+			const match = tzPart.value.match(/GMT([+-])(\d+)(?::(\d+))?/);
+			if (match) {
+				const sign = match[1];
+				const hours = parseInt(match[2], 10);
+				const minutes = match[3] ? parseInt(match[3], 10) : 0;
+				if (minutes === 0) {
+					return hours === 0 ? 'UTC' : `UTC${sign}${hours}`;
+				}
+				return `UTC${sign}${hours}:${minutes.toString().padStart(2, '0')}`;
+			}
+		}
+		return 'UTC';
+	} catch {
+		return 'UTC';
+	}
+}
+
+/**
+ * Format a time with timezone information
+ * @returns Object with formatted time, abbreviation, and offset for tooltip
+ */
+export function formatTimeWithTimezone(
+	time: string,
+	timezone: string,
+	date?: Date,
+	use24h: boolean = false
+): { time: string; abbreviation: string; offset: string } {
+	return {
+		time: formatTime(time, use24h),
+		abbreviation: getTimezoneAbbreviation(timezone, date),
+		offset: getTimezoneOffset(timezone, date)
+	};
+}
+
+/**
+ * Calculate real duration between two times in different timezones
+ * Accounts for timezone differences and returns duration in minutes
+ */
+export function calculateRealDuration(
+	departureTime: string,
+	departureTimezone: string,
+	arrivalTime: string,
+	arrivalTimezone: string,
+	departureDate: string,
+	arrivalDate: string
+): number {
+	// Parse times
+	const [depHours, depMinutes] = departureTime.split(':').map(Number);
+	const [arrHours, arrMinutes] = arrivalTime.split(':').map(Number);
+
+	// Create Date objects in UTC first, then adjust for timezone
+	const depDate = new Date(`${departureDate}T${departureTime}:00`);
+	const arrDate = new Date(`${arrivalDate}T${arrivalTime}:00`);
+
+	// Get timezone offsets in minutes
+	function getOffsetMinutes(timezone: string, date: Date): number {
+		try {
+			// Create a formatter that outputs the date in the target timezone
+			const formatter = new Intl.DateTimeFormat('en-US', {
+				timeZone: timezone,
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				hour12: false
+			});
+
+			// Parse the formatted date parts
+			const parts = formatter.formatToParts(date);
+			const getPart = (type: string) =>
+				parseInt(parts.find((p) => p.type === type)?.value || '0', 10);
+
+			const tzYear = getPart('year');
+			const tzMonth = getPart('month') - 1;
+			const tzDay = getPart('day');
+			const tzHour = getPart('hour');
+			const tzMinute = getPart('minute');
+
+			// Create a UTC date representing the timezone's local time
+			const tzDate = new Date(Date.UTC(tzYear, tzMonth, tzDay, tzHour, tzMinute));
+
+			// The offset is the difference between the timezone's local time and UTC
+			return (date.getTime() - tzDate.getTime()) / (1000 * 60);
+		} catch {
+			return 0;
+		}
+	}
+
+	const depOffsetMin = getOffsetMinutes(departureTimezone, depDate);
+	const arrOffsetMin = getOffsetMinutes(arrivalTimezone, arrDate);
+
+	// Convert both times to UTC
+	const depUtcMinutes =
+		depDate.getTime() / (1000 * 60) + depOffsetMin;
+	const arrUtcMinutes =
+		arrDate.getTime() / (1000 * 60) + arrOffsetMin;
+
+	return Math.round(arrUtcMinutes - depUtcMinutes);
+}

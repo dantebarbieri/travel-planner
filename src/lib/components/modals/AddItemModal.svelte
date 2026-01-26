@@ -1,34 +1,48 @@
 <script lang="ts">
-	import type { Activity, FoodVenue, DailyItemKind, Location, GeoLocation } from '$lib/types/travel';
+	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation } from '$lib/types/travel';
 	import { fakeAttractionAdapter } from '$lib/adapters/attractions/fakeAdapter';
 	import { fakeFoodAdapter } from '$lib/adapters/food/fakeAdapter';
+	import { fakeLodgingAdapter } from '$lib/adapters/lodging/fakeAdapter';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
-	import { generateActivityId, generateFoodVenueId } from '$lib/utils/ids';
+	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
 
 	interface Props {
 		isOpen: boolean;
 		onclose: () => void;
 		onAddActivity: (activity: Activity) => void;
 		onAddFoodVenue: (venue: FoodVenue) => void;
+		onAddStay?: (stay: Stay) => void;
 		cityLocation?: GeoLocation;
 	}
 
-	let { isOpen, onclose, onAddActivity, onAddFoodVenue, cityLocation }: Props = $props();
+	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, cityLocation }: Props = $props();
 
-	let selectedKind = $state<'activity' | 'food'>('activity');
+	let selectedKind = $state<'activity' | 'food' | 'stay'>('activity');
 	let activitySearchQuery = $state('');
 	let foodSearchQuery = $state('');
+	let staySearchQuery = $state('');
 	let selectedActivity = $state<Activity | null>(null);
 	let selectedFoodVenue = $state<FoodVenue | null>(null);
+	let selectedStay = $state<Stay | null>(null);
 	let scheduledTime = $state('');
 
+	// Stay-specific fields
+	let stayCheckIn = $state('');
+	let stayCheckOut = $state('');
+	let stayType = $state<StayType>('hotel');
+
 	// Derived: whichever item is currently selected based on kind
-	const selectedItem = $derived(selectedKind === 'activity' ? selectedActivity : selectedFoodVenue);
+	const selectedItem = $derived.by(() => {
+		if (selectedKind === 'activity') return selectedActivity;
+		if (selectedKind === 'food') return selectedFoodVenue;
+		if (selectedKind === 'stay') return selectedStay;
+		return null;
+	});
 
 	// For custom entries
 	let customName = $state('');
@@ -42,9 +56,14 @@
 			selectedKind = 'activity';
 			activitySearchQuery = '';
 			foodSearchQuery = '';
+			staySearchQuery = '';
 			selectedActivity = null;
 			selectedFoodVenue = null;
+			selectedStay = null;
 			scheduledTime = '';
+			stayCheckIn = '';
+			stayCheckOut = '';
+			stayType = 'hotel';
 			customName = '';
 			customAddress = '';
 			customNotes = '';
@@ -86,6 +105,16 @@
 		});
 	}
 
+	// Search function for stays
+	async function searchStays(query: string): Promise<Stay[]> {
+		return fakeLodgingAdapter.search({
+			query,
+			checkIn: stayCheckIn || undefined,
+			checkOut: stayCheckOut || undefined,
+			limit: 10
+		});
+	}
+
 	function selectActivity(item: Activity) {
 		selectedActivity = item;
 		showCustomForm = false;
@@ -93,6 +122,11 @@
 
 	function selectFoodVenue(item: FoodVenue) {
 		selectedFoodVenue = item;
+		showCustomForm = false;
+	}
+
+	function selectStay(item: Stay) {
+		selectedStay = item;
 		showCustomForm = false;
 	}
 
@@ -106,6 +140,12 @@
 			onAddFoodVenue({
 				...selectedFoodVenue,
 				scheduledTime: scheduledTime || undefined
+			});
+		} else if (selectedKind === 'stay' && selectedStay && onAddStay) {
+			onAddStay({
+				...selectedStay,
+				checkIn: stayCheckIn || selectedStay.checkIn,
+				checkOut: stayCheckOut || selectedStay.checkOut
 			});
 		} else {
 			return;
@@ -138,7 +178,7 @@
 				startTime: scheduledTime || undefined
 			};
 			onAddActivity(activity);
-		} else {
+		} else if (selectedKind === 'food') {
 			const venue: FoodVenue = {
 				id: generateFoodVenueId(),
 				name: customName,
@@ -148,15 +188,62 @@
 				scheduledTime: scheduledTime || undefined
 			};
 			onAddFoodVenue(venue);
+		} else if (selectedKind === 'stay' && onAddStay && stayCheckIn && stayCheckOut) {
+			const stay: Stay = {
+				id: generateStayId(),
+				type: stayType,
+				name: customName,
+				location: customLocation,
+				checkIn: stayCheckIn,
+				checkOut: stayCheckOut,
+				notes: customNotes || undefined
+			};
+			onAddStay(stay);
 		}
 
 		onclose();
 	}
 
+	function resetKindSelection() {
+		activitySearchQuery = '';
+		foodSearchQuery = '';
+		staySearchQuery = '';
+		selectedActivity = null;
+		selectedFoodVenue = null;
+		selectedStay = null;
+		showCustomForm = false;
+	}
+
 	const kindOptions = [
 		{ value: 'activity' as const, label: 'Activity', icon: 'attraction' },
-		{ value: 'food' as const, label: 'Food & Dining', icon: 'restaurant' }
+		{ value: 'food' as const, label: 'Food', icon: 'restaurant' },
+		{ value: 'stay' as const, label: 'Stay', icon: 'hotel' }
 	];
+
+	const stayTypeOptions: { value: StayType; label: string }[] = [
+		{ value: 'hotel', label: 'Hotel' },
+		{ value: 'airbnb', label: 'Airbnb' },
+		{ value: 'vrbo', label: 'VRBO' },
+		{ value: 'hostel', label: 'Hostel' },
+		{ value: 'custom', label: 'Other' }
+	];
+
+	const getIconForKind = (kind: 'activity' | 'food' | 'stay') => {
+		if (kind === 'activity') return 'attraction';
+		if (kind === 'food') return 'restaurant';
+		return 'hotel';
+	};
+
+	const getButtonLabel = (kind: 'activity' | 'food' | 'stay') => {
+		if (kind === 'activity') return 'Activity';
+		if (kind === 'food') return 'Food';
+		return 'Stay';
+	};
+
+	// Validation for stay
+	const canAddStay = $derived(
+		selectedKind === 'stay' && stayCheckIn && stayCheckOut && stayCheckIn <= stayCheckOut
+	);
 </script>
 
 <Modal {isOpen} title="Add to Day" {onclose}>
@@ -164,22 +251,20 @@
 		<!-- Kind Selection -->
 		<div class="kind-selector">
 			{#each kindOptions as option}
-				<button
-					type="button"
-					class="kind-option"
-					class:selected={selectedKind === option.value}
-					onclick={() => {
-						selectedKind = option.value;
-						activitySearchQuery = '';
-						foodSearchQuery = '';
-						selectedActivity = null;
-						selectedFoodVenue = null;
-						showCustomForm = false;
-					}}
-				>
-					<Icon name={option.icon} size={20} />
-					<span>{option.label}</span>
-				</button>
+				{#if option.value !== 'stay' || onAddStay}
+					<button
+						type="button"
+						class="kind-option"
+						class:selected={selectedKind === option.value}
+						onclick={() => {
+							selectedKind = option.value;
+							resetKindSelection();
+						}}
+					>
+						<Icon name={option.icon} size={20} />
+						<span>{option.label}</span>
+					</button>
+				{/if}
 			{/each}
 		</div>
 
@@ -199,7 +284,7 @@
 					bind:value={activitySearchQuery}
 					bind:selectedItem={selectedActivity}
 				/>
-			{:else}
+			{:else if selectedKind === 'food'}
 				<SearchAutocomplete
 					placeholder="Search restaurants, cafes, bars..."
 					searchFn={searchFoodVenues}
@@ -213,6 +298,20 @@
 					bind:value={foodSearchQuery}
 					bind:selectedItem={selectedFoodVenue}
 				/>
+			{:else if selectedKind === 'stay'}
+				<SearchAutocomplete
+					placeholder="Search hotels, airbnbs, hostels..."
+					searchFn={searchStays}
+					renderItem={(item) => ({
+						name: item.name,
+						subtitle: `${item.type} • ${item.location.address.formatted}`,
+						icon: 'hotel'
+					})}
+					getItemId={(item) => item.id}
+					onSelect={selectStay}
+					bind:value={staySearchQuery}
+					bind:selectedItem={selectedStay}
+				/>
 			{/if}
 
 			<button type="button" class="custom-toggle" onclick={() => (showCustomForm = !showCustomForm)}>
@@ -225,33 +324,95 @@
 			<div class="custom-form">
 				<Input label="Name" placeholder="Enter name" bind:value={customName} required />
 				<Input label="Address (optional)" placeholder="Enter address" bind:value={customAddress} />
+
+				{#if selectedKind === 'stay'}
+					<div class="stay-type-selector">
+						<label class="label">Type of Stay</label>
+						<div class="stay-type-options">
+							{#each stayTypeOptions as option}
+								<button
+									type="button"
+									class="stay-type-option"
+									class:selected={stayType === option.value}
+									onclick={() => (stayType = option.value)}
+								>
+									{option.label}
+								</button>
+							{/each}
+						</div>
+					</div>
+					<div class="date-row">
+						<div class="date-field">
+							<label class="label" for="custom-checkin">Check-in</label>
+							<input type="date" id="custom-checkin" class="input" bind:value={stayCheckIn} required />
+						</div>
+						<div class="date-field">
+							<label class="label" for="custom-checkout">Check-out</label>
+							<input type="date" id="custom-checkout" class="input" bind:value={stayCheckOut} min={stayCheckIn} required />
+						</div>
+					</div>
+				{:else}
+					<div class="time-field">
+						<label class="label" for="custom-time">Scheduled Time (optional)</label>
+						<input type="time" id="custom-time" class="input" bind:value={scheduledTime} />
+					</div>
+				{/if}
+
 				<Input label="Notes (optional)" placeholder="Any additional details" bind:value={customNotes} />
-				<div class="time-field">
-					<label class="label" for="custom-time">Scheduled Time (optional)</label>
-					<input type="time" id="custom-time" class="input" bind:value={scheduledTime} />
-				</div>
+
 				<div class="form-actions">
 					<Button variant="secondary" onclick={onclose}>Cancel</Button>
-					<Button onclick={addCustomItem} disabled={!customName.trim()}>Add {selectedKind === 'activity' ? 'Activity' : 'Food'}</Button>
+					<Button
+						onclick={addCustomItem}
+						disabled={!customName.trim() || (selectedKind === 'stay' && (!stayCheckIn || !stayCheckOut))}
+					>
+						Add {getButtonLabel(selectedKind)}
+					</Button>
 				</div>
 			</div>
 		{:else if selectedItem}
 			<!-- Selected Item Options -->
 			<div class="selected-options">
 				<div class="selected-preview">
-					<Icon name={selectedKind === 'activity' ? 'attraction' : 'restaurant'} size={20} />
+					<Icon name={getIconForKind(selectedKind)} size={20} />
 					<div class="selected-info">
 						<span class="selected-name">{selectedItem.name}</span>
 						<span class="selected-address">{selectedItem.location.address.formatted}</span>
+						{#if selectedKind === 'stay' && selectedStay}
+							<Badge size="sm">{selectedStay.type}</Badge>
+							{#if selectedStay.pricePerNight}
+								<span class="selected-price">{selectedStay.currency === 'EUR' ? '€' : selectedStay.currency === 'JPY' ? '¥' : '$'}{selectedStay.pricePerNight}/night</span>
+							{/if}
+						{/if}
 					</div>
 				</div>
-				<div class="time-field">
-					<label class="label" for="scheduled-time">Scheduled Time (optional)</label>
-					<input type="time" id="scheduled-time" class="input" bind:value={scheduledTime} />
-				</div>
+
+				{#if selectedKind === 'stay'}
+					<div class="date-row">
+						<div class="date-field">
+							<label class="label" for="stay-checkin">Check-in</label>
+							<input type="date" id="stay-checkin" class="input" bind:value={stayCheckIn} required />
+						</div>
+						<div class="date-field">
+							<label class="label" for="stay-checkout">Check-out</label>
+							<input type="date" id="stay-checkout" class="input" bind:value={stayCheckOut} min={stayCheckIn} required />
+						</div>
+					</div>
+				{:else}
+					<div class="time-field">
+						<label class="label" for="scheduled-time">Scheduled Time (optional)</label>
+						<input type="time" id="scheduled-time" class="input" bind:value={scheduledTime} />
+					</div>
+				{/if}
+
 				<div class="form-actions">
 					<Button variant="secondary" onclick={onclose}>Cancel</Button>
-					<Button onclick={addSelectedItem}>Add to Day</Button>
+					<Button
+						onclick={addSelectedItem}
+						disabled={selectedKind === 'stay' && !canAddStay}
+					>
+						Add to Day
+					</Button>
 				</div>
 			</div>
 		{/if}
@@ -361,10 +522,56 @@
 		color: var(--text-secondary);
 	}
 
-	.time-field {
+	.selected-price {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		font-weight: 500;
+	}
+
+	.time-field,
+	.date-field {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
+	}
+
+	.date-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-3);
+	}
+
+	.stay-type-selector {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.stay-type-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.stay-type-option {
+		padding: var(--space-2) var(--space-3);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition:
+			border-color var(--transition-fast),
+			background-color var(--transition-fast);
+
+		&:hover {
+			border-color: var(--color-primary);
+		}
+
+		&.selected {
+			border-color: var(--color-primary);
+			background: color-mix(in oklch, var(--color-primary), transparent 90%);
+		}
 	}
 
 	.label {

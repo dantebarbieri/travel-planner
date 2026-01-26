@@ -4,7 +4,7 @@
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
-	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, TravelMode } from '$lib/types/travel';
+	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
@@ -21,7 +21,8 @@
 	const tripId = $derived($page.params.id);
 	const trip = $derived(tripStore.state.trips.find((t) => t.id === tripId));
 
-	let weatherData = $state<Record<string, WeatherCondition>>({});
+	// Weather data keyed by date, with array of conditions (one per city for that day)
+	let weatherData = $state<Record<string, WeatherCondition[]>>({});
 	let isEditing = $state(false);
 	let showAddCityModal = $state(false);
 	let citySearchValue = $state('');
@@ -52,29 +53,63 @@
 		if (!trip) return;
 
 		for (const day of trip.itinerary) {
-			const city = trip.cities.find((c) => day.cityIds.includes(c.id));
-			if (city) {
-				const location = {
-					name: city.name,
-					address: {
-						street: '',
-						city: city.name,
-						country: city.country,
-						formatted: `${city.name}, ${city.country}`
-					},
-					geo: city.location
-				};
-				try {
-					const forecasts = await fakeWeatherAdapter.getForecast(location, [day.date]);
-					if (forecasts[0]) {
-						weatherData[day.date] = forecasts[0];
-					}
-				} catch {
-					// Ignore weather errors
-				}
-			}
+			await loadWeatherForDay(day);
 		}
 	}
+
+	async function loadWeatherForDay(day: ItineraryDay) {
+		if (!trip) return;
+
+		// Get all cities for this day
+		const dayCities = trip.cities.filter((c) => day.cityIds.includes(c.id));
+		if (dayCities.length === 0) {
+			weatherData[day.date] = [];
+			return;
+		}
+
+		const conditions: WeatherCondition[] = [];
+		for (const city of dayCities) {
+			const location = {
+				name: city.name,
+				address: {
+					street: '',
+					city: city.name,
+					country: city.country,
+					formatted: `${city.name}, ${city.country}`
+				},
+				geo: city.location
+			};
+			try {
+				// Use smart weather fetch (forecast vs historical based on date)
+				const forecasts = await fakeWeatherAdapter.getWeather(location, [day.date]);
+				if (forecasts[0]) {
+					conditions.push(forecasts[0]);
+				}
+			} catch {
+				// Ignore weather errors for this city
+			}
+		}
+		weatherData[day.date] = conditions;
+	}
+
+	// Reload weather when itinerary changes (cities assigned to days change)
+	let previousCityIds = $state<Record<string, string[]>>({});
+
+	$effect(() => {
+		if (!trip) return;
+
+		// Check each day to see if its cities changed
+		for (const day of trip.itinerary) {
+			const currentIds = day.cityIds.join(',');
+			const previousIds = previousCityIds[day.date]?.join(',') || '';
+
+			if (currentIds !== previousIds) {
+				// Cities changed for this day - reload weather
+				loadWeatherForDay(day);
+				previousCityIds[day.date] = [...day.cityIds];
+			}
+		}
+	});
 
 	function toggleEditing() {
 		isEditing = !isEditing;
@@ -278,6 +313,26 @@
 		});
 	}
 
+	function handleAddStayToDay(stay: Stay) {
+		if (!trip || !addItemDayId) return;
+
+		// Find the city for this day to add the stay to
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return;
+
+		const cityId = day.cityIds[0];
+
+		// Add the stay to the city
+		tripStore.addStay(trip.id, cityId, stay);
+
+		// Add it to the day's items (check-in on this day)
+		tripStore.addDayItem(trip.id, addItemDayId, {
+			kind: 'stay',
+			stayId: stay.id,
+			isCheckIn: true
+		});
+	}
+
 	// Get the city location for the current add item day
 	const addItemCityLocation = $derived.by(() => {
 		if (!trip || !addItemDayId) return undefined;
@@ -416,7 +471,7 @@
 						foodVenues={trip.foodVenues}
 						transportLegs={trip.transportLegs}
 						colorScheme={trip.colorScheme}
-						weather={weatherData[day.date]}
+						weatherList={weatherData[day.date] || []}
 						{isEditing}
 						onAddItem={() => handleAddItem(day)}
 						onReorder={(items) => handleReorder(day.id, items)}
@@ -523,6 +578,7 @@
 		}}
 		onAddActivity={handleAddActivityToDay}
 		onAddFoodVenue={handleAddFoodVenueToDay}
+		onAddStay={handleAddStayToDay}
 		cityLocation={addItemCityLocation}
 	/>
 

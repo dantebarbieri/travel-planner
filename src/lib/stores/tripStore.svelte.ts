@@ -12,7 +12,7 @@ import type {
 } from '$lib/types/travel';
 import { storageService } from '$lib/services/storageService';
 import { generateTripId, generateCityId, generateDayId, generateItemId } from '$lib/utils/ids';
-import { getDefaultColorScheme, assignStayColors } from '$lib/utils/colors';
+import { getDefaultColorScheme, assignStayColorsWithInferred } from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
 
 interface TripStoreState {
@@ -227,7 +227,10 @@ function addStay(tripId: string, cityId: string, stay: Stay): void {
 		// Update color scheme if in by-stay mode
 		if (updatedTrip.colorScheme.mode === 'by-stay') {
 			const allStayIds = updatedTrip.cities.flatMap((c) => c.stays.map((s) => s.id));
-			updatedTrip.colorScheme.stayColors = assignStayColors(allStayIds);
+			const citiesWithoutStays = updatedTrip.cities
+				.filter((c) => c.stays.length === 0)
+				.map((c) => c.id);
+			updatedTrip.colorScheme.stayColors = assignStayColorsWithInferred(allStayIds, citiesWithoutStays);
 		}
 		return regenerateItinerary(updatedTrip);
 	});
@@ -537,9 +540,12 @@ function toggleColorMode(tripId: string): void {
 			...t.colorScheme,
 			mode: newMode
 		};
-		if (newMode === 'by-stay' && !newScheme.stayColors) {
+		if (newMode === 'by-stay') {
 			const allStayIds = t.cities.flatMap((c) => c.stays.map((s) => s.id));
-			newScheme.stayColors = assignStayColors(allStayIds);
+			const citiesWithoutStays = t.cities
+				.filter((c) => c.stays.length === 0)
+				.map((c) => c.id);
+			newScheme.stayColors = assignStayColorsWithInferred(allStayIds, citiesWithoutStays);
 		}
 		return { ...t, colorScheme: newScheme, updatedAt: new Date().toISOString() };
 	});

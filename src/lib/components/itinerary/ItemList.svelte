@@ -6,7 +6,8 @@
 		FoodVenue,
 		TransportLeg,
 		ColorScheme,
-		TravelMode
+		TravelMode,
+		CityId
 	} from '$lib/types/travel';
 	import { isStayItem, isActivityItem, isFoodItem, isTransportItem } from '$lib/types/travel';
 	import StayCard from '$lib/components/items/StayCard.svelte';
@@ -17,6 +18,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
 	import ContextMenuItem from '$lib/components/ui/ContextMenuItem.svelte';
+	import { getItemColor as getItemColorUtil } from '$lib/utils/colors';
 
 	interface Props {
 		items: DailyItem[];
@@ -25,6 +27,7 @@
 		foodVenues: FoodVenue[];
 		transportLegs: TransportLeg[];
 		colorScheme: ColorScheme;
+		cityId?: CityId;
 		isEditing?: boolean;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
@@ -40,6 +43,7 @@
 		foodVenues,
 		transportLegs,
 		colorScheme,
+		cityId,
 		isEditing = false,
 		onReorder,
 		onItemClick,
@@ -92,10 +96,8 @@
 	}
 
 	function getItemColor(item: DailyItem): string {
-		if (colorScheme.mode === 'by-stay' && isStayItem(item) && colorScheme.stayColors) {
-			return colorScheme.stayColors[item.stayId] || colorScheme.kindColors.stay;
-		}
-		return colorScheme.kindColors[item.kind] || colorScheme.kindColors.activity;
+		const stayId = isStayItem(item) ? item.stayId : undefined;
+		return getItemColorUtil(item.kind, stayId, colorScheme, cityId);
 	}
 
 	// Drag and drop handlers

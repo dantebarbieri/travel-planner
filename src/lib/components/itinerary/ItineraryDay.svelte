@@ -11,7 +11,6 @@
 		DailyItem,
 		TravelMode
 	} from '$lib/types/travel';
-	import { formatDate, formatDayOfWeek } from '$lib/utils/dates';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
@@ -25,7 +24,7 @@
 		foodVenues: FoodVenue[];
 		transportLegs: TransportLeg[];
 		colorScheme: ColorScheme;
-		weather?: WeatherCondition;
+		weatherList?: WeatherCondition[];
 		isEditing?: boolean;
 		onAddItem?: () => void;
 		onReorder?: (items: DailyItem[]) => void;
@@ -43,7 +42,7 @@
 		foodVenues,
 		transportLegs,
 		colorScheme,
-		weather,
+		weatherList = [],
 		isEditing = false,
 		onAddItem,
 		onReorder,
@@ -85,6 +84,14 @@
 	});
 
 	const sortedItems = $derived([...day.items].sort((a, b) => a.sortOrder - b.sortOrder));
+
+	// The primary city for this day (used for inferred stay coloring)
+	// For transition days, use the destination city; otherwise use the first city
+	const primaryCityId = $derived.by(() => {
+		if (transitionInfo) return transitionInfo.to.id;
+		if (dayCities.length > 0) return dayCities[0].id;
+		return undefined;
+	});
 </script>
 
 <article class="itinerary-day" data-day-id={day.id}>
@@ -93,7 +100,7 @@
 		date={day.date}
 		title={day.title}
 		cityName={cityNames}
-		{weather}
+		{weatherList}
 	/>
 
 	<div class="day-content">
@@ -105,6 +112,7 @@
 				{foodVenues}
 				{transportLegs}
 				{colorScheme}
+				cityId={primaryCityId}
 				{isEditing}
 				{onReorder}
 				{onItemClick}

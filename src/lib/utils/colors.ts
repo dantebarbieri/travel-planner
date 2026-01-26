@@ -1,4 +1,4 @@
-import type { DailyItemKind, KindColors, ColorScheme, StayId } from '$lib/types/travel';
+import type { DailyItemKind, KindColors, ColorScheme, StayId, CityId } from '$lib/types/travel';
 
 export const defaultKindColors: KindColors = {
 	stay: 'oklch(0.7 0.15 280)',
@@ -48,13 +48,57 @@ export function assignStayColors(stayIds: StayId[]): Record<StayId, string> {
 	return colors;
 }
 
+/**
+ * Generate an inferred stay ID for a city (used when city has no actual stays)
+ */
+export function getInferredStayId(cityId: CityId): string {
+	return `inferred:${cityId}`;
+}
+
+/**
+ * Assign colors to both actual stays and inferred stays for cities without stays
+ */
+export function assignStayColorsWithInferred(
+	stayIds: StayId[],
+	cityIdsWithoutStays: CityId[]
+): Record<string, string> {
+	const colors: Record<string, string> = {};
+	let colorIndex = 0;
+
+	// First assign to actual stays
+	stayIds.forEach((id) => {
+		colors[id] = stayColorPalette[colorIndex % stayColorPalette.length];
+		colorIndex++;
+	});
+
+	// Then assign to inferred stays (cities without stays)
+	cityIdsWithoutStays.forEach((cityId) => {
+		const inferredId = getInferredStayId(cityId);
+		colors[inferredId] = stayColorPalette[colorIndex % stayColorPalette.length];
+		colorIndex++;
+	});
+
+	return colors;
+}
+
 export function getItemColor(
 	kind: DailyItemKind,
 	stayId: StayId | undefined,
-	colorScheme: ColorScheme
+	colorScheme: ColorScheme,
+	cityId?: CityId
 ): string {
-	if (colorScheme.mode === 'by-stay' && stayId && colorScheme.stayColors?.[stayId]) {
-		return colorScheme.stayColors[stayId];
+	if (colorScheme.mode === 'by-stay') {
+		// Try actual stay color first
+		if (stayId && colorScheme.stayColors?.[stayId]) {
+			return colorScheme.stayColors[stayId];
+		}
+		// Fall back to inferred stay color based on city
+		if (cityId) {
+			const inferredId = getInferredStayId(cityId);
+			if (colorScheme.stayColors?.[inferredId]) {
+				return colorScheme.stayColors[inferredId];
+			}
+		}
 	}
 	return getColorForKind(kind, colorScheme);
 }
