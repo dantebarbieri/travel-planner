@@ -133,7 +133,7 @@
 <style>
 	.item-card {
 		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-food)), white 90%);
+		background: color-mix(in oklch, var(--item-color, var(--color-kind-food)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
 		border-left: 4px solid var(--item-color, var(--color-kind-food));
 		border-radius: var(--radius-md);
 		padding: var(--space-3);

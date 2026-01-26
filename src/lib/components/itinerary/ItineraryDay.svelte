@@ -9,12 +9,14 @@
 		ColorScheme,
 		WeatherCondition,
 		DailyItem,
-		TravelMode
+		TravelMode,
+		StaySegment
 	} from '$lib/types/travel';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { getSegmentForDay, getDayBackgroundColor } from '$lib/utils/colors';
 
 	interface Props {
 		day: ItineraryDay;
@@ -24,6 +26,10 @@
 		foodVenues: FoodVenue[];
 		transportLegs: TransportLeg[];
 		colorScheme: ColorScheme;
+		/** Pre-computed stay segments for by-stay coloring */
+		staySegments?: StaySegment[];
+		/** Whether this day has a city but no lodging booked */
+		hasMissingLodging?: boolean;
 		weatherList?: WeatherCondition[];
 		isEditing?: boolean;
 		onAddItem?: () => void;
@@ -44,6 +50,8 @@
 		foodVenues,
 		transportLegs,
 		colorScheme,
+		staySegments = [],
+		hasMissingLodging = false,
 		weatherList = [],
 		isEditing = false,
 		onAddItem,
@@ -96,14 +104,45 @@
 		if (dayCities.length > 0) return dayCities[0].id;
 		return undefined;
 	});
+
+	// Get the stay segment for this day (for by-stay coloring)
+	const daySegment = $derived.by(() => {
+		if (staySegments.length === 0) return undefined;
+		return getSegmentForDay(staySegments, day.dayNumber - 1);
+	});
+
+	// Get the day background color (for by-stay mode when day is homogeneous)
+	const dayBgColor = $derived.by(() => {
+		return getDayBackgroundColor(colorScheme, staySegments, day.dayNumber - 1);
+	});
+
+	// Style string for the day container
+	const dayStyle = $derived.by(() => {
+		const styles: string[] = [];
+		if (dayBgColor) {
+			styles.push(`--day-bg-color: ${dayBgColor}`);
+		}
+		if (hasMissingLodging) {
+			styles.push(`--day-warning: var(--color-warning)`);
+		}
+		return styles.length > 0 ? styles.join('; ') : undefined;
+	});
 </script>
 
-<article class="itinerary-day" data-day-id={day.id}>
+<article 
+	class="itinerary-day" 
+	class:has-day-color={!!dayBgColor}
+	class:has-missing-lodging={hasMissingLodging}
+	data-day-id={day.id}
+	data-color-mode={colorScheme.mode}
+	style={dayStyle}
+>
 	<DayHeader
 		dayNumber={day.dayNumber}
 		date={day.date}
 		title={day.title}
 		cityName={cityNames}
+		{hasMissingLodging}
 		{weatherList}
 	/>
 
@@ -117,6 +156,7 @@
 				{transportLegs}
 				{colorScheme}
 				cityId={primaryCityId}
+				segmentId={daySegment?.id}
 				{isEditing}
 				{onReorder}
 				{onItemClick}
@@ -158,6 +198,18 @@
 		border-radius: var(--radius-lg);
 		margin-bottom: var(--space-4);
 		overflow: hidden;
+	}
+
+	/* Day with assigned stay color in by-stay mode */
+	.itinerary-day.has-day-color {
+		background: color-mix(in oklch, var(--day-bg-color), var(--surface-primary) 85%);
+		border-color: color-mix(in oklch, var(--day-bg-color), var(--border-color) 70%);
+	}
+
+	/* Day with missing lodging warning */
+	.itinerary-day.has-missing-lodging {
+		border-color: var(--color-warning);
+		border-width: 2px;
 	}
 
 	.day-content {

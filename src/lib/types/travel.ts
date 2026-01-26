@@ -350,10 +350,44 @@ export interface KindColors {
 	flight: string;
 }
 
+/**
+ * A color palette for stay coloring.
+ * Can be a default palette or a custom one for the trip.
+ */
+export interface ColorPalette {
+	id: string;
+	name: string;
+	colors: string[];
+}
+
 export interface ColorScheme {
 	mode: ColorMode;
 	kindColors: KindColors;
-	stayColors?: Record<StayId, string>;
+	/** Map of stay IDs (or inferred stay keys) to their assigned colors */
+	stayColors?: Record<string, string>;
+	/** Custom palette for this trip (if not using default) */
+	palette?: ColorPalette;
+}
+
+/**
+ * Information about a "stay segment" - either a real stay or an inferred one
+ * Used for by-stay coloring when days don't have explicit lodging
+ */
+export interface StaySegment {
+	/** Real stay ID, or inferred ID like 'inferred:cityId' or 'inferred:unknown:dayIndex' */
+	id: string;
+	/** The color assigned to this segment */
+	color: string;
+	/** Start day index (0-based) */
+	startDayIndex: number;
+	/** End day index (0-based, inclusive) */
+	endDayIndex: number;
+	/** Whether this is an inferred stay (no lodging booked) */
+	isInferred: boolean;
+	/** City ID if known */
+	cityId?: CityId;
+	/** Real stay ID if this is an actual stay */
+	stayId?: StayId;
 }
 
 // ============ Trip ============

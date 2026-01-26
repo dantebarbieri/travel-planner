@@ -4,9 +4,10 @@
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
-	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem } from '$lib/types/travel';
+	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
+	import { computeStaySegments, dayHasMissingLodging } from '$lib/utils/colors';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
 	import MoveItemModal from '$lib/components/modals/MoveItemModal.svelte';
@@ -558,6 +559,15 @@
 
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
+	
+	// Compute stay segments for by-stay coloring
+	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments(trip) : []);
+	
+	// Check which days have missing lodging (city assigned but no stay)
+	function checkDayMissingLodging(day: ItineraryDay): boolean {
+		if (!trip) return false;
+		return dayHasMissingLodging(trip, day);
+	}
 </script>
 
 {#if !trip}
@@ -652,6 +662,8 @@
 						foodVenues={trip.foodVenues}
 						transportLegs={trip.transportLegs}
 						colorScheme={trip.colorScheme}
+						{staySegments}
+						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date] || []}
 						{isEditing}
 						onAddItem={() => handleAddItem(day)}

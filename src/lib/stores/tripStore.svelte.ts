@@ -13,7 +13,12 @@ import type {
 } from '$lib/types/travel';
 import { storageService } from '$lib/services/storageService';
 import { generateTripId, generateCityId, generateDayId, generateItemId } from '$lib/utils/ids';
-import { getDefaultColorScheme, assignStayColorsWithInferred } from '$lib/utils/colors';
+import { 
+	getDefaultColorScheme, 
+	assignStayColorsWithInferred,
+	computeStaySegments,
+	buildStayColorsFromSegments
+} from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
 
 interface TripStoreState {
@@ -240,15 +245,14 @@ function addStay(tripId: string, cityId: string, stay: Stay): void {
 			cities: t.cities.map((c) => (c.id === cityId ? { ...c, stays: [...c.stays, stay] } : c)),
 			updatedAt: new Date().toISOString()
 		};
+		// Regenerate itinerary first to get proper day assignments
+		const tripWithItinerary = regenerateItinerary(updatedTrip);
 		// Update color scheme if in by-stay mode
-		if (updatedTrip.colorScheme.mode === 'by-stay') {
-			const allStayIds = updatedTrip.cities.flatMap((c) => c.stays.map((s) => s.id));
-			const citiesWithoutStays = updatedTrip.cities
-				.filter((c) => c.stays.length === 0)
-				.map((c) => c.id);
-			updatedTrip.colorScheme.stayColors = assignStayColorsWithInferred(allStayIds, citiesWithoutStays);
+		if (tripWithItinerary.colorScheme.mode === 'by-stay') {
+			const segments = computeStaySegments(tripWithItinerary);
+			tripWithItinerary.colorScheme.stayColors = buildStayColorsFromSegments(segments);
 		}
-		return regenerateItinerary(updatedTrip);
+		return tripWithItinerary;
 	});
 	saveTrips();
 }
@@ -627,11 +631,9 @@ function toggleColorMode(tripId: string): void {
 			mode: newMode
 		};
 		if (newMode === 'by-stay') {
-			const allStayIds = t.cities.flatMap((c) => c.stays.map((s) => s.id));
-			const citiesWithoutStays = t.cities
-				.filter((c) => c.stays.length === 0)
-				.map((c) => c.id);
-			newScheme.stayColors = assignStayColorsWithInferred(allStayIds, citiesWithoutStays);
+			// Compute stay segments and build color map
+			const segments = computeStaySegments(t);
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
 		}
 		return { ...t, colorScheme: newScheme, updatedAt: new Date().toISOString() };
 	});

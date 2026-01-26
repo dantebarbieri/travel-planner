@@ -28,6 +28,8 @@
 		transportLegs: TransportLeg[];
 		colorScheme: ColorScheme;
 		cityId?: CityId;
+		/** The stay segment ID for this day (used for by-stay coloring) */
+		segmentId?: string;
 		isEditing?: boolean;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
@@ -46,6 +48,7 @@
 		transportLegs,
 		colorScheme,
 		cityId,
+		segmentId,
 		isEditing = false,
 		onReorder,
 		onItemClick,
@@ -101,7 +104,8 @@
 
 	function getItemColor(item: DailyItem): string {
 		const stayId = isStayItem(item) ? item.stayId : undefined;
-		return getItemColorUtil(item.kind, stayId, colorScheme, cityId);
+		// For by-stay mode, all items on this day get the segment's color
+		return getItemColorUtil(item.kind, stayId, colorScheme, cityId, segmentId);
 	}
 
 	// Drag and drop handlers

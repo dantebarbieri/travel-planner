@@ -3,6 +3,7 @@
 	import { formatDate, formatDayOfWeek } from '$lib/utils/dates';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import WeatherBadge from '$lib/components/weather/WeatherBadge.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	interface Props {
 		dayNumber: number;
@@ -11,9 +12,11 @@
 		cityName: string;
 		weather?: WeatherCondition;
 		weatherList?: WeatherCondition[]; // For multiple cities
+		/** Whether this day has a city but no lodging booked */
+		hasMissingLodging?: boolean;
 	}
 
-	let { dayNumber, date, title, cityName, weather, weatherList = [] }: Props = $props();
+	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false }: Props = $props();
 
 	const dayOfWeek = $derived(formatDayOfWeek(date));
 	const formattedDate = $derived(formatDate(date, { month: 'short', day: 'numeric' }));
@@ -22,7 +25,7 @@
 	const allWeather = $derived(weatherList.length > 0 ? weatherList : weather ? [weather] : []);
 </script>
 
-<header class="day-header">
+<header class="day-header" class:has-warning={hasMissingLodging}>
 	<div class="day-info">
 		<Badge>Day {dayNumber}</Badge>
 		<div class="day-details">
@@ -31,6 +34,11 @@
 					{title}
 				{:else}
 					{cityName}
+				{/if}
+				{#if hasMissingLodging}
+					<span class="lodging-warning" title="No lodging booked for this day">
+						<Icon name="warning" size={18} />
+					</span>
 				{/if}
 			</h2>
 			<div class="day-meta">
@@ -81,6 +89,15 @@
 		font-weight: 600;
 		margin: 0;
 		line-height: 1.3;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.lodging-warning {
+		display: inline-flex;
+		color: var(--color-warning);
+		flex-shrink: 0;
 	}
 
 	.day-meta {

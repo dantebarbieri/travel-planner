@@ -200,7 +200,7 @@
 <style>
 	.item-card {
 		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-transport)), white 90%);
+		background: color-mix(in oklch, var(--item-color, var(--color-kind-transport)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
 		border-left: 4px solid var(--item-color, var(--color-kind-transport));
 		border-radius: var(--radius-md);
 		padding: var(--space-3);
