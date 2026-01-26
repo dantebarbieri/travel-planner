@@ -459,6 +459,7 @@
 		background: var(--surface-secondary);
 		border: 2px solid var(--border-color);
 		border-radius: var(--radius-md);
+		color: var(--text-primary);
 		cursor: pointer;
 		transition:
 			border-color var(--transition-fast),
