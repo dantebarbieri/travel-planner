@@ -18,35 +18,35 @@ function getItemDetails(
 			const details = [stay.location.address.formatted];
 			if (item.isCheckIn) details.push('Check-in');
 			if (item.isCheckOut) details.push('Check-out');
-			return { name: stay.name, details, time: item.time };
+			return { name: stay.name, details };
 		}
 		case 'activity': {
 			const activity = activities.find((a) => a.id === item.activityId);
 			if (!activity) return { name: 'Unknown Activity', details: [] };
 			const details = [activity.location.address.formatted];
-			if (activity.admissionPrice) {
-				details.push(`Admission: ${activity.admissionPrice.currency} ${activity.admissionPrice.amount}`);
+			if (activity.price !== undefined && activity.currency) {
+				details.push(`Admission: ${activity.currency} ${activity.price}`);
 			}
-			if (activity.businessHours) {
-				details.push(`Hours: ${activity.businessHours}`);
+			if (activity.openingHours) {
+				details.push('See opening hours');
 			}
-			return { name: activity.name, details, time: item.time };
+			return { name: activity.name, details };
 		}
 		case 'food': {
 			const venue = foodVenues.find((f) => f.id === item.foodVenueId);
 			if (!venue) return { name: 'Unknown Venue', details: [] };
 			const details = [venue.location.address.formatted];
-			if (venue.cuisine) details.push(`Cuisine: ${venue.cuisine}`);
+			if (venue.cuisineTypes?.length) details.push(`Cuisine: ${venue.cuisineTypes.join(', ')}`);
 			if (venue.priceLevel) details.push(`Price: ${'$'.repeat(venue.priceLevel)}`);
-			return { name: venue.name, details, time: item.time };
+			return { name: venue.name, details };
 		}
 		case 'transport': {
 			const leg = transportLegs.find((t) => t.id === item.transportLegId);
 			if (!leg) return { name: 'Unknown Transport', details: [] };
-			const details = [`${leg.from.name} → ${leg.to.name}`];
+			const details = [`${leg.origin.name} → ${leg.destination.name}`];
 			if (leg.duration) details.push(`Duration: ${formatDuration(leg.duration)}`);
 			if (leg.carrier) details.push(`Carrier: ${leg.carrier}`);
-			return { name: `${leg.mode.charAt(0).toUpperCase() + leg.mode.slice(1)}`, details, time: item.time };
+			return { name: `${leg.mode.charAt(0).toUpperCase() + leg.mode.slice(1)}`, details };
 		}
 	}
 }
@@ -179,9 +179,9 @@ export async function exportToPDF(trip: Trip): Promise<void> {
 	const options = {
 		margin: 10,
 		filename: `${trip.name.replace(/\s+/g, '-').toLowerCase()}-itinerary.pdf`,
-		image: { type: 'jpeg', quality: 0.98 },
+		image: { type: 'jpeg' as const, quality: 0.98 },
 		html2canvas: { scale: 2, useCORS: true },
-		jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+		jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
 	};
 
 	try {

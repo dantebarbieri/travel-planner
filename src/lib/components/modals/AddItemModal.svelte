@@ -327,8 +327,8 @@
 
 				{#if selectedKind === 'stay'}
 					<div class="stay-type-selector">
-						<label class="label">Type of Stay</label>
-						<div class="stay-type-options">
+						<span class="label" id="stay-type-label">Type of Stay</span>
+						<div class="stay-type-options" role="group" aria-labelledby="stay-type-label">
 							{#each stayTypeOptions as option}
 								<button
 									type="button"

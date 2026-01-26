@@ -158,6 +158,8 @@
 			onblur={handleBlur}
 			onfocus={handleFocus}
 			autocomplete="off"
+			role="combobox"
+			aria-controls="search-results"
 			aria-expanded={isOpen}
 			aria-haspopup="listbox"
 			aria-autocomplete="list"
@@ -176,7 +178,7 @@
 	{/if}
 
 	{#if isOpen && results.length > 0}
-		<ul class="results-list" role="listbox">
+		<ul class="results-list" role="listbox" id="search-results">
 			{#each results as item, index (getItemId(item))}
 				{@const rendered = renderItem(item)}
 				<li

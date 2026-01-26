@@ -7,6 +7,7 @@
 		disabled?: boolean;
 		loading?: boolean;
 		type?: 'button' | 'submit' | 'reset';
+		title?: string;
 		onclick?: () => void;
 		children: Snippet;
 	}
@@ -17,6 +18,7 @@
 		disabled = false,
 		loading = false,
 		type = 'button',
+		title,
 		onclick,
 		children
 	}: Props = $props();
@@ -33,7 +35,7 @@
 	);
 </script>
 
-<button class={classes} {type} disabled={disabled || loading} {onclick}>
+<button class={classes} {type} disabled={disabled || loading} {onclick} {title}>
 	{#if loading}
 		<span class="spinner"></span>
 	{/if}

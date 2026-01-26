@@ -304,6 +304,13 @@ export interface TransportDailyItem extends BaseDailyItem {
 
 export type DailyItem = StayDailyItem | ActivityDailyItem | FoodDailyItem | TransportDailyItem;
 
+// Helper type for creating new daily items (without id and sortOrder)
+export type NewStayDailyItem = Omit<StayDailyItem, 'id' | 'sortOrder'>;
+export type NewActivityDailyItem = Omit<ActivityDailyItem, 'id' | 'sortOrder'>;
+export type NewFoodDailyItem = Omit<FoodDailyItem, 'id' | 'sortOrder'>;
+export type NewTransportDailyItem = Omit<TransportDailyItem, 'id' | 'sortOrder'>;
+export type NewDailyItem = NewStayDailyItem | NewActivityDailyItem | NewFoodDailyItem | NewTransportDailyItem;
+
 // ============ Itinerary Day ============
 
 export interface ItineraryDay {

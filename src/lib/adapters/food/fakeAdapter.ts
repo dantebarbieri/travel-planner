@@ -352,7 +352,7 @@ const fakeFoodVenues: FoodVenue[] = [
 			wednesday: { open: '11:00', close: '21:00' },
 			thursday: { open: '11:00', close: '21:00' },
 			friday: { open: '11:00', close: '21:00' },
-			Saturday: { open: '11:00', close: '21:00' },
+			saturday: { open: '11:00', close: '21:00' },
 			sunday: { open: '11:00', close: '20:00' }
 		},
 		rating: 4.5,

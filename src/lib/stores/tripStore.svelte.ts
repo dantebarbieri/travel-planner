@@ -7,6 +7,7 @@ import type {
 	TransportLeg,
 	ItineraryDay,
 	DailyItem,
+	NewDailyItem,
 	ColorScheme,
 	Location
 } from '$lib/types/travel';
@@ -391,7 +392,7 @@ function removeTransportLeg(tripId: string, legId: string): void {
 
 // ============ Daily Item Management ============
 
-function addDayItem(tripId: string, dayId: string, item: Omit<DailyItem, 'id' | 'sortOrder'>): void {
+function addDayItem(tripId: string, dayId: string, item: NewDailyItem): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
 		return {
