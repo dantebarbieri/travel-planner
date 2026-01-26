@@ -10,10 +10,9 @@
 		mealSlot?: MealType;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { venue, mealSlot, isEditing = false, onclick, onRemove }: Props = $props();
+	let { venue, mealSlot, isEditing = false, onclick }: Props = $props();
 
 	const mealLabel = $derived.by(() => {
 		const labels: Record<MealType, string> = {
@@ -129,12 +128,6 @@
 			</div>
 		</div>
 	</div>
-
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>

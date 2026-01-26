@@ -427,6 +427,76 @@ function addDayItem(tripId: string, dayId: string, item: NewDailyItem): void {
 	saveTrips();
 }
 
+function insertDayItemAt(tripId: string, dayId: string, item: NewDailyItem, position: number): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId) return day;
+				const newItem: DailyItem = {
+					...item,
+					id: generateItemId(),
+					sortOrder: position
+				} as DailyItem;
+				const newItems = [...day.items];
+				// Clamp position to valid range
+				const insertPos = Math.max(0, Math.min(position, newItems.length));
+				newItems.splice(insertPos, 0, newItem);
+				// Re-number sortOrder
+				return { ...day, items: newItems.map((it, idx) => ({ ...it, sortOrder: idx })) };
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function duplicateDayItem(tripId: string, dayId: string, itemId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId) return day;
+				const itemToDuplicate = day.items.find((i) => i.id === itemId);
+				if (!itemToDuplicate) return day;
+				
+				const itemIndex = day.items.findIndex((i) => i.id === itemId);
+				const duplicatedItem: DailyItem = {
+					...itemToDuplicate,
+					id: generateItemId(),
+					sortOrder: itemIndex + 1
+				};
+				
+				const newItems = [...day.items];
+				newItems.splice(itemIndex + 1, 0, duplicatedItem);
+				// Re-number sortOrder
+				return { ...day, items: newItems.map((it, idx) => ({ ...it, sortOrder: idx })) };
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function removeAllStayItems(tripId: string, stayId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => ({
+				...day,
+				items: day.items
+					.filter((item) => !(item.kind === 'stay' && item.stayId === stayId))
+					.map((it, idx) => ({ ...it, sortOrder: idx }))
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 function updateDayItem(tripId: string, dayId: string, itemId: string, updates: Partial<DailyItem>): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
@@ -689,6 +759,9 @@ export const tripStore = {
 
 	// Daily Items
 	addDayItem,
+	insertDayItemAt,
+	duplicateDayItem,
+	removeAllStayItems,
 	updateDayItem,
 	removeDayItem,
 	reorderDayItems,

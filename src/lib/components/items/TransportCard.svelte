@@ -9,10 +9,9 @@
 		leg: TransportLeg;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { leg, isEditing = false, onclick, onRemove }: Props = $props();
+	let { leg, isEditing = false, onclick }: Props = $props();
 
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
@@ -196,11 +195,6 @@
 		</div>
 	</div>
 
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>

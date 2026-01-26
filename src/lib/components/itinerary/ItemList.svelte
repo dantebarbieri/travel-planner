@@ -32,7 +32,9 @@
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
+		onRemoveEntireStay?: (stayId: string) => void;
 		onMoveItem?: (itemId: string) => void;
+		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
 	}
 
@@ -48,7 +50,9 @@
 		onReorder,
 		onItemClick,
 		onRemoveItem,
+		onRemoveEntireStay,
 		onMoveItem,
+		onDuplicateItem,
 		onTravelModeChange
 	}: Props = $props();
 
@@ -161,7 +165,38 @@
 
 	function handleRemoveFromMenu() {
 		if (contextMenuItemId) {
-			onRemoveItem?.(contextMenuItemId);
+			// Check if this is a stay item
+			const item = items.find((i) => i.id === contextMenuItemId);
+			if (item && isStayItem(item)) {
+				// Show confirmation dialog for stay
+				const stay = getStay(item.stayId);
+				const stayName = stay?.name || 'this stay';
+				const choice = confirm(
+					`Would you like to remove just this instance of "${stayName}" from this day?\n\nClick "OK" to remove this instance only.\nClick "Cancel" to keep it.`
+				);
+				if (choice) {
+					onRemoveItem?.(contextMenuItemId);
+				}
+			} else {
+				onRemoveItem?.(contextMenuItemId);
+			}
+		}
+		closeContextMenu();
+	}
+
+	function handleRemoveEntireStayFromMenu() {
+		if (contextMenuItemId) {
+			const item = items.find((i) => i.id === contextMenuItemId);
+			if (item && isStayItem(item)) {
+				const stay = getStay(item.stayId);
+				const stayName = stay?.name || 'this stay';
+				const confirmed = confirm(
+					`Are you sure you want to remove "${stayName}" from ALL days of your trip?`
+				);
+				if (confirmed) {
+					onRemoveEntireStay?.(item.stayId);
+				}
+			}
 		}
 		closeContextMenu();
 	}
@@ -172,6 +207,17 @@
 		}
 		closeContextMenu();
 	}
+
+	function handleDuplicateFromMenu() {
+		if (contextMenuItemId) {
+			onDuplicateItem?.(contextMenuItemId);
+		}
+		closeContextMenu();
+	}
+
+	// Get the currently selected context menu item
+	const contextMenuItem = $derived(contextMenuItemId ? items.find((i) => i.id === contextMenuItemId) : null);
+	const isContextMenuItemStay = $derived(contextMenuItem ? isStayItem(contextMenuItem) : false);
 
 	function getItemName(item: DailyItem): string {
 		if (isStayItem(item)) {
@@ -238,7 +284,6 @@
 							isCheckOut={item.isCheckOut}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
-							onRemove={() => onRemoveItem?.(item.id)}
 						/>
 					{/if}
 				{:else if isActivityItem(item)}
@@ -248,7 +293,6 @@
 							{activity}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
-							onRemove={() => onRemoveItem?.(item.id)}
 						/>
 					{/if}
 				{:else if isFoodItem(item)}
@@ -259,7 +303,6 @@
 							mealSlot={item.mealSlot}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
-							onRemove={() => onRemoveItem?.(item.id)}
 						/>
 					{/if}
 				{:else if isTransportItem(item)}
@@ -269,7 +312,6 @@
 							{leg}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
-							onRemove={() => onRemoveItem?.(item.id)}
 						/>
 					{/if}
 				{/if}
@@ -290,8 +332,12 @@
 
 <!-- Context Menu -->
 <ContextMenu isOpen={contextMenuOpen} x={contextMenuX} y={contextMenuY} onclose={closeContextMenu}>
+	<ContextMenuItem label="Duplicate" icon="copy" onclick={handleDuplicateFromMenu} />
 	<ContextMenuItem label="Move to another day" icon="move" onclick={handleMoveFromMenu} />
 	<ContextMenuItem label="Remove from day" icon="delete" variant="danger" onclick={handleRemoveFromMenu} />
+	{#if isContextMenuItemStay}
+		<ContextMenuItem label="Remove entire stay" icon="delete" variant="danger" onclick={handleRemoveEntireStayFromMenu} />
+	{/if}
 </ContextMenu>
 
 <style>

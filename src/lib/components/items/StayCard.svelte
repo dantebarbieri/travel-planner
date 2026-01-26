@@ -11,10 +11,9 @@
 		isCheckOut?: boolean;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { stay, isCheckIn = false, isCheckOut = false, isEditing = false, onclick, onRemove }: Props = $props();
+	let { stay, isCheckIn = false, isCheckOut = false, isEditing = false, onclick }: Props = $props();
 
 	const stayTypeLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -87,11 +86,6 @@
 		</div>
 	</div>
 
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>

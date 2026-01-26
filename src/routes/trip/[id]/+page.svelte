@@ -292,7 +292,28 @@
 		// Add the activity to the trip
 		tripStore.addActivity(trip.id, activity);
 
-		// Add it to the day's items
+		// Find the day and check if it has stay bookends (intermediate day)
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (day) {
+			const hasStayBookends = day.items.length >= 2 &&
+				day.items[0].kind === 'stay' &&
+				day.items[day.items.length - 1].kind === 'stay' &&
+				!('isCheckIn' in day.items[0] && day.items[0].isCheckIn) &&
+				!('isCheckOut' in day.items[0] && day.items[0].isCheckOut) &&
+				!('isCheckIn' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckIn) &&
+				!('isCheckOut' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckOut);
+
+			if (hasStayBookends) {
+				// Insert before the last item (the end-of-day stay bookend)
+				tripStore.insertDayItemAt(trip.id, addItemDayId, {
+					kind: 'activity',
+					activityId: activity.id
+				}, day.items.length - 1);
+				return;
+			}
+		}
+
+		// Default: add at end
 		tripStore.addDayItem(trip.id, addItemDayId, {
 			kind: 'activity',
 			activityId: activity.id
@@ -305,7 +326,29 @@
 		// Add the food venue to the trip
 		tripStore.addFoodVenue(trip.id, venue);
 
-		// Add it to the day's items
+		// Find the day and check if it has stay bookends (intermediate day)
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (day) {
+			const hasStayBookends = day.items.length >= 2 &&
+				day.items[0].kind === 'stay' &&
+				day.items[day.items.length - 1].kind === 'stay' &&
+				!('isCheckIn' in day.items[0] && day.items[0].isCheckIn) &&
+				!('isCheckOut' in day.items[0] && day.items[0].isCheckOut) &&
+				!('isCheckIn' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckIn) &&
+				!('isCheckOut' in day.items[day.items.length - 1] && day.items[day.items.length - 1].isCheckOut);
+
+			if (hasStayBookends) {
+				// Insert before the last item (the end-of-day stay bookend)
+				tripStore.insertDayItemAt(trip.id, addItemDayId, {
+					kind: 'food',
+					foodVenueId: venue.id,
+					mealSlot: venue.mealType
+				}, day.items.length - 1);
+				return;
+			}
+		}
+
+		// Default: add at end
 		tripStore.addDayItem(trip.id, addItemDayId, {
 			kind: 'food',
 			foodVenueId: venue.id,
@@ -477,6 +520,18 @@
 		}
 	}
 
+	function handleRemoveEntireStay(stayId: string) {
+		if (trip) {
+			tripStore.removeAllStayItems(trip.id, stayId);
+		}
+	}
+
+	function handleDuplicateItem(dayId: string, itemId: string) {
+		if (trip) {
+			tripStore.duplicateDayItem(trip.id, dayId, itemId);
+		}
+	}
+
 	function handleMoveItem(dayId: string, itemId: string) {
 		moveItemFromDayId = dayId;
 		moveItemId = itemId;
@@ -599,7 +654,9 @@
 						onAddItem={() => handleAddItem(day)}
 						onReorder={(items) => handleReorder(day.id, items)}
 						onRemoveItem={(itemId) => handleRemoveItem(day.id, itemId)}
+						onRemoveEntireStay={handleRemoveEntireStay}
 						onMoveItem={(itemId) => handleMoveItem(day.id, itemId)}
+						onDuplicateItem={(itemId) => handleDuplicateItem(day.id, itemId)}
 						onTravelModeChange={(itemId, mode) => handleTravelModeChange(day.id, itemId, mode)}
 					/>
 				{/each}

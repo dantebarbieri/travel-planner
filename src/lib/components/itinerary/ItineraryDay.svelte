@@ -30,7 +30,9 @@
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
+		onRemoveEntireStay?: (stayId: string) => void;
 		onMoveItem?: (itemId: string) => void;
+		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
 	}
 
@@ -48,7 +50,9 @@
 		onReorder,
 		onItemClick,
 		onRemoveItem,
+		onRemoveEntireStay,
 		onMoveItem,
+		onDuplicateItem,
 		onTravelModeChange
 	}: Props = $props();
 
@@ -117,7 +121,9 @@
 				{onReorder}
 				{onItemClick}
 				{onRemoveItem}
+				{onRemoveEntireStay}
 				{onMoveItem}
+				{onDuplicateItem}
 				{onTravelModeChange}
 			/>
 		{:else}

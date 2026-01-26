@@ -9,10 +9,9 @@
 		activity: Activity;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { activity, isEditing = false, onclick, onRemove }: Props = $props();
+	let { activity, isEditing = false, onclick }: Props = $props();
 
 	const categoryLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -115,11 +114,6 @@
 		</div>
 	</div>
 
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>
