@@ -56,6 +56,8 @@ const fakeCities: CitySearchResult[] = [
 	{ id: 'city-new-york', name: 'New York', country: 'USA', location: { latitude: 40.7128, longitude: -74.0060 }, timezone: 'America/New_York', population: 8336817 },
 	{ id: 'city-los-angeles', name: 'Los Angeles', country: 'USA', location: { latitude: 34.0522, longitude: -118.2437 }, timezone: 'America/Los_Angeles', population: 3979576 },
 	{ id: 'city-san-francisco', name: 'San Francisco', country: 'USA', location: { latitude: 37.7749, longitude: -122.4194 }, timezone: 'America/Los_Angeles', population: 873965 },
+	{ id: 'city-monterey', name: 'Monterey', country: 'USA', location: { latitude: 36.6002, longitude: -121.8947 }, timezone: 'America/Los_Angeles', population: 28454 },
+	{ id: 'city-san-diego', name: 'San Diego', country: 'USA', location: { latitude: 32.7157, longitude: -117.1611 }, timezone: 'America/Los_Angeles', population: 1386932 },
 	{ id: 'city-chicago', name: 'Chicago', country: 'USA', location: { latitude: 41.8781, longitude: -87.6298 }, timezone: 'America/Chicago', population: 2693976 },
 	{ id: 'city-miami', name: 'Miami', country: 'USA', location: { latitude: 25.7617, longitude: -80.1918 }, timezone: 'America/New_York', population: 467963 },
 	{ id: 'city-las-vegas', name: 'Las Vegas', country: 'USA', location: { latitude: 36.1699, longitude: -115.1398 }, timezone: 'America/Los_Angeles', population: 651319 },
