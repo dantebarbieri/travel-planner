@@ -298,7 +298,10 @@ export function buildStayColorsFromSegments(segments: StaySegment[]): Record<str
 }
 
 /**
- * Check if a day has "missing lodging" - meaning it has a city but no booked stay
+ * Check if a day has "missing lodging" - meaning it has a city but no booked stay.
+ * 
+ * Exception: The last day of the trip does not require lodging if there's a flight home.
+ * This allows for checkout-only days where the traveler is flying back.
  */
 export function dayHasMissingLodging(trip: Trip, day: ItineraryDay): boolean {
 	if (day.cityIds.length === 0) {
@@ -319,7 +322,23 @@ export function dayHasMissingLodging(trip: Trip, day: ItineraryDay): boolean {
 		}
 	}
 	
-	// City assigned but no lodging
+	// Check if this is the last day of the trip
+	const isLastDay = day.date === trip.endDate;
+	
+	if (isLastDay) {
+		// On the last day, no lodging warning if there's a flight home
+		const hasFlightHome = day.items.some(item => {
+			if (item.kind !== 'transport') return false;
+			const transportLeg = trip.transportLegs.find(t => t.id === item.transportLegId);
+			return transportLeg?.mode === 'flight';
+		});
+		
+		if (hasFlightHome) {
+			return false; // Last day with flight home - no warning needed
+		}
+	}
+	
+	// City assigned but no lodging (and no flight home exception)
 	return true;
 }
 
