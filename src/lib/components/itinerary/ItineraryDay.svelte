@@ -125,11 +125,11 @@
 		{/if}
 	</div>
 
-	{#if isEditing && sortedItems.length > 0 && onAddItem}
+	{#if isEditing && onAddItem}
 		<div class="day-footer">
-			<Button variant="ghost" size="sm" onclick={onAddItem}>
+			<Button variant="secondary" size="sm" onclick={onAddItem}>
 				<Icon name="add" size={16} />
-				Add item
+				Add activity
 			</Button>
 		</div>
 	{/if}

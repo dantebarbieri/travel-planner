@@ -7,6 +7,7 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
 	import { generateActivityId, generateFoodVenueId } from '$lib/utils/ids';
 
 	interface Props {
@@ -20,11 +21,14 @@
 	let { isOpen, onclose, onAddActivity, onAddFoodVenue, cityLocation }: Props = $props();
 
 	let selectedKind = $state<'activity' | 'food'>('activity');
-	let searchQuery = $state('');
-	let searchResults = $state<(Activity | FoodVenue)[]>([]);
-	let isSearching = $state(false);
-	let selectedItem = $state<Activity | FoodVenue | null>(null);
+	let activitySearchQuery = $state('');
+	let foodSearchQuery = $state('');
+	let selectedActivity = $state<Activity | null>(null);
+	let selectedFoodVenue = $state<FoodVenue | null>(null);
 	let scheduledTime = $state('');
+
+	// Derived: whichever item is currently selected based on kind
+	const selectedItem = $derived(selectedKind === 'activity' ? selectedActivity : selectedFoodVenue);
 
 	// For custom entries
 	let customName = $state('');
@@ -36,9 +40,10 @@
 		if (!isOpen) {
 			// Reset state when modal closes
 			selectedKind = 'activity';
-			searchQuery = '';
-			searchResults = [];
-			selectedItem = null;
+			activitySearchQuery = '';
+			foodSearchQuery = '';
+			selectedActivity = null;
+			selectedFoodVenue = null;
 			scheduledTime = '';
 			customName = '';
 			customAddress = '';
@@ -47,63 +52,63 @@
 		}
 	});
 
-	async function search() {
-		if (!searchQuery.trim()) {
-			searchResults = [];
-			return;
-		}
+	// Search function for activities
+	async function searchActivities(query: string): Promise<Activity[]> {
+		const location: Location | undefined = cityLocation
+			? {
+					name: 'Search Location',
+					address: { street: '', city: '', country: '', formatted: '' },
+					geo: cityLocation
+				}
+			: undefined;
 
-		isSearching = true;
-		try {
-			const location: Location | undefined = cityLocation
-				? {
-						name: 'Search Location',
-						address: { street: '', city: '', country: '', formatted: '' },
-						geo: cityLocation
-					}
-				: undefined;
-
-			if (selectedKind === 'activity') {
-				searchResults = await fakeAttractionAdapter.search({
-					query: searchQuery,
-					location,
-					limit: 10
-				});
-			} else {
-				searchResults = await fakeFoodAdapter.search({
-					query: searchQuery,
-					location,
-					limit: 10
-				});
-			}
-		} catch (error) {
-			console.error('Search failed:', error);
-			searchResults = [];
-		} finally {
-			isSearching = false;
-		}
+		return fakeAttractionAdapter.search({
+			query,
+			location,
+			limit: 10
+		});
 	}
 
-	function selectItem(item: Activity | FoodVenue) {
-		selectedItem = item;
+	// Search function for food venues
+	async function searchFoodVenues(query: string): Promise<FoodVenue[]> {
+		const location: Location | undefined = cityLocation
+			? {
+					name: 'Search Location',
+					address: { street: '', city: '', country: '', formatted: '' },
+					geo: cityLocation
+				}
+			: undefined;
+
+		return fakeFoodAdapter.search({
+			query,
+			location,
+			limit: 10
+		});
+	}
+
+	function selectActivity(item: Activity) {
+		selectedActivity = item;
+		showCustomForm = false;
+	}
+
+	function selectFoodVenue(item: FoodVenue) {
+		selectedFoodVenue = item;
 		showCustomForm = false;
 	}
 
 	function addSelectedItem() {
-		if (!selectedItem) return;
-
-		if (selectedKind === 'activity') {
-			const activity = selectedItem as Activity;
+		if (selectedKind === 'activity' && selectedActivity) {
 			onAddActivity({
-				...activity,
+				...selectedActivity,
 				startTime: scheduledTime || undefined
 			});
-		} else {
-			const venue = selectedItem as FoodVenue;
+		} else if (selectedKind === 'food' && selectedFoodVenue) {
 			onAddFoodVenue({
-				...venue,
+				...selectedFoodVenue,
 				scheduledTime: scheduledTime || undefined
 			});
+		} else {
+			return;
 		}
 
 		onclose();
@@ -148,10 +153,6 @@
 		onclose();
 	}
 
-	function isActivity(item: Activity | FoodVenue): item is Activity {
-		return 'category' in item;
-	}
-
 	const kindOptions = [
 		{ value: 'activity' as const, label: 'Activity', icon: 'attraction' },
 		{ value: 'food' as const, label: 'Food & Dining', icon: 'restaurant' }
@@ -169,8 +170,10 @@
 					class:selected={selectedKind === option.value}
 					onclick={() => {
 						selectedKind = option.value;
-						searchResults = [];
-						selectedItem = null;
+						activitySearchQuery = '';
+						foodSearchQuery = '';
+						selectedActivity = null;
+						selectedFoodVenue = null;
 						showCustomForm = false;
 					}}
 				>
@@ -182,16 +185,35 @@
 
 		<!-- Search -->
 		<div class="search-section">
-			<div class="search-input-row">
-				<Input
-					placeholder={selectedKind === 'activity' ? 'Search attractions, tours...' : 'Search restaurants, cafes...'}
-					bind:value={searchQuery}
-					onkeydown={(e) => e.key === 'Enter' && search()}
+			{#if selectedKind === 'activity'}
+				<SearchAutocomplete
+					placeholder="Search attractions, tours, museums..."
+					searchFn={searchActivities}
+					renderItem={(item) => ({
+						name: item.name,
+						subtitle: item.location.address.formatted,
+						icon: 'attraction'
+					})}
+					getItemId={(item) => item.id}
+					onSelect={selectActivity}
+					bind:value={activitySearchQuery}
+					bind:selectedItem={selectedActivity}
 				/>
-				<Button onclick={search} disabled={isSearching}>
-					<Icon name="search" size={16} />
-				</Button>
-			</div>
+			{:else}
+				<SearchAutocomplete
+					placeholder="Search restaurants, cafes, bars..."
+					searchFn={searchFoodVenues}
+					renderItem={(item) => ({
+						name: item.name,
+						subtitle: `${item.venueType} • ${item.location.address.formatted}`,
+						icon: 'restaurant'
+					})}
+					getItemId={(item) => item.id}
+					onSelect={selectFoodVenue}
+					bind:value={foodSearchQuery}
+					bind:selectedItem={selectedFoodVenue}
+				/>
+			{/if}
 
 			<button type="button" class="custom-toggle" onclick={() => (showCustomForm = !showCustomForm)}>
 				{showCustomForm ? 'Search instead' : "Can't find it? Add custom entry"}
@@ -213,55 +235,25 @@
 					<Button onclick={addCustomItem} disabled={!customName.trim()}>Add {selectedKind === 'activity' ? 'Activity' : 'Food'}</Button>
 				</div>
 			</div>
-		{:else}
-			<!-- Search Results -->
-			{#if isSearching}
-				<div class="loading">Searching...</div>
-			{:else if searchResults.length > 0}
-				<div class="results-list">
-					{#each searchResults as result (result.id)}
-						<button
-							type="button"
-							class="result-item"
-							class:selected={selectedItem?.id === result.id}
-							onclick={() => selectItem(result)}
-						>
-							<div class="result-info">
-								<span class="result-name">{result.name}</span>
-								<span class="result-address">{result.location.address.formatted}</span>
-								{#if isActivity(result)}
-									<Badge size="sm">{result.category}</Badge>
-								{:else}
-									<Badge size="sm">{result.venueType}</Badge>
-								{/if}
-							</div>
-							{#if selectedItem?.id === result.id}
-								<Icon name="check" size={16} />
-							{/if}
-						</button>
-					{/each}
-				</div>
-
-				{#if selectedItem}
-					<div class="selected-options">
-						<div class="time-field">
-							<label class="label" for="scheduled-time">Scheduled Time (optional)</label>
-							<input type="time" id="scheduled-time" class="input" bind:value={scheduledTime} />
-						</div>
-						<div class="form-actions">
-							<Button variant="secondary" onclick={onclose}>Cancel</Button>
-							<Button onclick={addSelectedItem}>Add to Day</Button>
-						</div>
+		{:else if selectedItem}
+			<!-- Selected Item Options -->
+			<div class="selected-options">
+				<div class="selected-preview">
+					<Icon name={selectedKind === 'activity' ? 'attraction' : 'restaurant'} size={20} />
+					<div class="selected-info">
+						<span class="selected-name">{selectedItem.name}</span>
+						<span class="selected-address">{selectedItem.location.address.formatted}</span>
 					</div>
-				{/if}
-			{:else if searchQuery}
-				<div class="no-results">
-					<p>No results found for "{searchQuery}"</p>
-					<button type="button" class="custom-toggle" onclick={() => (showCustomForm = true)}>
-						Add as custom entry
-					</button>
 				</div>
-			{/if}
+				<div class="time-field">
+					<label class="label" for="scheduled-time">Scheduled Time (optional)</label>
+					<input type="time" id="scheduled-time" class="input" bind:value={scheduledTime} />
+				</div>
+				<div class="form-actions">
+					<Button variant="secondary" onclick={onclose}>Cancel</Button>
+					<Button onclick={addSelectedItem}>Add to Day</Button>
+				</div>
+			</div>
 		{/if}
 	</div>
 </Modal>
@@ -315,11 +307,6 @@
 		gap: var(--space-2);
 	}
 
-	.search-input-row {
-		display: flex;
-		gap: var(--space-2);
-	}
-
 	.custom-toggle {
 		background: none;
 		border: none;
@@ -341,59 +328,37 @@
 		gap: var(--space-3);
 	}
 
-	.results-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		max-height: 250px;
-		overflow-y: auto;
-	}
-
-	.result-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: var(--space-2) var(--space-3);
-		background: var(--surface-secondary);
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-md);
-		cursor: pointer;
-		text-align: left;
-		transition:
-			border-color var(--transition-fast),
-			background-color var(--transition-fast);
-
-		&:hover {
-			border-color: var(--color-primary);
-		}
-
-		&.selected {
-			border-color: var(--color-primary);
-			background: color-mix(in oklch, var(--color-primary), transparent 95%);
-		}
-	}
-
-	.result-info {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.result-name {
-		font-weight: 500;
-	}
-
-	.result-address {
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-	}
-
 	.selected-options {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
 		padding-top: var(--space-3);
 		border-top: 1px solid var(--border-color);
+	}
+
+	.selected-preview {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
+		padding: var(--space-3);
+		background: color-mix(in oklch, var(--color-success), transparent 90%);
+		border: 1px solid var(--color-success);
+		border-radius: var(--radius-md);
+	}
+
+	.selected-info {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.selected-name {
+		font-weight: 600;
+	}
+
+	.selected-address {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
 	}
 
 	.time-field {
@@ -411,23 +376,5 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-3);
-	}
-
-	.loading,
-	.no-results {
-		text-align: center;
-		padding: var(--space-8);
-		color: var(--text-secondary);
-	}
-
-	.no-results {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: var(--space-2);
-
-		& p {
-			margin: 0;
-		}
 	}
 </style>
