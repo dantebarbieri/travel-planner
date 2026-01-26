@@ -83,8 +83,9 @@ Data fetching uses adapters with consistent interfaces:
 
 ```typescript
 interface LodgingAdapter {
-  search(query: string, location: GeoLocation): Promise<Stay[]>;
+  search(params: LodgingSearchParams): Promise<Stay[]>;
   getById(id: string): Promise<Stay | null>;
+  getDetails(stay: Stay): Promise<Stay>;
 }
 ```
 
