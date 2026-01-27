@@ -35,6 +35,7 @@
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
 		onRemoveEntireStay?: (stayId: string) => void;
+		onRemoveEntireTransport?: (transportLegId: string) => void;
 		onMoveItem?: (itemId: string) => void;
 		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
@@ -54,6 +55,7 @@
 		onItemClick,
 		onRemoveItem,
 		onRemoveEntireStay,
+		onRemoveEntireTransport,
 		onMoveItem,
 		onDuplicateItem,
 		onTravelModeChange
@@ -205,6 +207,23 @@
 		closeContextMenu();
 	}
 
+	function handleRemoveEntireTransportFromMenu() {
+		if (contextMenuItemId) {
+			const item = items.find((i) => i.id === contextMenuItemId);
+			if (item && isTransportItem(item)) {
+				const leg = getTransportLeg(item.transportLegId);
+				const legName = leg?.carrier || 'this transport';
+				const confirmed = confirm(
+					`Are you sure you want to remove "${legName}" (both departure and arrival) from your trip?`
+				);
+				if (confirmed) {
+					onRemoveEntireTransport?.(item.transportLegId);
+				}
+			}
+		}
+		closeContextMenu();
+	}
+
 	function handleMoveFromMenu() {
 		if (contextMenuItemId) {
 			onMoveItem?.(contextMenuItemId);
@@ -222,6 +241,7 @@
 	// Get the currently selected context menu item
 	const contextMenuItem = $derived(contextMenuItemId ? items.find((i) => i.id === contextMenuItemId) : null);
 	const isContextMenuItemStay = $derived(contextMenuItem ? isStayItem(contextMenuItem) : false);
+	const isContextMenuItemTransport = $derived(contextMenuItem ? isTransportItem(contextMenuItem) : false);
 
 	function getItemName(item: DailyItem): string {
 		if (isStayItem(item)) {
@@ -314,6 +334,8 @@
 					{#if leg}
 						<TransportCard
 							{leg}
+							isDeparture={item.isDeparture}
+							isArrival={item.isArrival}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
 						/>
@@ -341,6 +363,9 @@
 	<ContextMenuItem label="Remove from day" icon="delete" variant="danger" onclick={handleRemoveFromMenu} />
 	{#if isContextMenuItemStay}
 		<ContextMenuItem label="Remove entire stay" icon="delete" variant="danger" onclick={handleRemoveEntireStayFromMenu} />
+	{/if}
+	{#if isContextMenuItemTransport}
+		<ContextMenuItem label="Remove entire transport" icon="delete" variant="danger" onclick={handleRemoveEntireTransportFromMenu} />
 	{/if}
 </ContextMenu>
 

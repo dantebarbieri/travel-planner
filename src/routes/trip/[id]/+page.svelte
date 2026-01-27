@@ -4,7 +4,7 @@
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
-	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment } from '$lib/types/travel';
+	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
 	import { computeStaySegments, dayHasMissingLodging } from '$lib/utils/colors';
@@ -530,6 +530,39 @@
 		}
 	}
 
+	function handleRemoveEntireTransport(transportLegId: string) {
+		if (trip) {
+			tripStore.removeAllTransportItems(trip.id, transportLegId);
+		}
+	}
+
+	function handleAddTransportToDay(leg: TransportLeg) {
+		if (!trip) return;
+
+		// Check if arrival date extends beyond trip
+		const arrivalDate = leg.arrivalDate || leg.departureDate;
+		if (arrivalDate > trip.endDate) {
+			const confirmed = confirm(
+				`This transport's arrival date (${formatDate(arrivalDate)}) extends beyond the trip end date. Extend trip?`
+			);
+			if (!confirmed) return;
+			// Extend trip dates if needed (this will regenerate itinerary)
+			tripStore.updateTrip(trip.id, { endDate: arrivalDate });
+		}
+
+		// Check if departure date is before trip start
+		if (leg.departureDate < trip.startDate) {
+			const confirmed = confirm(
+				`This transport's departure date (${formatDate(leg.departureDate)}) is before the trip start date. Extend trip?`
+			);
+			if (!confirmed) return;
+			tripStore.updateTrip(trip.id, { startDate: leg.departureDate });
+		}
+
+		// Add transport with departure/arrival daily items
+		tripStore.addTransportWithDailyItems(trip.id, leg);
+	}
+
 	function handleDuplicateItem(dayId: string, itemId: string) {
 		if (trip) {
 			tripStore.duplicateDayItem(trip.id, dayId, itemId);
@@ -670,6 +703,7 @@
 						onReorder={(items) => handleReorder(day.id, items)}
 						onRemoveItem={(itemId) => handleRemoveItem(day.id, itemId)}
 						onRemoveEntireStay={handleRemoveEntireStay}
+						onRemoveEntireTransport={handleRemoveEntireTransport}
 						onMoveItem={(itemId) => handleMoveItem(day.id, itemId)}
 						onDuplicateItem={(itemId) => handleDuplicateItem(day.id, itemId)}
 						onTravelModeChange={(itemId, mode) => handleTravelModeChange(day.id, itemId, mode)}
@@ -774,6 +808,7 @@
 		onAddActivity={handleAddActivityToDay}
 		onAddFoodVenue={handleAddFoodVenueToDay}
 		onAddStay={handleAddStayToDay}
+		onAddTransport={handleAddTransportToDay}
 		cityLocation={addItemCityLocation}
 		selectedDate={addItemSelectedDate}
 		defaultCheckOutDate={addItemDefaultCheckOutDate}

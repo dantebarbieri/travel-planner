@@ -37,6 +37,7 @@
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
 		onRemoveEntireStay?: (stayId: string) => void;
+		onRemoveEntireTransport?: (transportLegId: string) => void;
 		onMoveItem?: (itemId: string) => void;
 		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
@@ -59,6 +60,7 @@
 		onItemClick,
 		onRemoveItem,
 		onRemoveEntireStay,
+		onRemoveEntireTransport,
 		onMoveItem,
 		onDuplicateItem,
 		onTravelModeChange
@@ -162,6 +164,7 @@
 				{onItemClick}
 				{onRemoveItem}
 				{onRemoveEntireStay}
+				{onRemoveEntireTransport}
 				{onMoveItem}
 				{onDuplicateItem}
 				{onTravelModeChange}

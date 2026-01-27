@@ -300,6 +300,8 @@ export interface FoodDailyItem extends BaseDailyItem {
 export interface TransportDailyItem extends BaseDailyItem {
 	kind: 'transport';
 	transportLegId: TransportLegId;
+	isDeparture?: boolean;
+	isArrival?: boolean;
 }
 
 export type DailyItem = StayDailyItem | ActivityDailyItem | FoodDailyItem | TransportDailyItem;
@@ -485,6 +487,75 @@ export interface TransportAdapter {
 		origin: Location,
 		destination: Location
 	): Promise<{ min: number; max: number; currency: string }>;
+}
+
+// ============ Flight Search Adapter ============
+
+export interface FlightSearchParams {
+	airline?: string;
+	airlineCode?: string;
+	flightNumber?: string;
+	departureDate: string;
+	origin?: Location;
+	destination?: Location;
+}
+
+export interface Airline {
+	name: string;
+	code: string;
+}
+
+export interface FlightSearchResult {
+	airline: string;
+	airlineCode: string;
+	flightNumber: string;
+	origin: Location;
+	destination: Location;
+	departureDate: string;
+	departureTime: string;
+	arrivalDate: string;
+	arrivalTime: string;
+	duration: number;
+	aircraft?: string;
+	price?: number;
+	currency?: string;
+}
+
+export interface FlightAdapter {
+	searchAirlines(query: string): Promise<Airline[]>;
+	searchFlights(params: FlightSearchParams): Promise<FlightSearchResult[]>;
+	getFlightDetails(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult | null>;
+}
+
+// ============ Train/Bus Search Adapter ============
+
+export interface TrainBusSearchParams {
+	query?: string;
+	origin?: Location;
+	destination?: Location;
+	departureDate: string;
+	mode: 'train' | 'bus';
+}
+
+export interface TrainBusSearchResult {
+	carrier: string;
+	routeNumber?: string;
+	routeName?: string;
+	origin: Location;
+	destination: Location;
+	departureDate: string;
+	departureTime: string;
+	arrivalDate: string;
+	arrivalTime: string;
+	duration: number;
+	mode: 'train' | 'bus';
+	price?: number;
+	currency?: string;
+}
+
+export interface TrainBusAdapter {
+	searchRoutes(params: TrainBusSearchParams): Promise<TrainBusSearchResult[]>;
+	getCarriers(cityLocation: Location, mode: 'train' | 'bus'): Promise<string[]>;
 }
 
 // ============ Helper Types ============

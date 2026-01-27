@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation } from '$lib/types/travel';
+	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg } from '$lib/types/travel';
 	import { fakeAttractionAdapter } from '$lib/adapters/attractions/fakeAdapter';
 	import { fakeFoodAdapter } from '$lib/adapters/food/fakeAdapter';
 	import { fakeLodgingAdapter } from '$lib/adapters/lodging/fakeAdapter';
@@ -9,6 +9,9 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
+	import TransportKindModal from '$lib/components/modals/TransportKindModal.svelte';
+	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
+	import TrainBusSearchModal from '$lib/components/modals/TrainBusSearchModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
 
 	interface Props {
@@ -17,6 +20,7 @@
 		onAddActivity: (activity: Activity) => void;
 		onAddFoodVenue: (venue: FoodVenue) => void;
 		onAddStay?: (stay: Stay) => void;
+		onAddTransport?: (leg: TransportLeg) => void;
 		cityLocation?: GeoLocation;
 		/** The date of the selected day (for default check-in) */
 		selectedDate?: string;
@@ -24,9 +28,9 @@
 		defaultCheckOutDate?: string;
 	}
 
-	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, cityLocation, selectedDate, defaultCheckOutDate }: Props = $props();
+	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, selectedDate, defaultCheckOutDate }: Props = $props();
 
-	let selectedKind = $state<'activity' | 'food' | 'stay'>('activity');
+	let selectedKind = $state<'activity' | 'food' | 'stay' | 'transport'>('activity');
 	let activitySearchQuery = $state('');
 	let foodSearchQuery = $state('');
 	let staySearchQuery = $state('');
@@ -40,12 +44,29 @@
 	let stayCheckOut = $state('');
 	let stayType = $state<StayType>('hotel');
 
+	// Transport-specific state
+	let showTransportKindModal = $state(false);
+	let showFlightSearchModal = $state(false);
+	let showTrainBusSearchModal = $state(false);
+	let transportMode = $state<'train' | 'bus'>('train');
+
 	// Derived: whichever item is currently selected based on kind
 	const selectedItem = $derived.by(() => {
 		if (selectedKind === 'activity') return selectedActivity;
 		if (selectedKind === 'food') return selectedFoodVenue;
 		if (selectedKind === 'stay') return selectedStay;
+		// Transport doesn't use selectedItem - it uses sub-modals
 		return null;
+	});
+
+	// City location for transport modals
+	const cityLocationForTransport = $derived.by(() => {
+		if (!cityLocation) return undefined;
+		return {
+			name: 'Search Location',
+			address: { street: '', city: '', country: '', formatted: '' },
+			geo: cityLocation
+		} as Location;
 	});
 
 	// For custom entries
@@ -78,6 +99,9 @@
 			customAddress = '';
 			customNotes = '';
 			showCustomForm = false;
+			showTransportKindModal = false;
+			showFlightSearchModal = false;
+			showTrainBusSearchModal = false;
 		} else {
 			// Set default dates when modal opens
 			setDefaultStayDates();
@@ -230,7 +254,8 @@
 	const kindOptions = [
 		{ value: 'activity' as const, label: 'Activity', icon: 'attraction' },
 		{ value: 'food' as const, label: 'Food', icon: 'restaurant' },
-		{ value: 'stay' as const, label: 'Stay', icon: 'hotel' }
+		{ value: 'stay' as const, label: 'Stay', icon: 'hotel' },
+		{ value: 'transport' as const, label: 'Transport', icon: 'flight' }
 	];
 
 	const stayTypeOptions: { value: StayType; label: string }[] = [
@@ -241,17 +266,42 @@
 		{ value: 'custom', label: 'Other' }
 	];
 
-	const getIconForKind = (kind: 'activity' | 'food' | 'stay') => {
+	const getIconForKind = (kind: 'activity' | 'food' | 'stay' | 'transport') => {
 		if (kind === 'activity') return 'attraction';
 		if (kind === 'food') return 'restaurant';
+		if (kind === 'transport') return 'flight';
 		return 'hotel';
 	};
 
-	const getButtonLabel = (kind: 'activity' | 'food' | 'stay') => {
+	const getButtonLabel = (kind: 'activity' | 'food' | 'stay' | 'transport') => {
 		if (kind === 'activity') return 'Activity';
 		if (kind === 'food') return 'Food';
+		if (kind === 'transport') return 'Transport';
 		return 'Stay';
 	};
+
+	// Transport handlers
+	function handleTransportKindSelect(kind: 'flight' | 'train' | 'bus') {
+		showTransportKindModal = false;
+		if (kind === 'flight') {
+			showFlightSearchModal = true;
+		} else {
+			transportMode = kind;
+			showTrainBusSearchModal = true;
+		}
+	}
+
+	function handleAddFlight(leg: TransportLeg) {
+		showFlightSearchModal = false;
+		onAddTransport?.(leg);
+		onclose();
+	}
+
+	function handleAddTrainBus(leg: TransportLeg) {
+		showTrainBusSearchModal = false;
+		onAddTransport?.(leg);
+		onclose();
+	}
 
 	// Validation for stay
 	const canAddStay = $derived(
@@ -264,7 +314,11 @@
 		<!-- Kind Selection -->
 		<div class="kind-selector">
 			{#each kindOptions as option}
-				{#if option.value !== 'stay' || onAddStay}
+				{#if option.value === 'stay' && !onAddStay}
+					<!-- Skip stay if no handler -->
+				{:else if option.value === 'transport' && !onAddTransport}
+					<!-- Skip transport if no handler -->
+				{:else}
 					<button
 						type="button"
 						class="kind-option"
@@ -275,6 +329,10 @@
 							// Set default dates when switching to stay
 							if (option.value === 'stay') {
 								setDefaultStayDates();
+							}
+							// Open transport kind modal when selecting transport
+							if (option.value === 'transport') {
+								showTransportKindModal = true;
 							}
 						}}
 					>
@@ -329,11 +387,21 @@
 					bind:value={staySearchQuery}
 					bind:selectedItem={selectedStay}
 				/>
+			{:else if selectedKind === 'transport'}
+				<div class="transport-prompt">
+					<p>Select a transport type to add flights, trains, or intercity buses to your itinerary.</p>
+					<Button onclick={() => (showTransportKindModal = true)}>
+						<Icon name="flight" size={16} />
+						Choose Transport Type
+					</Button>
+				</div>
 			{/if}
 
-			<button type="button" class="custom-toggle" onclick={() => (showCustomForm = !showCustomForm)}>
-				{showCustomForm ? 'Search instead' : "Can't find it? Add custom entry"}
-			</button>
+			{#if selectedKind !== 'transport'}
+				<button type="button" class="custom-toggle" onclick={() => (showCustomForm = !showCustomForm)}>
+					{showCustomForm ? 'Search instead' : "Can't find it? Add custom entry"}
+				</button>
+			{/if}
 		</div>
 
 		{#if showCustomForm}
@@ -435,6 +503,29 @@
 		{/if}
 	</div>
 </Modal>
+
+<!-- Transport Sub-Modals -->
+<TransportKindModal
+	isOpen={showTransportKindModal}
+	onclose={() => (showTransportKindModal = false)}
+	onSelectKind={handleTransportKindSelect}
+/>
+
+<FlightSearchModal
+	isOpen={showFlightSearchModal}
+	onclose={() => (showFlightSearchModal = false)}
+	onAddFlight={handleAddFlight}
+	defaultDate={selectedDate}
+/>
+
+<TrainBusSearchModal
+	isOpen={showTrainBusSearchModal}
+	onclose={() => (showTrainBusSearchModal = false)}
+	onAddTransport={handleAddTrainBus}
+	mode={transportMode}
+	cityLocation={cityLocationForTransport}
+	defaultDate={selectedDate}
+/>
 
 <style>
 	.add-item-modal {
@@ -601,5 +692,23 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-3);
+	}
+
+	.transport-prompt {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		background: var(--surface-secondary);
+		border: 1px dashed var(--border-color);
+		border-radius: var(--radius-md);
+		text-align: center;
+
+		& p {
+			margin: 0;
+			font-size: 0.875rem;
+			color: var(--text-secondary);
+		}
 	}
 </style>

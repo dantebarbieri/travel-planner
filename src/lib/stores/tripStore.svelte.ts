@@ -501,6 +501,62 @@ function removeAllStayItems(tripId: string, stayId: string): void {
 	saveTrips();
 }
 
+function removeAllTransportItems(tripId: string, transportLegId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			transportLegs: t.transportLegs.filter((l) => l.id !== transportLegId),
+			itinerary: t.itinerary.map((day) => ({
+				...day,
+				items: day.items
+					.filter((item) => !(item.kind === 'transport' && item.transportLegId === transportLegId))
+					.map((it, idx) => ({ ...it, sortOrder: idx }))
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function addTransportWithDailyItems(tripId: string, leg: TransportLeg): void {
+	// First add the transport leg
+	addTransportLeg(tripId, leg);
+
+	// Get the updated trip
+	const trip = state.trips.find((t) => t.id === tripId);
+	if (!trip) return;
+
+	const departureDay = trip.itinerary.find((d) => d.date === leg.departureDate);
+	const arrivalDate = leg.arrivalDate || leg.departureDate;
+	const arrivalDay = trip.itinerary.find((d) => d.date === arrivalDate);
+
+	// Add departure item at end of departure day
+	if (departureDay) {
+		addDayItem(tripId, departureDay.id, {
+			kind: 'transport',
+			transportLegId: leg.id,
+			isDeparture: true
+		});
+	}
+
+	// Add arrival item at beginning of arrival day (if different from departure)
+	if (arrivalDay && arrivalDay.id !== departureDay?.id) {
+		insertDayItemAt(tripId, arrivalDay.id, {
+			kind: 'transport',
+			transportLegId: leg.id,
+			isArrival: true
+		}, 0);
+	} else if (arrivalDay && arrivalDay.id === departureDay?.id) {
+		// Same day - add arrival after departure
+		addDayItem(tripId, arrivalDay.id, {
+			kind: 'transport',
+			transportLegId: leg.id,
+			isArrival: true
+		});
+	}
+}
+
 function updateDayItem(tripId: string, dayId: string, itemId: string, updates: Partial<DailyItem>): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
@@ -758,6 +814,8 @@ export const tripStore = {
 	addTransportLeg,
 	updateTransportLeg,
 	removeTransportLeg,
+	removeAllTransportItems,
+	addTransportWithDailyItems,
 
 	// Daily Items
 	addDayItem,

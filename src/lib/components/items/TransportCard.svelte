@@ -7,11 +7,13 @@
 
 	interface Props {
 		leg: TransportLeg;
+		isDeparture?: boolean;
+		isArrival?: boolean;
 		isEditing?: boolean;
 		onclick?: () => void;
 	}
 
-	let { leg, isEditing = false, onclick }: Props = $props();
+	let { leg, isDeparture = false, isArrival = false, isEditing = false, onclick }: Props = $props();
 
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
@@ -114,6 +116,12 @@
 			<Icon name={modeIcon} size={18} />
 		</div>
 		<div class="card-badges">
+			{#if isDeparture}
+				<Badge variant="warning" size="sm">Departure</Badge>
+			{/if}
+			{#if isArrival}
+				<Badge variant="success" size="sm">Arrival</Badge>
+			{/if}
 			<Badge size="sm">{modeLabel}</Badge>
 			{#if leg.carrier}
 				<Badge variant="info" size="sm">{leg.carrier}</Badge>
