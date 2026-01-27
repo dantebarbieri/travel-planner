@@ -4,7 +4,7 @@ This document helps AI assistants understand and work with this travel planner c
 
 ## Project Overview
 
-A travel itinerary planning application built with **SvelteKit 5** and **Svelte 5 runes**. Users can create multi-city trips, plan stays (hotel, airbnb, vrbo, address), schedule activities and meals, and view day-by-day itineraries with travel time calculations.
+A travel itinerary planning application built with **SvelteKit 5** and **Svelte 5 runes**. Users can create multi-city trips, plan stays (hotel, airbnb, vrbo, hostel, custom), schedule activities and meals, book flights/trains/buses, and view day-by-day itineraries with travel time calculations.
 
 ## Tech Stack
 
@@ -28,12 +28,16 @@ src/
 │   │   └── travel.ts            # All TypeScript interfaces
 │   ├── stores/
 │   │   └── tripStore.svelte.ts  # Main trip state (Svelte 5 runes)
-│   ├── adapters/                # Data fetching abstraction
-│   │   ├── lodging/fakeAdapter.ts
-│   │   ├── food/fakeAdapter.ts
-│   │   ├── attractions/fakeAdapter.ts
-│   │   ├── weather/fakeAdapter.ts
-│   │   └── transport/fakeAdapter.ts
+│   ├── adapters/
+│   │   ├── cities/fakeAdapter.ts      # 100+ pre-defined cities
+│   │   ├── lodging/fakeAdapter.ts     # Hotel, Airbnb, VRBO, Hostel data
+│   │   ├── food/fakeAdapter.ts        # Restaurant, cafe, bar data
+│   │   ├── attractions/fakeAdapter.ts # Activities and attractions
+│   │   ├── weather/fakeAdapter.ts     # Weather forecasts
+│   │   └── transport/
+│   │       ├── fakeAdapter.ts         # Car travel estimates
+│   │       ├── flightAdapter.ts       # Flight search
+│   │       └── trainBusAdapter.ts     # Train/Bus search
 │   ├── services/
 │   │   ├── storageService.ts    # localStorage persistence
 │   │   ├── documentService.ts   # PDF/DOCX export
@@ -41,15 +45,39 @@ src/
 │   │   └── mapService.ts        # Google/Apple Maps links
 │   ├── components/
 │   │   ├── ui/                  # Reusable UI primitives
+│   │   │   ├── Modal.svelte
+│   │   │   ├── Button.svelte
+│   │   │   ├── Card.svelte
+│   │   │   ├── Input.svelte
+│   │   │   ├── Icon.svelte
+│   │   │   ├── Badge.svelte
+│   │   │   ├── ContextMenu.svelte
+│   │   │   └── ContextMenuItem.svelte
+│   │   ├── modals/              # Feature modals
+│   │   │   ├── AddItemModal.svelte
+│   │   │   ├── MoveItemModal.svelte
+│   │   │   ├── TransportKindModal.svelte
+│   │   │   ├── FlightSearchModal.svelte
+│   │   │   └── TrainBusSearchModal.svelte
 │   │   ├── itinerary/           # Day display components
-│   │   ├── items/               # Item cards (Stay, Activity, Food, Transport)
+│   │   │   ├── ItineraryDay.svelte
+│   │   │   ├── DayHeader.svelte
+│   │   │   └── ItemList.svelte
+│   │   ├── items/               # Item cards
+│   │   │   ├── StayCard.svelte
+│   │   │   ├── ActivityCard.svelte
+│   │   │   ├── FoodCard.svelte
+│   │   │   └── TransportCard.svelte
 │   │   ├── travel/              # Travel time/distance display
+│   │   │   └── TravelMargin.svelte
 │   │   ├── search/              # Autocomplete search
+│   │   │   └── SearchAutocomplete.svelte
 │   │   └── weather/             # Weather badges
+│   │       └── WeatherBadge.svelte
 │   └── utils/
 │       ├── ids.ts               # ID generation
-│       ├── dates.ts             # Date formatting
-│       └── colors.ts            # Color utilities
+│       ├── dates.ts             # Date formatting, timezone handling
+│       └── colors.ts            # Color utilities, stay segments
 └── app.css                      # Global styles, CSS variables
 ```
 
@@ -79,8 +107,9 @@ Data fetching is abstracted through adapters with consistent interfaces:
 
 ```typescript
 interface LodgingAdapter {
-  search(query: string, location: GeoLocation): Promise<Stay[]>;
+  search(params: LodgingSearchParams): Promise<Stay[]>;
   getById(id: string): Promise<Stay | null>;
+  getDetails(stay: Stay): Promise<Stay>;
 }
 ```
 
@@ -88,19 +117,14 @@ Currently using fake adapters with mock data. To add real APIs, create new adapt
 
 ### TypeScript Discriminated Unions
 
-Stay types use discriminated unions:
+Stay types and daily items use discriminated unions:
 
 ```typescript
 type Stay = HotelStay | AirbnbStay | VrboStay | HostelStay | CustomStay;
-
-interface HotelStay extends StayBase {
-  type: 'hotel';
-  starRating?: 1 | 2 | 3 | 4 | 5;
-  // hotel-specific fields
-}
+type DailyItem = StayDailyItem | ActivityDailyItem | FoodDailyItem | TransportDailyItem;
 ```
 
-Use type guards (`isStayItem`, `isActivityItem`, etc.) for narrowing.
+Use type guards (`isStayItem`, `isActivityItem`, `isFoodItem`, `isTransportItem`) for narrowing.
 
 ### CSS Conventions
 
@@ -130,8 +154,9 @@ Use type guards (`isStayItem`, `isActivityItem`, etc.) for narrowing.
 
 ```typescript
 interface Trip {
-  id: string;
+  id: TripId;
   name: string;
+  description?: string;
   homeCity: Location;
   startDate: string;        // ISO date
   endDate: string;
@@ -141,19 +166,85 @@ interface Trip {
   transportLegs: TransportLeg[];
   itinerary: ItineraryDay[];
   colorScheme: ColorScheme;
+  createdAt: string;
+  updatedAt: string;
 }
 ```
 
-### ItineraryDay
+### City
 
 ```typescript
-interface ItineraryDay {
-  id: string;
-  date: string;
-  dayNumber: number;
-  title?: string;
-  cityIds: string[];    // Which cities this day spans
-  items: DailyItem[];   // Ordered list of items
+interface City {
+  id: CityId;
+  name: string;
+  country: string;
+  location: GeoLocation;
+  timezone: string;
+  startDate: string;
+  endDate: string;
+  stays: Stay[];
+  arrivalTransportId?: TransportLegId;
+  departureTransportId?: TransportLegId;
+}
+```
+
+### Stay Types
+
+All stay types extend `StayBase` with type-specific fields:
+
+```typescript
+type Stay = HotelStay | AirbnbStay | VrboStay | HostelStay | CustomStay;
+
+interface HotelStay extends StayBase {
+  type: 'hotel';
+  roomType?: string;
+  starRating?: number;
+}
+
+interface AirbnbStay extends StayBase {
+  type: 'airbnb';
+  hostName?: string;
+  propertyType?: 'entire_place' | 'private_room' | 'shared_room';
+  listingUrl?: string;
+}
+
+interface HostelStay extends StayBase {
+  type: 'hostel';
+  roomType?: 'dorm' | 'private';
+  bedsInRoom?: number;
+}
+```
+
+### Transport Modes
+
+Supports 10 transport modes:
+
+```typescript
+type TransportMode = 'flight' | 'train' | 'bus' | 'car' | 'taxi' | 'rideshare' | 'ferry' | 'subway' | 'walking' | 'biking';
+```
+
+Transport legs include mode-specific fields:
+
+```typescript
+interface TransportLeg {
+  id: TransportLegId;
+  mode: TransportMode;
+  origin: Location;
+  destination: Location;
+  departureDate: string;
+  departureTime?: string;
+  arrivalDate?: string;       // Can differ from departure (multi-day journeys)
+  arrivalTime?: string;
+  duration?: number;
+  carrier?: string;
+  flightNumber?: string;      // For flights
+  trainNumber?: string;       // For trains
+  terminal?: string;          // For flights
+  gate?: string;              // For flights
+  price?: number;
+  currency?: string;
+  bookingReference?: string;
+  // ...
 }
 ```
 
@@ -162,15 +253,70 @@ interface ItineraryDay {
 ```typescript
 type DailyItem = StayDailyItem | ActivityDailyItem | FoodDailyItem | TransportDailyItem;
 
-interface StayDailyItem {
-  id: string;
-  kind: 'stay';
-  stayId: string;
-  time?: string;
-  isCheckIn?: boolean;
-  isCheckOut?: boolean;
+interface TransportDailyItem extends BaseDailyItem {
+  kind: 'transport';
+  transportLegId: TransportLegId;
+  isDeparture?: boolean;      // Departure from origin
+  isArrival?: boolean;        // Arrival at destination
 }
 ```
+
+## Color System
+
+### Two Color Modes
+
+1. **By Kind** (`by-kind`): Each item type has a distinct color
+   - Stays: purple
+   - Activities: green
+   - Food: orange
+   - Transport: blue
+   - Flights: special flight color
+
+2. **By Stay** (`by-stay`): Items colored by which lodging they belong to
+   - Real stays get assigned colors from an 8-color palette
+   - Days without booked lodging use "inferred" stays based on city
+   - Useful for tracking belongings across different accommodations
+
+### Stay Segments
+
+For `by-stay` mode, the system computes `StaySegment` objects:
+
+```typescript
+interface StaySegment {
+  id: string;               // Real stay ID or 'inferred:cityId'
+  color: string;
+  startDayIndex: number;
+  endDayIndex: number;
+  isInferred: boolean;      // No lodging booked
+  cityId?: CityId;
+  stayId?: StayId;
+}
+```
+
+### Color Utilities (`src/lib/utils/colors.ts`)
+
+- `lightenColor()`, `darkenColor()`, `desaturateColor()`
+- `getContrastColor()` for text contrast
+- `getDayBackgroundColor()` for visual day grouping
+- `computeStaySegments()` for segment calculation
+
+## Transport Search
+
+### Flight Search
+
+`FlightAdapter` interface with:
+- Airline autocomplete search
+- Flight lookup by airline code + flight number + date
+- Support for multi-day flights (arrival next day)
+- Currency support (USD, EUR, JPY)
+- Fallback to manual entry if not found
+
+### Train/Bus Search
+
+`TrainBusAdapter` interface with:
+- Station/terminal data for major cities
+- Route search by city and date
+- Support for custom manual entry
 
 ## Common Tasks
 
@@ -186,14 +332,16 @@ interface StayDailyItem {
 1. Create in `src/lib/adapters/{type}/`
 2. Implement the interface from `src/lib/types/travel.ts`
 3. Export adapter instance
-4. Update relevant store to use new adapter
+4. Update relevant store/component to use new adapter
 
-### Adding a New Route
+### Adding Transport with Auto Daily Items
 
-1. Create directory under `src/routes/`
-2. Add `+page.svelte` for the page
-3. Use `$page` from `$app/stores` for route params
-4. Import tripStore for state access
+Use `addTransportWithDailyItems()` to automatically create departure/arrival items:
+
+```typescript
+// Adds transport leg AND creates daily items on departure/arrival days
+tripStore.addTransportWithDailyItems(tripId, transportLeg);
+```
 
 ### Modifying State
 
@@ -213,25 +361,20 @@ tripStore.addDayItem(tripId, dayId, {
 tripStore.reorderDayItems(tripId, dayId, newItemsOrder);
 ```
 
-## Color Coding
-
-Two modes available:
-1. **By Kind**: Each item type has a color (stays purple, activities green, food orange, transport blue)
-2. **By Stay**: Items colored by which stay they belong to (useful for tracking belongings)
-
-Colors defined in `src/lib/utils/colors.ts` using oklch color space.
-
 ## Testing
 
 Manual testing checklist:
 - [ ] Create trip with multiple cities
-- [ ] Add stays to each city
+- [ ] Add stays to each city (hotel, airbnb, hostel)
 - [ ] Add activities and food venues
+- [ ] Add flights with departure/arrival items auto-created
+- [ ] Add train/bus transport
 - [ ] Verify travel times between items
-- [ ] Test color mode toggle
+- [ ] Test color mode toggle (by-kind vs by-stay)
 - [ ] Export to all formats (PDF, DOCX, JSON)
 - [ ] Import from JSON
 - [ ] Test on mobile viewport
+- [ ] Test timezone display for flights
 
 ## Common Issues
 
@@ -247,11 +390,62 @@ Check variable names match those in `app.css`. Use browser DevTools to debug.
 ### Export failing
 Ensure html2pdf.js and docx packages are installed. Check browser console for errors.
 
+### Flight times showing wrong timezone
+Verify `Location.timezone` is set correctly for origin/destination. Use IANA timezone names (e.g., 'America/New_York').
+
 ## Future Improvements
 
-Areas planned for enhancement:
-1. Real API adapters for lodging, food, attractions
-2. Google Maps integration for accurate travel times
-3. Collaborative trip planning
-4. Mobile app with offline support
-5. Calendar integration
+### Near-term (Planned)
+
+1. **User Settings** (type defined, needs UI)
+   - Home city preference
+   - Default color scheme
+   - Preferred map app (Google/Apple)
+   - Temperature unit (celsius/fahrenheit)
+   - Distance unit (km/miles)
+   - Time format (12h/24h)
+   - Auto-save settings (enabled, interval)
+   - **Bike preferences** (e.g., prefer bike-friendly routes, bike rental defaults)
+
+2. **Trip Settings** (per-trip overrides)
+   - Custom color palettes for the trip
+   - Override user settings for specific trips
+   - Default travel mode preferences
+   - Budget tracking preferences
+
+### Medium-term
+
+3. **Real API Adapters**
+   - Lodging: Booking.com, Airbnb API
+   - Food: Google Places, Yelp API
+   - Attractions: TripAdvisor, Viator API
+   - Flights: Amadeus, Skyscanner API
+   - Weather: OpenWeatherMap, WeatherAPI
+
+4. **Google Maps Integration**
+   - Accurate travel time calculations
+   - Route visualization
+   - Place autocomplete
+
+5. **Enhanced Features**
+   - Packing list management
+   - Budget tracking and spending
+   - Photo/memory attachments
+   - Notes and journal entries
+
+### Long-term
+
+6. **Collaborative Features**
+   - Share trips with travel companions
+   - Real-time collaborative editing
+   - Comments and suggestions
+
+7. **Mobile & Offline**
+   - Progressive Web App (PWA)
+   - Offline support with sync
+   - Mobile-optimized UI
+
+8. **Integrations**
+   - Calendar sync (Google Calendar, iCal)
+   - Email itinerary summaries
+   - Travel document storage
