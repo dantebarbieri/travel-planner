@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A travel itinerary planning application built with **SvelteKit 5** and **Svelte 5 runes**. Users can create multi-city trips, plan stays, schedule activities and meals, and view day-by-day itineraries with travel time calculations.
+A travel itinerary planning application built with **SvelteKit 5** and **Svelte 5 runes**. Users can create multi-city trips, plan stays (hotel, airbnb, vrbo, hostel, custom), schedule activities and meals, book flights/trains/buses, and view day-by-day itineraries with travel time calculations.
 
 ## Tech Stack
 
@@ -47,13 +47,31 @@ Stay types use discriminated unions with a `type` field:
 type Stay = HotelStay | AirbnbStay | VrboStay | HostelStay | CustomStay;
 ```
 
+Each stay type has type-specific fields (e.g., `starRating` for hotels, `hostName`/`propertyType` for airbnb, `bedsInRoom` for hostels).
+
 Daily items use discriminated unions with a `kind` field:
 
 ```typescript
 type DailyItem = StayDailyItem | ActivityDailyItem | FoodDailyItem | TransportDailyItem;
 ```
 
-Use type guards (`isStayItem`, `isActivityItem`, etc.) for narrowing.
+Transport daily items have `isDeparture` and `isArrival` flags for departure/arrival tracking.
+
+Use type guards (`isStayItem`, `isActivityItem`, `isFoodItem`, `isTransportItem`) for narrowing.
+
+## Transport Modes
+
+Supports 10 transport modes:
+
+```typescript
+type TransportMode = 'flight' | 'train' | 'bus' | 'car' | 'taxi' | 'rideshare' | 'ferry' | 'subway' | 'walking' | 'biking';
+```
+
+Use `addTransportWithDailyItems()` to automatically create departure/arrival items on the appropriate days:
+
+```typescript
+tripStore.addTransportWithDailyItems(tripId, transportLeg);
+```
 
 ## CSS Conventions
 
@@ -99,6 +117,7 @@ All trip mutations go through `tripStore`:
 tripStore.addCity(tripId, { name: 'Paris', country: 'France', ... });
 tripStore.addDayItem(tripId, dayId, { kind: 'activity', activityId: 'act-123' });
 tripStore.reorderDayItems(tripId, dayId, newItemsOrder);
+tripStore.addTransportWithDailyItems(tripId, transportLeg);
 ```
 
 ## Key File Locations
@@ -109,17 +128,25 @@ tripStore.reorderDayItems(tripId, dayId, newItemsOrder);
 | Main trip state | `src/lib/stores/tripStore.svelte.ts` |
 | UI primitives | `src/lib/components/ui/` |
 | Item cards | `src/lib/components/items/` |
+| Itinerary components | `src/lib/components/itinerary/` |
+| Feature modals | `src/lib/components/modals/` |
 | Global styles | `src/app.css` |
 | Utilities | `src/lib/utils/` |
 | Services | `src/lib/services/` |
+| Data adapters | `src/lib/adapters/{type}/` |
 
 ## Color Coding System
 
 Two modes:
-1. **By Kind**: Item types have colors (stays purple, activities green, food orange, transport blue)
-2. **By Stay**: Items colored by which stay they belong to
+1. **By Kind** (`by-kind`): Item types have colors (stays purple, activities green, food orange, transport blue, flights special)
+2. **By Stay** (`by-stay`): Items colored by which stay they belong to
+   - Real stays get assigned colors from an 8-color palette
+   - Days without booked lodging use "inferred" stays based on city
 
-Colors defined in `src/lib/utils/colors.ts` using oklch color space.
+Colors defined in `src/lib/utils/colors.ts` using oklch color space. Key utilities:
+- `computeStaySegments()` for segment calculation
+- `lightenColor()`, `darkenColor()`, `getContrastColor()`
+- `getDayBackgroundColor()` for visual day grouping
 
 ## Common Pitfalls to Avoid
 
@@ -127,3 +154,4 @@ Colors defined in `src/lib/utils/colors.ts` using oklch color space.
 2. **Don't reassign state** - Mutate the state object instead
 3. **Don't forget type guards** - Use them when working with discriminated unions
 4. **Don't hardcode colors** - Use CSS custom properties from `app.css`
+5. **Don't forget timezone handling** - Use IANA timezone names (e.g., 'America/New_York') for `Location.timezone`
