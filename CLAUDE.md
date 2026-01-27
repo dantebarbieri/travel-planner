@@ -35,7 +35,7 @@ src/
 │   │   ├── attractions/fakeAdapter.ts # Activities and attractions
 │   │   ├── weather/fakeAdapter.ts     # Weather forecasts
 │   │   └── transport/
-│   │       ├── fakeAdapter.ts         # Car travel estimates
+│   │       ├── fakeAdapter.ts         # Travel time/cost estimates (mock)
 │   │       ├── flightAdapter.ts       # Flight search
 │   │       └── trainBusAdapter.ts     # Train/Bus search
 │   ├── services/
