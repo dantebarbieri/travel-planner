@@ -1,18 +1,19 @@
 <script lang="ts">
 	import type { TransportLeg } from '$lib/types/travel';
-	import { formatTime, formatDuration, formatDateShort } from '$lib/utils/dates';
+	import { formatTime, formatDuration, formatDateShort, getTimezoneAbbreviation, getTimezoneOffset, calculateRealDuration, parseISODate } from '$lib/utils/dates';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getDirectionsUrl } from '$lib/services/mapService';
 
 	interface Props {
 		leg: TransportLeg;
+		isDeparture?: boolean;
+		isArrival?: boolean;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { leg, isEditing = false, onclick, onRemove }: Props = $props();
+	let { leg, isDeparture = false, isArrival = false, isEditing = false, onclick }: Props = $props();
 
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
@@ -55,6 +56,55 @@
 	const isFlight = $derived(leg.mode === 'flight');
 	const isLongDistance = $derived(['flight', 'train', 'bus', 'ferry'].includes(leg.mode));
 
+	// Timezone info for departure
+	const departureTimezone = $derived(leg.origin.timezone || 'UTC');
+	const departureTzAbbr = $derived.by(() => {
+		if (!leg.origin.timezone) return null;
+		const date = leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneAbbreviation(leg.origin.timezone, date);
+	});
+	const departureTzOffset = $derived.by(() => {
+		if (!leg.origin.timezone) return null;
+		const date = leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneOffset(leg.origin.timezone, date);
+	});
+
+	// Timezone info for arrival
+	const arrivalTimezone = $derived(leg.destination.timezone || 'UTC');
+	const arrivalTzAbbr = $derived.by(() => {
+		if (!leg.destination.timezone) return null;
+		const date = leg.arrivalDate ? parseISODate(leg.arrivalDate) : leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneAbbreviation(leg.destination.timezone, date);
+	});
+	const arrivalTzOffset = $derived.by(() => {
+		if (!leg.destination.timezone) return null;
+		const date = leg.arrivalDate ? parseISODate(leg.arrivalDate) : leg.departureDate ? parseISODate(leg.departureDate) : undefined;
+		return getTimezoneOffset(leg.destination.timezone, date);
+	});
+
+	// Calculate real duration accounting for timezone changes
+	const realDuration = $derived.by(() => {
+		if (!leg.departureTime || !leg.arrivalTime || !leg.departureDate) return leg.duration;
+		if (!leg.origin.timezone || !leg.destination.timezone) return leg.duration;
+
+		const arrivalDate = leg.arrivalDate || leg.departureDate;
+		return calculateRealDuration(
+			leg.departureTime,
+			leg.origin.timezone,
+			leg.arrivalTime,
+			leg.destination.timezone,
+			leg.departureDate,
+			arrivalDate
+		);
+	});
+
+	// Are timezones different?
+	const timezonesAreDifferent = $derived(
+		leg.origin.timezone &&
+		leg.destination.timezone &&
+		leg.origin.timezone !== leg.destination.timezone
+	);
+
 	function openDirections() {
 		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving'), '_blank');
 	}
@@ -66,6 +116,12 @@
 			<Icon name={modeIcon} size={18} />
 		</div>
 		<div class="card-badges">
+			{#if isDeparture}
+				<Badge variant="warning" size="sm">Departure</Badge>
+			{/if}
+			{#if isArrival}
+				<Badge variant="success" size="sm">Arrival</Badge>
+			{/if}
 			<Badge size="sm">{modeLabel}</Badge>
 			{#if leg.carrier}
 				<Badge variant="info" size="sm">{leg.carrier}</Badge>
@@ -78,20 +134,30 @@
 			<div class="route-point">
 				<span class="route-name">{leg.origin.name}</span>
 				{#if leg.departureTime}
-					<span class="route-time">{formatTime(leg.departureTime)}</span>
+					<span class="route-time">
+						{formatTime(leg.departureTime)}
+						{#if departureTzAbbr}
+							<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
+						{/if}
+					</span>
 				{/if}
 			</div>
 			<div class="route-line">
 				<span class="route-duration">
-					{#if leg.duration}
-						{formatDuration(leg.duration)}
+					{#if realDuration}
+						{formatDuration(realDuration)}
 					{/if}
 				</span>
 			</div>
 			<div class="route-point">
 				<span class="route-name">{leg.destination.name}</span>
 				{#if leg.arrivalTime}
-					<span class="route-time">{formatTime(leg.arrivalTime)}</span>
+					<span class="route-time">
+						{formatTime(leg.arrivalTime)}
+						{#if arrivalTzAbbr}
+							<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
+						{/if}
+					</span>
 				{/if}
 			</div>
 		</div>
@@ -137,17 +203,12 @@
 		</div>
 	</div>
 
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>
 	.item-card {
 		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-transport)), white 90%);
+		background: color-mix(in oklch, var(--item-color, var(--color-kind-transport)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
 		border-left: 4px solid var(--item-color, var(--color-kind-transport));
 		border-radius: var(--radius-md);
 		padding: var(--space-3);
@@ -206,6 +267,23 @@
 	.route-time {
 		font-size: 0.75rem;
 		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.timezone {
+		font-size: 0.625rem;
+		color: var(--text-tertiary);
+		cursor: help;
+		padding: 1px 3px;
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
+
+		&.different {
+			color: var(--color-warning);
+			background: color-mix(in oklch, var(--color-warning), transparent 90%);
+		}
 	}
 
 	.route-line {
@@ -297,28 +375,6 @@
 
 		&:hover {
 			color: var(--color-primary-dark);
-		}
-	}
-
-	.remove-btn {
-		position: absolute;
-		top: var(--space-2);
-		right: var(--space-2);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		background: var(--surface-primary);
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-
-		&:hover {
-			background: var(--color-error);
-			border-color: var(--color-error);
-			color: white;
 		}
 	}
 </style>

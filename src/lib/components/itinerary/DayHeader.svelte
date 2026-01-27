@@ -3,6 +3,7 @@
 	import { formatDate, formatDayOfWeek } from '$lib/utils/dates';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import WeatherBadge from '$lib/components/weather/WeatherBadge.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	interface Props {
 		dayNumber: number;
@@ -10,15 +11,21 @@
 		title?: string;
 		cityName: string;
 		weather?: WeatherCondition;
+		weatherList?: WeatherCondition[]; // For multiple cities
+		/** Whether this day has a city but no lodging booked */
+		hasMissingLodging?: boolean;
 	}
 
-	let { dayNumber, date, title, cityName, weather }: Props = $props();
+	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false }: Props = $props();
 
 	const dayOfWeek = $derived(formatDayOfWeek(date));
 	const formattedDate = $derived(formatDate(date, { month: 'short', day: 'numeric' }));
+
+	// Use weatherList if provided, otherwise wrap single weather in array
+	const allWeather = $derived(weatherList.length > 0 ? weatherList : weather ? [weather] : []);
 </script>
 
-<header class="day-header">
+<header class="day-header" class:has-warning={hasMissingLodging}>
 	<div class="day-info">
 		<Badge>Day {dayNumber}</Badge>
 		<div class="day-details">
@@ -28,20 +35,29 @@
 				{:else}
 					{cityName}
 				{/if}
+				{#if hasMissingLodging}
+					<span class="lodging-warning" title="No lodging booked for this day">
+						<Icon name="warning" size={18} />
+					</span>
+				{/if}
 			</h2>
 			<div class="day-meta">
 				<span class="day-of-week">{dayOfWeek}</span>
 				<span class="separator">·</span>
 				<time class="date" datetime={date}>{formattedDate}</time>
-				{#if title}
+				{#if title && cityName !== 'No city assigned'}
 					<span class="separator">·</span>
 					<span class="city-name">{cityName}</span>
 				{/if}
 			</div>
 		</div>
 	</div>
-	{#if weather}
-		<WeatherBadge {weather} />
+	{#if allWeather.length > 0}
+		<div class="weather-section">
+			{#each allWeather as w (w.location.name)}
+				<WeatherBadge weather={w} showDetails={allWeather.length === 1} />
+			{/each}
+		</div>
 	{/if}
 </header>
 
@@ -73,6 +89,15 @@
 		font-weight: 600;
 		margin: 0;
 		line-height: 1.3;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.lodging-warning {
+		display: inline-flex;
+		color: var(--color-warning);
+		flex-shrink: 0;
 	}
 
 	.day-meta {
@@ -95,10 +120,21 @@
 		color: var(--text-tertiary);
 	}
 
+	.weather-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
 	@container day (max-width: 500px) {
 		.day-header {
 			flex-direction: column;
 			gap: var(--space-3);
+		}
+
+		.weather-section {
+			flex-direction: row;
+			flex-wrap: wrap;
 		}
 	}
 </style>

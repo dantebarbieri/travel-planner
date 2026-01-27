@@ -7,12 +7,18 @@ import type {
 	TransportLeg,
 	ItineraryDay,
 	DailyItem,
+	NewDailyItem,
 	ColorScheme,
 	Location
 } from '$lib/types/travel';
 import { storageService } from '$lib/services/storageService';
 import { generateTripId, generateCityId, generateDayId, generateItemId } from '$lib/utils/ids';
-import { getDefaultColorScheme, assignStayColors } from '$lib/utils/colors';
+import { 
+	getDefaultColorScheme, 
+	assignStayColorsWithInferred,
+	computeStaySegments,
+	buildStayColorsFromSegments
+} from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
 
 interface TripStoreState {
@@ -102,12 +108,42 @@ function updateTrip(id: string, updates: Partial<Trip>): void {
 	saveTrips();
 }
 
+function extendTripDates(tripId: string, newEndDate: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		if (newEndDate <= t.endDate) return t;
+
+		const updatedTrip = {
+			...t,
+			endDate: newEndDate,
+			updatedAt: new Date().toISOString()
+		};
+		return regenerateItinerary(updatedTrip);
+	});
+	saveTrips();
+}
+
 function deleteTrip(id: string): void {
 	state.trips = state.trips.filter((t) => t.id !== id);
 	if (state.currentTripId === id) {
 		state.currentTripId = null;
 	}
 	saveTrips();
+}
+
+function importTrip(trip: Trip): Trip {
+	// Generate new ID to avoid conflicts
+	const importedTrip: Trip = {
+		...trip,
+		id: generateTripId(),
+		name: trip.name + ' (Imported)',
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString()
+	};
+
+	state.trips = [...state.trips, importedTrip];
+	saveTrips();
+	return importedTrip;
 }
 
 function setCurrentTrip(id: string | null): void {
@@ -128,8 +164,22 @@ function addCity(
 
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
+
+		// Extend trip dates if city dates are outside current range
+		let newStartDate = t.startDate;
+		let newEndDate = t.endDate;
+
+		if (cityData.startDate < t.startDate) {
+			newStartDate = cityData.startDate;
+		}
+		if (cityData.endDate > t.endDate) {
+			newEndDate = cityData.endDate;
+		}
+
 		const updatedTrip = {
 			...t,
+			startDate: newStartDate,
+			endDate: newEndDate,
 			cities: [...t.cities, city],
 			updatedAt: new Date().toISOString()
 		};
@@ -144,9 +194,27 @@ function addCity(
 function updateCity(tripId: string, cityId: string, updates: Partial<City>): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
+
+		const updatedCities = t.cities.map((c) => (c.id === cityId ? { ...c, ...updates } : c));
+
+		// Recalculate trip dates based on all cities
+		let newStartDate = t.startDate;
+		let newEndDate = t.endDate;
+
+		for (const city of updatedCities) {
+			if (city.startDate < newStartDate) {
+				newStartDate = city.startDate;
+			}
+			if (city.endDate > newEndDate) {
+				newEndDate = city.endDate;
+			}
+		}
+
 		const updatedTrip = {
 			...t,
-			cities: t.cities.map((c) => (c.id === cityId ? { ...c, ...updates } : c)),
+			startDate: newStartDate,
+			endDate: newEndDate,
+			cities: updatedCities,
 			updatedAt: new Date().toISOString()
 		};
 		return regenerateItinerary(updatedTrip);
@@ -177,12 +245,14 @@ function addStay(tripId: string, cityId: string, stay: Stay): void {
 			cities: t.cities.map((c) => (c.id === cityId ? { ...c, stays: [...c.stays, stay] } : c)),
 			updatedAt: new Date().toISOString()
 		};
+		// Regenerate itinerary first to get proper day assignments
+		const tripWithItinerary = regenerateItinerary(updatedTrip);
 		// Update color scheme if in by-stay mode
-		if (updatedTrip.colorScheme.mode === 'by-stay') {
-			const allStayIds = updatedTrip.cities.flatMap((c) => c.stays.map((s) => s.id));
-			updatedTrip.colorScheme.stayColors = assignStayColors(allStayIds);
+		if (tripWithItinerary.colorScheme.mode === 'by-stay') {
+			const segments = computeStaySegments(tripWithItinerary);
+			tripWithItinerary.colorScheme.stayColors = buildStayColorsFromSegments(segments);
 		}
-		return regenerateItinerary(updatedTrip);
+		return tripWithItinerary;
 	});
 	saveTrips();
 }
@@ -341,7 +411,7 @@ function removeTransportLeg(tripId: string, legId: string): void {
 
 // ============ Daily Item Management ============
 
-function addDayItem(tripId: string, dayId: string, item: Omit<DailyItem, 'id' | 'sortOrder'>): void {
+function addDayItem(tripId: string, dayId: string, item: NewDailyItem): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
 		return {
@@ -359,6 +429,132 @@ function addDayItem(tripId: string, dayId: string, item: Omit<DailyItem, 'id' | 
 		};
 	});
 	saveTrips();
+}
+
+function insertDayItemAt(tripId: string, dayId: string, item: NewDailyItem, position: number): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId) return day;
+				const newItem: DailyItem = {
+					...item,
+					id: generateItemId(),
+					sortOrder: position
+				} as DailyItem;
+				const newItems = [...day.items];
+				// Clamp position to valid range
+				const insertPos = Math.max(0, Math.min(position, newItems.length));
+				newItems.splice(insertPos, 0, newItem);
+				// Re-number sortOrder
+				return { ...day, items: newItems.map((it, idx) => ({ ...it, sortOrder: idx })) };
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function duplicateDayItem(tripId: string, dayId: string, itemId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId) return day;
+				const itemToDuplicate = day.items.find((i) => i.id === itemId);
+				if (!itemToDuplicate) return day;
+				
+				const itemIndex = day.items.findIndex((i) => i.id === itemId);
+				const duplicatedItem: DailyItem = {
+					...itemToDuplicate,
+					id: generateItemId(),
+					sortOrder: itemIndex + 1
+				};
+				
+				const newItems = [...day.items];
+				newItems.splice(itemIndex + 1, 0, duplicatedItem);
+				// Re-number sortOrder
+				return { ...day, items: newItems.map((it, idx) => ({ ...it, sortOrder: idx })) };
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function removeAllStayItems(tripId: string, stayId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => ({
+				...day,
+				items: day.items
+					.filter((item) => !(item.kind === 'stay' && item.stayId === stayId))
+					.map((it, idx) => ({ ...it, sortOrder: idx }))
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function removeAllTransportItems(tripId: string, transportLegId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			transportLegs: t.transportLegs.filter((l) => l.id !== transportLegId),
+			itinerary: t.itinerary.map((day) => ({
+				...day,
+				items: day.items
+					.filter((item) => !(item.kind === 'transport' && item.transportLegId === transportLegId))
+					.map((it, idx) => ({ ...it, sortOrder: idx }))
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function addTransportWithDailyItems(tripId: string, leg: TransportLeg): void {
+	// First add the transport leg
+	addTransportLeg(tripId, leg);
+
+	// Get the updated trip
+	const trip = state.trips.find((t) => t.id === tripId);
+	if (!trip) return;
+
+	const departureDay = trip.itinerary.find((d) => d.date === leg.departureDate);
+	const arrivalDate = leg.arrivalDate || leg.departureDate;
+	const arrivalDay = trip.itinerary.find((d) => d.date === arrivalDate);
+
+	// Add departure item at end of departure day
+	if (departureDay) {
+		addDayItem(tripId, departureDay.id, {
+			kind: 'transport',
+			transportLegId: leg.id,
+			isDeparture: true
+		});
+	}
+
+	// Add arrival item at beginning of arrival day (if different from departure)
+	if (arrivalDay && arrivalDay.id !== departureDay?.id) {
+		insertDayItemAt(tripId, arrivalDay.id, {
+			kind: 'transport',
+			transportLegId: leg.id,
+			isArrival: true
+		}, 0);
+	} else if (arrivalDay && arrivalDay.id === departureDay?.id) {
+		// Same day - add arrival after departure
+		addDayItem(tripId, arrivalDay.id, {
+			kind: 'transport',
+			transportLegId: leg.id,
+			isArrival: true
+		});
+	}
 }
 
 function updateDayItem(tripId: string, dayId: string, itemId: string, updates: Partial<DailyItem>): void {
@@ -428,6 +624,51 @@ function updateDayTitle(tripId: string, dayId: string, title: string): void {
 	saveTrips();
 }
 
+function moveDayItem(tripId: string, fromDayId: string, toDayId: string, itemId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+
+		let itemToMove: DailyItem | undefined;
+
+		// Find and remove the item from the source day
+		const updatedItinerary = t.itinerary.map((day) => {
+			if (day.id === fromDayId) {
+				const item = day.items.find((i) => i.id === itemId);
+				if (item) {
+					itemToMove = { ...item };
+				}
+				return {
+					...day,
+					items: day.items
+						.filter((i) => i.id !== itemId)
+						.map((item, idx) => ({ ...item, sortOrder: idx }))
+				};
+			}
+			return day;
+		});
+
+		// Add the item to the target day
+		if (itemToMove) {
+			return {
+				...t,
+				itinerary: updatedItinerary.map((day) => {
+					if (day.id === toDayId) {
+						return {
+							...day,
+							items: [...day.items, { ...itemToMove!, sortOrder: day.items.length }]
+						};
+					}
+					return day;
+				}),
+				updatedAt: new Date().toISOString()
+			};
+		}
+
+		return t;
+	});
+	saveTrips();
+}
+
 // ============ Color Scheme ============
 
 function updateColorScheme(tripId: string, colorScheme: ColorScheme): void {
@@ -445,9 +686,10 @@ function toggleColorMode(tripId: string): void {
 			...t.colorScheme,
 			mode: newMode
 		};
-		if (newMode === 'by-stay' && !newScheme.stayColors) {
-			const allStayIds = t.cities.flatMap((c) => c.stays.map((s) => s.id));
-			newScheme.stayColors = assignStayColors(allStayIds);
+		if (newMode === 'by-stay') {
+			// Compute stay segments and build color map
+			const segments = computeStaySegments(t);
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
 		}
 		return { ...t, colorScheme: newScheme, updatedAt: new Date().toISOString() };
 	});
@@ -485,17 +727,39 @@ function regenerateItinerary(trip: Trip): Trip {
 }
 
 function getCityIdsForDate(trip: Trip, date: string): string[] {
-	const cityIds: string[] = [];
+	// First, get cities based on their date range (fallback)
+	const citiesFromRange: string[] = [];
+	for (const city of trip.cities) {
+		if (date >= city.startDate && date <= city.endDate) {
+			citiesFromRange.push(city.id);
+		}
+	}
+
+	// Then, get cities based on lodging (overrides range if present)
+	const citiesFromLodging: string[] = [];
 	for (const city of trip.cities) {
 		for (const stay of city.stays) {
+			// Include check-in day and all days up to (but not including) check-out
 			if (date >= stay.checkIn && date < stay.checkOut) {
-				if (!cityIds.includes(city.id)) {
-					cityIds.push(city.id);
+				if (!citiesFromLodging.includes(city.id)) {
+					citiesFromLodging.push(city.id);
+				}
+			}
+			// Also include check-out day for that city (last day at the hotel)
+			if (date === stay.checkOut) {
+				if (!citiesFromLodging.includes(city.id)) {
+					citiesFromLodging.push(city.id);
 				}
 			}
 		}
 	}
-	return cityIds;
+
+	// If we have lodging for this date, use that; otherwise use the city date range
+	if (citiesFromLodging.length > 0) {
+		return citiesFromLodging;
+	}
+
+	return citiesFromRange;
 }
 
 // ============ Export Store ============
@@ -522,7 +786,9 @@ export const tripStore = {
 	createTrip,
 	updateTrip,
 	deleteTrip,
+	importTrip,
 	setCurrentTrip,
+	extendTripDates,
 
 	// City
 	addCity,
@@ -548,12 +814,18 @@ export const tripStore = {
 	addTransportLeg,
 	updateTransportLeg,
 	removeTransportLeg,
+	removeAllTransportItems,
+	addTransportWithDailyItems,
 
 	// Daily Items
 	addDayItem,
+	insertDayItemAt,
+	duplicateDayItem,
+	removeAllStayItems,
 	updateDayItem,
 	removeDayItem,
 	reorderDayItems,
+	moveDayItem,
 	updateDayTitle,
 
 	// Color Scheme

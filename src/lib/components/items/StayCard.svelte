@@ -11,10 +11,9 @@
 		isCheckOut?: boolean;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { stay, isCheckIn = false, isCheckOut = false, isEditing = false, onclick, onRemove }: Props = $props();
+	let { stay, isCheckIn = false, isCheckOut = false, isEditing = false, onclick }: Props = $props();
 
 	const stayTypeLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -87,17 +86,12 @@
 		</div>
 	</div>
 
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>
 	.item-card {
 		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-stay)), white 90%);
+		background: color-mix(in oklch, var(--item-color, var(--color-kind-stay)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
 		border-left: 4px solid var(--item-color, var(--color-kind-stay));
 		border-radius: var(--radius-md);
 		padding: var(--space-3);
@@ -139,6 +133,7 @@
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
+		color: var(--text-primary);
 
 		&:disabled {
 			cursor: default;
@@ -213,27 +208,5 @@
 		font-size: 0.75rem;
 		padding: 2px 6px;
 		color: var(--text-tertiary);
-	}
-
-	.remove-btn {
-		position: absolute;
-		top: var(--space-2);
-		right: var(--space-2);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		background: var(--surface-primary);
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-
-		&:hover {
-			background: var(--color-error);
-			border-color: var(--color-error);
-			color: white;
-		}
 	}
 </style>

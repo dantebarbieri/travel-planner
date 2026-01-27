@@ -8,13 +8,15 @@
 		TransportLeg,
 		ColorScheme,
 		WeatherCondition,
-		DailyItem
+		DailyItem,
+		TravelMode,
+		StaySegment
 	} from '$lib/types/travel';
-	import { formatDate, formatDayOfWeek } from '$lib/utils/dates';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { getSegmentForDay, getDayBackgroundColor } from '$lib/utils/colors';
 
 	interface Props {
 		day: ItineraryDay;
@@ -24,12 +26,21 @@
 		foodVenues: FoodVenue[];
 		transportLegs: TransportLeg[];
 		colorScheme: ColorScheme;
-		weather?: WeatherCondition;
+		/** Pre-computed stay segments for by-stay coloring */
+		staySegments?: StaySegment[];
+		/** Whether this day has a city but no lodging booked */
+		hasMissingLodging?: boolean;
+		weatherList?: WeatherCondition[];
 		isEditing?: boolean;
 		onAddItem?: () => void;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
 		onRemoveItem?: (itemId: string) => void;
+		onRemoveEntireStay?: (stayId: string) => void;
+		onRemoveEntireTransport?: (transportLegId: string) => void;
+		onMoveItem?: (itemId: string) => void;
+		onDuplicateItem?: (itemId: string) => void;
+		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
 	}
 
 	let {
@@ -40,27 +51,101 @@
 		foodVenues,
 		transportLegs,
 		colorScheme,
-		weather,
+		staySegments = [],
+		hasMissingLodging = false,
+		weatherList = [],
 		isEditing = false,
 		onAddItem,
 		onReorder,
 		onItemClick,
-		onRemoveItem
+		onRemoveItem,
+		onRemoveEntireStay,
+		onRemoveEntireTransport,
+		onMoveItem,
+		onDuplicateItem,
+		onTravelModeChange
 	}: Props = $props();
 
 	const dayCities = $derived(cities.filter((c) => day.cityIds.includes(c.id)));
-	const cityNames = $derived(dayCities.map((c) => c.name).join(' - ') || 'No city assigned');
+
+	// Determine if this is a transition day (leaving one city, arriving at another)
+	// Check if any city's end date matches today (leaving) and another city's start date matches (arriving)
+	const transitionInfo = $derived.by(() => {
+		if (dayCities.length !== 2) return null;
+
+		const [city1, city2] = dayCities;
+		// If city1 ends today and city2 starts today, it's a transition from city1 to city2
+		if (city1.endDate === day.date && city2.startDate === day.date) {
+			return { from: city1, to: city2 };
+		}
+		// If city2 ends today and city1 starts today, it's a transition from city2 to city1
+		if (city2.endDate === day.date && city1.startDate === day.date) {
+			return { from: city2, to: city1 };
+		}
+		return null;
+	});
+
+	const cityNames = $derived.by(() => {
+		if (dayCities.length === 0) return 'No city assigned';
+		if (transitionInfo) {
+			return `${transitionInfo.from.name} → ${transitionInfo.to.name}`;
+		}
+		if (dayCities.length === 1) {
+			return dayCities[0].name;
+		}
+		// Multiple cities but not a clear transition - use ampersand
+		return dayCities.map((c) => c.name).join(' & ');
+	});
 
 	const sortedItems = $derived([...day.items].sort((a, b) => a.sortOrder - b.sortOrder));
+
+	// The primary city for this day (used for inferred stay coloring)
+	// For transition days, use the destination city; otherwise use the first city
+	const primaryCityId = $derived.by(() => {
+		if (transitionInfo) return transitionInfo.to.id;
+		if (dayCities.length > 0) return dayCities[0].id;
+		return undefined;
+	});
+
+	// Get the stay segment for this day (for by-stay coloring)
+	const daySegment = $derived.by(() => {
+		if (staySegments.length === 0) return undefined;
+		return getSegmentForDay(staySegments, day.dayNumber - 1);
+	});
+
+	// Get the day background color (for by-stay mode when day is homogeneous)
+	const dayBgColor = $derived.by(() => {
+		return getDayBackgroundColor(colorScheme, staySegments, day.dayNumber - 1);
+	});
+
+	// Style string for the day container
+	const dayStyle = $derived.by(() => {
+		const styles: string[] = [];
+		if (dayBgColor) {
+			styles.push(`--day-bg-color: ${dayBgColor}`);
+		}
+		if (hasMissingLodging) {
+			styles.push(`--day-warning: var(--color-warning)`);
+		}
+		return styles.length > 0 ? styles.join('; ') : undefined;
+	});
 </script>
 
-<article class="itinerary-day" data-day-id={day.id}>
+<article 
+	class="itinerary-day" 
+	class:has-day-color={!!dayBgColor}
+	class:has-missing-lodging={hasMissingLodging}
+	data-day-id={day.id}
+	data-color-mode={colorScheme.mode}
+	style={dayStyle}
+>
 	<DayHeader
 		dayNumber={day.dayNumber}
 		date={day.date}
 		title={day.title}
 		cityName={cityNames}
-		{weather}
+		{hasMissingLodging}
+		{weatherList}
 	/>
 
 	<div class="day-content">
@@ -72,10 +157,17 @@
 				{foodVenues}
 				{transportLegs}
 				{colorScheme}
+				cityId={primaryCityId}
+				segmentId={daySegment?.id}
 				{isEditing}
 				{onReorder}
 				{onItemClick}
 				{onRemoveItem}
+				{onRemoveEntireStay}
+				{onRemoveEntireTransport}
+				{onMoveItem}
+				{onDuplicateItem}
+				{onTravelModeChange}
 			/>
 		{:else}
 			<div class="empty-state">
@@ -90,11 +182,11 @@
 		{/if}
 	</div>
 
-	{#if isEditing && sortedItems.length > 0 && onAddItem}
+	{#if isEditing && onAddItem}
 		<div class="day-footer">
-			<Button variant="ghost" size="sm" onclick={onAddItem}>
+			<Button variant="secondary" size="sm" onclick={onAddItem}>
 				<Icon name="add" size={16} />
-				Add item
+				Add activity
 			</Button>
 		</div>
 	{/if}
@@ -109,6 +201,18 @@
 		border-radius: var(--radius-lg);
 		margin-bottom: var(--space-4);
 		overflow: hidden;
+	}
+
+	/* Day with assigned stay color in by-stay mode */
+	.itinerary-day.has-day-color {
+		background: color-mix(in oklch, var(--day-bg-color), var(--surface-primary) 85%);
+		border-color: color-mix(in oklch, var(--day-bg-color), var(--border-color) 70%);
+	}
+
+	/* Day with missing lodging warning */
+	.itinerary-day.has-missing-lodging {
+		border-color: var(--color-warning);
+		border-width: 2px;
 	}
 
 	.day-content {

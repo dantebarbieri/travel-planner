@@ -300,9 +300,18 @@ export interface FoodDailyItem extends BaseDailyItem {
 export interface TransportDailyItem extends BaseDailyItem {
 	kind: 'transport';
 	transportLegId: TransportLegId;
+	isDeparture?: boolean;
+	isArrival?: boolean;
 }
 
 export type DailyItem = StayDailyItem | ActivityDailyItem | FoodDailyItem | TransportDailyItem;
+
+// Helper type for creating new daily items (without id and sortOrder)
+export type NewStayDailyItem = Omit<StayDailyItem, 'id' | 'sortOrder'>;
+export type NewActivityDailyItem = Omit<ActivityDailyItem, 'id' | 'sortOrder'>;
+export type NewFoodDailyItem = Omit<FoodDailyItem, 'id' | 'sortOrder'>;
+export type NewTransportDailyItem = Omit<TransportDailyItem, 'id' | 'sortOrder'>;
+export type NewDailyItem = NewStayDailyItem | NewActivityDailyItem | NewFoodDailyItem | NewTransportDailyItem;
 
 // ============ Itinerary Day ============
 
@@ -343,10 +352,44 @@ export interface KindColors {
 	flight: string;
 }
 
+/**
+ * A color palette for stay coloring.
+ * Can be a default palette or a custom one for the trip.
+ */
+export interface ColorPalette {
+	id: string;
+	name: string;
+	colors: string[];
+}
+
 export interface ColorScheme {
 	mode: ColorMode;
 	kindColors: KindColors;
-	stayColors?: Record<StayId, string>;
+	/** Map of stay IDs (or inferred stay keys) to their assigned colors */
+	stayColors?: Record<string, string>;
+	/** Custom palette for this trip (if not using default) */
+	palette?: ColorPalette;
+}
+
+/**
+ * Information about a "stay segment" - either a real stay or an inferred one
+ * Used for by-stay coloring when days don't have explicit lodging
+ */
+export interface StaySegment {
+	/** Real stay ID, or inferred ID like 'inferred:cityId' or 'inferred:unknown:dayIndex' */
+	id: string;
+	/** The color assigned to this segment */
+	color: string;
+	/** Start day index (0-based) */
+	startDayIndex: number;
+	/** End day index (0-based, inclusive) */
+	endDayIndex: number;
+	/** Whether this is an inferred stay (no lodging booked) */
+	isInferred: boolean;
+	/** City ID if known */
+	cityId?: CityId;
+	/** Real stay ID if this is an actual stay */
+	stayId?: StayId;
 }
 
 // ============ Trip ============
@@ -433,6 +476,8 @@ export interface AttractionAdapter {
 export interface WeatherAdapter {
 	getForecast(location: Location, dates: string[]): Promise<WeatherCondition[]>;
 	getHistorical(location: Location, dates: string[]): Promise<WeatherCondition[]>;
+	/** Smart fetch - uses forecast for near dates (within 2 weeks), historical estimates otherwise */
+	getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]>;
 }
 
 export interface TransportAdapter {
@@ -442,6 +487,75 @@ export interface TransportAdapter {
 		origin: Location,
 		destination: Location
 	): Promise<{ min: number; max: number; currency: string }>;
+}
+
+// ============ Flight Search Adapter ============
+
+export interface FlightSearchParams {
+	airline?: string;
+	airlineCode?: string;
+	flightNumber?: string;
+	departureDate: string;
+	origin?: Location;
+	destination?: Location;
+}
+
+export interface Airline {
+	name: string;
+	code: string;
+}
+
+export interface FlightSearchResult {
+	airline: string;
+	airlineCode: string;
+	flightNumber: string;
+	origin: Location;
+	destination: Location;
+	departureDate: string;
+	departureTime: string;
+	arrivalDate: string;
+	arrivalTime: string;
+	duration: number;
+	aircraft?: string;
+	price?: number;
+	currency?: string;
+}
+
+export interface FlightAdapter {
+	searchAirlines(query: string): Promise<Airline[]>;
+	searchFlights(params: FlightSearchParams): Promise<FlightSearchResult[]>;
+	getFlightDetails(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult | null>;
+}
+
+// ============ Train/Bus Search Adapter ============
+
+export interface TrainBusSearchParams {
+	query?: string;
+	origin?: Location;
+	destination?: Location;
+	departureDate: string;
+	mode: 'train' | 'bus';
+}
+
+export interface TrainBusSearchResult {
+	carrier: string;
+	routeNumber?: string;
+	routeName?: string;
+	origin: Location;
+	destination: Location;
+	departureDate: string;
+	departureTime: string;
+	arrivalDate: string;
+	arrivalTime: string;
+	duration: number;
+	mode: 'train' | 'bus';
+	price?: number;
+	currency?: string;
+}
+
+export interface TrainBusAdapter {
+	searchRoutes(params: TrainBusSearchParams): Promise<TrainBusSearchResult[]>;
+	getCarriers(cityLocation: Location, mode: 'train' | 'bus'): Promise<string[]>;
 }
 
 // ============ Helper Types ============

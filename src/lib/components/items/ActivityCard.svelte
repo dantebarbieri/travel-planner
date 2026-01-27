@@ -9,10 +9,9 @@
 		activity: Activity;
 		isEditing?: boolean;
 		onclick?: () => void;
-		onRemove?: () => void;
 	}
 
-	let { activity, isEditing = false, onclick, onRemove }: Props = $props();
+	let { activity, isEditing = false, onclick }: Props = $props();
 
 	const categoryLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -115,17 +114,12 @@
 		</div>
 	</div>
 
-	{#if isEditing && onRemove}
-		<button type="button" class="remove-btn" onclick={onRemove} title="Remove">
-			<Icon name="close" size={16} />
-		</button>
-	{/if}
 </div>
 
 <style>
 	.item-card {
 		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-activity)), white 90%);
+		background: color-mix(in oklch, var(--item-color, var(--color-kind-activity)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
 		border-left: 4px solid var(--item-color, var(--color-kind-activity));
 		border-radius: var(--radius-md);
 		padding: var(--space-3);
@@ -167,6 +161,7 @@
 		text-align: left;
 		cursor: pointer;
 		font: inherit;
+		color: var(--text-primary);
 
 		&:disabled {
 			cursor: default;
@@ -190,6 +185,7 @@
 		margin: 0;
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
+		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}
@@ -265,28 +261,6 @@
 
 		&:hover {
 			color: var(--color-primary-dark);
-		}
-	}
-
-	.remove-btn {
-		position: absolute;
-		top: var(--space-2);
-		right: var(--space-2);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		background: var(--surface-primary);
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-sm);
-		color: var(--text-secondary);
-		cursor: pointer;
-
-		&:hover {
-			background: var(--color-error);
-			border-color: var(--color-error);
-			color: white;
 		}
 	}
 </style>

@@ -22,12 +22,12 @@
 	const weatherIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
 			sunny: 'sunny',
-			partly_cloudy: 'cloudy',
+			partly_cloudy: 'partlyCloudy',
 			cloudy: 'cloudy',
 			rain: 'rain',
-			snow: 'cloudy',
-			storm: 'rain',
-			fog: 'cloudy'
+			snow: 'snow',
+			storm: 'storm',
+			fog: 'fog'
 		};
 		return iconMap[weather.condition] || 'sunny';
 	});
@@ -60,7 +60,7 @@
 		{/if}
 	{/if}
 	{#if weather.isHistorical}
-		<span class="historical-indicator" title="Historical average">avg</span>
+		<span class="historical-indicator" title="Historical average - forecast not available for this date">*</span>
 	{/if}
 </div>
 
@@ -108,12 +108,10 @@
 	}
 
 	.historical-indicator {
-		font-size: 0.625rem;
+		font-size: 0.875rem;
 		color: var(--text-tertiary);
-		background: var(--surface-secondary);
-		padding: 1px 4px;
-		border-radius: var(--radius-sm);
-		text-transform: uppercase;
+		cursor: help;
+		margin-left: -2px;
 	}
 
 	.show-details {
