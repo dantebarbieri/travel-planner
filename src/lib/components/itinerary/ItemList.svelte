@@ -290,7 +290,7 @@
 			ondragleave={handleDragLeave}
 			ondrop={(e) => handleDrop(e, index)}
 			ondragend={handleDragEnd}
-			oncontextmenu={(e) => openContextMenu(e, item.id)}
+			oncontextmenu={(e) => isEditing && openContextMenu(e, item.id)}
 			role={isEditing ? 'listitem' : undefined}
 		>
 			{#if isEditing}

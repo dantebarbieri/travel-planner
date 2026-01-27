@@ -67,6 +67,7 @@
 	.card-clickable {
 		cursor: pointer;
 		font: inherit;
+		color: inherit;
 
 		&:focus-visible {
 			outline: 2px solid var(--color-primary);
