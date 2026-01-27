@@ -283,7 +283,7 @@ For `by-stay` mode, the system computes `StaySegment` objects:
 
 ```typescript
 interface StaySegment {
-  id: string;               // Real stay ID or 'inferred:cityId'
+  id: string;               // Real stay ID or inferred key (e.g. 'inferred:cityId' or 'inferred:unknown:dayIndex')
   color: string;
   startDayIndex: number;
   endDayIndex: number;
