@@ -263,7 +263,10 @@ export interface WeatherCondition {
 	uvIndex?: number;
 	sunrise?: string;
 	sunset?: string;
+	/** True for past dates - weather data is historical, not a forecast */
 	isHistorical?: boolean;
+	/** True for far-future dates (14+ days) - weather is an estimate based on historical patterns, not a real forecast */
+	isEstimate?: boolean;
 }
 
 // ============ Daily Items ============

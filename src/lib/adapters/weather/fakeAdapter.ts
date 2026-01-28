@@ -47,7 +47,14 @@ function getWeatherDataType(date: string): WeatherDataType {
 	return 'estimate';                           // Far future = show asterisk
 }
 
-function generateWeatherForDate(location: Location, date: string, isHistorical: boolean): WeatherCondition {
+interface WeatherFlags {
+	/** True for past dates - weather data is historical, not a forecast */
+	isHistorical: boolean;
+	/** True for far-future dates - weather is an estimate, not a real forecast */
+	isEstimate: boolean;
+}
+
+function generateWeatherForDate(location: Location, date: string, flags: WeatherFlags): WeatherCondition {
 	const city = location.address.city;
 	const pattern = getCityPattern(city);
 
@@ -64,8 +71,8 @@ function generateWeatherForDate(location: Location, date: string, isHistorical: 
 	const conditionIndex = (dateNum + month) % pattern.conditions.length;
 	const condition = pattern.conditions[conditionIndex];
 
-	// Historical estimates have wider temperature ranges (less precise)
-	const tempVariance = isHistorical ? 5 : 2;
+	// Estimates (far future) have wider temperature ranges (less precise)
+	const tempVariance = flags.isEstimate ? 5 : 2;
 
 	return {
 		date,
@@ -83,7 +90,8 @@ function generateWeatherForDate(location: Location, date: string, isHistorical: 
 		uvIndex: condition === 'sunny' ? 6 + Math.floor(Math.random() * 4) : 2 + Math.floor(Math.random() * 3),
 		sunrise: '06:30',
 		sunset: '19:45',
-		isHistorical
+		isHistorical: flags.isHistorical,
+		isEstimate: flags.isEstimate
 	};
 }
 
@@ -95,28 +103,36 @@ export const fakeWeatherAdapter: WeatherAdapter = {
 	async getForecast(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
-		return dates.map((date) => generateWeatherForDate(location, date, false));
+		return dates.map((date) => generateWeatherForDate(location, date, {
+			isHistorical: false,
+			isEstimate: false
+		}));
 	},
 
 	async getHistorical(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
-		return dates.map((date) => generateWeatherForDate(location, date, true));
+		return dates.map((date) => generateWeatherForDate(location, date, {
+			isHistorical: true,
+			isEstimate: false
+		}));
 	},
 
 	/**
-	 * Smart weather fetch:
-	 * - Past dates: definitive historical data (no asterisk)
-	 * - 0-14 days future: forecast data (no asterisk)
-	 * - 14+ days future: seasonal estimate (show asterisk)
+	 * Smart weather fetch that determines the appropriate data type:
+	 * - Past dates: historical data (marked with †)
+	 * - 0-14 days future: forecast data (no indicator)
+	 * - 14+ days future: estimate based on historical patterns (marked with *)
 	 */
 	async getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
 		return dates.map((date) => {
 			const dataType = getWeatherDataType(date);
-			// Only show asterisk for estimates (far future), not historical or forecast
-			return generateWeatherForDate(location, date, dataType === 'estimate');
+			return generateWeatherForDate(location, date, {
+				isHistorical: dataType === 'historical',
+				isEstimate: dataType === 'estimate'
+			});
 		});
 	}
 };
