@@ -172,6 +172,7 @@
 				{colorScheme}
 				cityId={primaryCityId}
 				segmentId={daySegment?.id}
+				distanceUnit={unitResolution?.distanceUnit}
 				{isEditing}
 				{onReorder}
 				{onItemClick}

@@ -30,6 +30,8 @@
 		cityId?: CityId;
 		/** The stay segment ID for this day (used for by-stay coloring) */
 		segmentId?: string;
+		/** Resolved distance unit for this day's location */
+		distanceUnit?: 'km' | 'miles';
 		isEditing?: boolean;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
@@ -50,6 +52,7 @@
 		colorScheme,
 		cityId,
 		segmentId,
+		distanceUnit = 'km',
 		isEditing = false,
 		onReorder,
 		onItemClick,
@@ -274,6 +277,7 @@
 				toLocation={currentLocation}
 				selectedMode={item.travelMode || 'driving'}
 				estimates={item.travelFromPrevious ? [item.travelFromPrevious] : []}
+				{distanceUnit}
 				onModeChange={(mode) => handleModeChange(item.id, mode)}
 			/>
 		{/if}

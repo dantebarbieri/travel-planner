@@ -11,6 +11,8 @@
 		toLocation: Location;
 		selectedMode?: TravelMode;
 		estimates?: TravelEstimate[];
+		/** Resolved distance unit for this day's location */
+		distanceUnit?: 'km' | 'miles';
 		onModeChange?: (mode: TravelMode) => void;
 	}
 
@@ -19,16 +21,11 @@
 		toLocation,
 		selectedMode = 'driving',
 		estimates = [],
+		distanceUnit = 'km',
 		onModeChange
 	}: Props = $props();
 
 	const distance = $derived(getDistanceBetweenLocations(fromLocation, toLocation));
-
-	// Get resolved distance unit from settings - use $derived.by for explicit dependency tracking
-	const distanceUnit = $derived.by(() => {
-		const unit = settingsStore.userSettings.distanceUnit;
-		return settingsStore.getConcreteDistanceUnit(unit);
-	});
 
 	// Map between TravelMode and DisableableTransportMode names
 	const travelModeToDisableable: Record<TravelMode, DisableableTransportMode | null> = {
