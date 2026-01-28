@@ -11,6 +11,57 @@ import type {
 	ColorPalette
 } from '$lib/types/travel';
 import { isStayItem } from '$lib/types/travel';
+import { parse, formatHex, oklch as toOklch } from 'culori';
+
+/**
+ * Convert an oklch color string to hex format for use with HTML color inputs.
+ * Falls back to a default purple if parsing fails.
+ */
+export function oklchToHex(oklchStr: string): string {
+	try {
+		// If it's already a hex color, return it directly
+		if (oklchStr.startsWith('#')) {
+			return oklchStr;
+		}
+		
+		// Parse the oklch string and convert to hex
+		const parsed = parse(oklchStr);
+		if (parsed) {
+			const hex = formatHex(parsed);
+			return hex || '#6366f1';
+		}
+		return '#6366f1'; // Default fallback
+	} catch {
+		return '#6366f1'; // Error fallback
+	}
+}
+
+/**
+ * Convert a hex color string to oklch format for storage.
+ */
+export function hexToOklch(hex: string): string {
+	try {
+		// If it's already an oklch color, return it directly
+		if (hex.startsWith('oklch')) {
+			return hex;
+		}
+		
+		// Parse the hex color and convert to oklch
+		const parsed = parse(hex);
+		if (parsed) {
+			const oklchColor = toOklch(parsed);
+			if (oklchColor) {
+				const l = oklchColor.l?.toFixed(2) ?? '0.5';
+				const c = oklchColor.c?.toFixed(2) ?? '0.15';
+				const h = oklchColor.h?.toFixed(0) ?? '0';
+				return `oklch(${l} ${c} ${h})`;
+			}
+		}
+		return 'oklch(0.7 0.15 280)'; // Default fallback
+	} catch {
+		return 'oklch(0.7 0.15 280)'; // Error fallback
+	}
+}
 
 export const defaultKindColors: KindColors = {
 	stay: 'oklch(0.7 0.15 280)',

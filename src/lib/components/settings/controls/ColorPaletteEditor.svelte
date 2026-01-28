@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { CustomColorPalette } from '$lib/types/settings';
 	import { generateTripId } from '$lib/utils/ids';
+	import { oklchToHex, hexToOklch } from '$lib/utils/colors';
 
 	interface Props {
 		palette?: CustomColorPalette;
@@ -31,8 +32,9 @@
 
 	let editingColorIndex = $state<number | null>(null);
 
-	function handleColorChange(index: number, value: string) {
-		colors[index] = value;
+	function handleColorChange(index: number, hexValue: string) {
+		// Convert hex from color picker to oklch for storage
+		colors[index] = hexToOklch(hexValue);
 	}
 
 	function addColor() {
@@ -57,18 +59,6 @@
 		});
 	}
 
-	// Convert oklch to hex for color picker
-	function oklchToHex(oklch: string): string {
-		// Simple fallback - the color picker will use the browser's interpretation
-		// For a real implementation, you'd use a color library
-		return oklch;
-	}
-
-	// Convert hex to oklch (simplified)
-	function hexToOklch(hex: string): string {
-		// Return as-is for now - browsers handle hex in color inputs
-		return hex;
-	}
 </script>
 
 <div class="palette-editor">
@@ -100,7 +90,7 @@
 						<input
 							type="color"
 							class="color-input"
-							value={color.startsWith('#') ? color : '#6366f1'}
+							value={oklchToHex(color)}
 							onchange={(e) => handleColorChange(index, (e.target as HTMLInputElement).value)}
 							title="Color {index + 1}"
 						/>
