@@ -1,100 +1,93 @@
 <script lang="ts">
-	import type { CustomColorPalette, CustomKindColors } from '$lib/types/settings';
-	import type { KindColors } from '$lib/types/travel';
+	import type { CustomColorScheme } from '$lib/types/settings';
 	import SettingRow from '../controls/SettingRow.svelte';
 	import SettingRadioGroup from '../controls/SettingRadioGroup.svelte';
 	import SettingSelect from '../controls/SettingSelect.svelte';
-	import ColorPaletteEditor from '../controls/ColorPaletteEditor.svelte';
-	import KindColorsEditor from '../controls/KindColorsEditor.svelte';
+	import ColorSchemeEditor from '../controls/ColorSchemeEditor.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
-	import { defaultStayColorPalette } from '$lib/utils/colors';
+	import { defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
 
 	const colorModeOptions = [
 		{ value: 'by-kind', label: 'By Type' },
 		{ value: 'by-stay', label: 'By Stay' }
 	];
 
-	let showPaletteEditor = $state(false);
-	let editingPalette = $state<CustomColorPalette | undefined>(undefined);
+	let showSchemeEditor = $state(false);
+	let editingScheme = $state<CustomColorScheme | undefined>(undefined);
 
-	// Get palette options for dropdown (default + custom)
-	const paletteOptions = $derived([
-		{ value: '', label: 'Default Palette' },
-		...settingsStore.userSettings.customColorPalettes.map(p => ({
-			value: p.id,
-			label: p.name
+	// Get scheme options for dropdown (default + custom)
+	const schemeOptions = $derived([
+		{ value: '', label: 'Default Colors' },
+		...settingsStore.userSettings.customColorSchemes.map(s => ({
+			value: s.id,
+			label: s.name
 		}))
 	]);
 
-	// Get the currently selected palette (for preview)
-	const selectedPalette = $derived(
-		settingsStore.userSettings.defaultPaletteId
-			? settingsStore.userSettings.customColorPalettes.find(
-					p => p.id === settingsStore.userSettings.defaultPaletteId
+	// Get the currently selected scheme (for preview)
+	const selectedScheme = $derived(
+		settingsStore.userSettings.defaultColorSchemeId
+			? settingsStore.userSettings.customColorSchemes.find(
+					s => s.id === settingsStore.userSettings.defaultColorSchemeId
 				)
 			: null
 	);
 
-	// Get colors to preview (selected custom palette or default)
-	const previewColors = $derived(
-		selectedPalette?.colors ?? defaultStayColorPalette.colors
-	);
+	// Get colors to preview
+	const previewKindColors = $derived(selectedScheme?.kindColors ?? defaultKindColors);
+	const previewPaletteColors = $derived(selectedScheme?.paletteColors ?? defaultPaletteColors);
 
 	function handleColorModeChange(value: string) {
 		settingsStore.setDefaultColorMode(value as 'by-kind' | 'by-stay');
 	}
 
-	function handleDefaultPaletteChange(paletteId: string) {
-		settingsStore.setDefaultPalette(paletteId || undefined);
+	function handleDefaultSchemeChange(schemeId: string) {
+		settingsStore.setDefaultColorScheme(schemeId || undefined);
 	}
 
-	function handleKindColorsChange(kindColors: KindColors) {
-		settingsStore.setCustomKindColors(kindColors as CustomKindColors);
+	function openNewSchemeEditor() {
+		editingScheme = undefined;
+		showSchemeEditor = true;
 	}
 
-	function openNewPaletteEditor() {
-		editingPalette = undefined;
-		showPaletteEditor = true;
+	function openEditSchemeEditor(scheme: CustomColorScheme) {
+		editingScheme = scheme;
+		showSchemeEditor = true;
 	}
 
-	function openEditPaletteEditor(palette: CustomColorPalette) {
-		editingPalette = palette;
-		showPaletteEditor = true;
-	}
-
-	function handleSavePalette(palette: CustomColorPalette) {
-		if (editingPalette) {
-			settingsStore.updateCustomPalette(palette.id, palette);
+	function handleSaveScheme(scheme: CustomColorScheme) {
+		if (editingScheme) {
+			settingsStore.updateCustomColorScheme(scheme.id, scheme);
 		} else {
-			settingsStore.addCustomPalette(palette);
+			settingsStore.addCustomColorScheme(scheme);
 		}
-		showPaletteEditor = false;
-		editingPalette = undefined;
+		showSchemeEditor = false;
+		editingScheme = undefined;
 	}
 
-	function handleCancelPalette() {
-		showPaletteEditor = false;
-		editingPalette = undefined;
+	function handleCancelScheme() {
+		showSchemeEditor = false;
+		editingScheme = undefined;
 	}
 
-	function handleDeletePalette(paletteId: string) {
-		if (confirm('Are you sure you want to delete this palette?')) {
-			settingsStore.deleteCustomPalette(paletteId);
+	function handleDeleteScheme(schemeId: string) {
+		if (confirm('Are you sure you want to delete this color scheme?')) {
+			settingsStore.deleteCustomColorScheme(schemeId);
 		}
 	}
 </script>
 
 <div class="section">
-	{#if showPaletteEditor}
-		<ColorPaletteEditor
-			palette={editingPalette}
-			onsave={handleSavePalette}
-			oncancel={handleCancelPalette}
+	{#if showSchemeEditor}
+		<ColorSchemeEditor
+			scheme={editingScheme}
+			onsave={handleSaveScheme}
+			oncancel={handleCancelScheme}
 		/>
 	{:else}
 		<h3 class="section-title">Colors</h3>
 
-		<SettingRow label="Default Color Mode" description="How items are colored in the itinerary">
+		<SettingRow label="Default Display Mode" description="How items are colored in the itinerary">
 			<SettingRadioGroup
 				name="colorMode"
 				value={settingsStore.userSettings.defaultColorMode}
@@ -103,89 +96,103 @@
 			/>
 		</SettingRow>
 
-		<!-- Kind Colors Editor (for by-kind mode) -->
-		<div class="colors-subsection">
-			<h4 class="subsection-title">By Type Colors</h4>
-			<p class="subsection-description">
-				Customize the colors used for each item type when "By Type" mode is selected.
-			</p>
-			<KindColorsEditor
-				kindColors={settingsStore.getEffectiveKindColors()}
-				onchange={handleKindColorsChange}
-			/>
-		</div>
-
-		<!-- Stay Palettes Section -->
-		<div class="palettes-section">
-			<div class="palettes-header">
+		<!-- Color Schemes Section -->
+		<div class="schemes-section">
+			<div class="schemes-header">
 				<div>
-					<h4 class="palettes-title">Stay Palettes</h4>
-					<p class="palettes-description">
-						Color palettes for "By Stay" mode. Each stay gets a unique color from the selected palette.
+					<h4 class="schemes-title">Color Schemes</h4>
+					<p class="schemes-description">
+						Color schemes define both "By Type" colors and "By Stay" palette colors.
 					</p>
 				</div>
-				<button type="button" class="add-palette-btn" onclick={openNewPaletteEditor}>
+				<button type="button" class="add-scheme-btn" onclick={openNewSchemeEditor}>
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M12 5v14M5 12h14" />
 					</svg>
-					New Palette
+					New Scheme
 				</button>
 			</div>
 
-			<!-- Palette Selection Dropdown -->
-			<div class="palette-selector">
-				<span class="selector-label" id="palette-selector-label">Active Palette</span>
+			<!-- Scheme Selection Dropdown -->
+			<div class="scheme-selector">
+				<span class="selector-label" id="scheme-selector-label">Active Color Scheme</span>
 				<div class="selector-row">
 					<SettingSelect
-						value={settingsStore.userSettings.defaultPaletteId ?? ''}
-						options={paletteOptions}
-						onchange={handleDefaultPaletteChange}
-						ariaLabelledBy="palette-selector-label"
+						value={settingsStore.userSettings.defaultColorSchemeId ?? ''}
+						options={schemeOptions}
+						onchange={handleDefaultSchemeChange}
+						ariaLabelledBy="scheme-selector-label"
 					/>
 				</div>
-				<!-- Preview of selected palette colors -->
-				<div class="palette-preview">
-					{#each previewColors.slice(0, 8) as color}
-						<span class="preview-dot" style="background: {color}"></span>
-					{/each}
-					{#if previewColors.length > 8}
-						<span class="preview-more">+{previewColors.length - 8}</span>
-					{/if}
+
+				<!-- Preview of selected scheme -->
+				<div class="scheme-preview">
+					<div class="preview-section">
+						<span class="preview-label">By Type:</span>
+						<div class="preview-colors">
+							<span class="preview-dot" style="background: {previewKindColors.stay}" title="Stays"></span>
+							<span class="preview-dot" style="background: {previewKindColors.activity}" title="Activities"></span>
+							<span class="preview-dot" style="background: {previewKindColors.food}" title="Food"></span>
+							<span class="preview-dot" style="background: {previewKindColors.transport}" title="Transport"></span>
+							<span class="preview-dot" style="background: {previewKindColors.flight}" title="Flights"></span>
+						</div>
+					</div>
+					<div class="preview-section">
+						<span class="preview-label">By Stay:</span>
+						<div class="preview-colors">
+							{#each previewPaletteColors.slice(0, 8) as color}
+								<span class="preview-dot" style="background: {color}"></span>
+							{/each}
+							{#if previewPaletteColors.length > 8}
+								<span class="preview-more">+{previewPaletteColors.length - 8}</span>
+							{/if}
+						</div>
+					</div>
 				</div>
 			</div>
 
-			<!-- Custom Palettes List -->
-			{#if settingsStore.userSettings.customColorPalettes.length > 0}
-				<div class="palettes-list">
-					<span class="list-label">Custom Palettes</span>
-					{#each settingsStore.userSettings.customColorPalettes as palette}
+			<!-- Custom Schemes List -->
+			{#if settingsStore.userSettings.customColorSchemes.length > 0}
+				<div class="schemes-list">
+					<span class="list-label">Custom Schemes</span>
+					{#each settingsStore.userSettings.customColorSchemes as scheme}
 						<div
-							class="palette-card"
-							class:selected={settingsStore.userSettings.defaultPaletteId === palette.id}
+							class="scheme-card"
+							class:selected={settingsStore.userSettings.defaultColorSchemeId === scheme.id}
 						>
 							<button
 								type="button"
-								class="palette-select-btn"
-								onclick={() => handleDefaultPaletteChange(
-									settingsStore.userSettings.defaultPaletteId === palette.id ? '' : palette.id
+								class="scheme-select-btn"
+								onclick={() => handleDefaultSchemeChange(
+									settingsStore.userSettings.defaultColorSchemeId === scheme.id ? '' : scheme.id
 								)}
 							>
-								<div class="palette-colors">
-									{#each palette.colors.slice(0, 8) as color}
-										<span class="palette-color-dot" style="background: {color}"></span>
-									{/each}
+								<div class="scheme-colors">
+									<div class="scheme-kind-colors">
+										<span class="scheme-color-dot" style="background: {scheme.kindColors.stay}"></span>
+										<span class="scheme-color-dot" style="background: {scheme.kindColors.activity}"></span>
+										<span class="scheme-color-dot" style="background: {scheme.kindColors.food}"></span>
+										<span class="scheme-color-dot" style="background: {scheme.kindColors.transport}"></span>
+										<span class="scheme-color-dot" style="background: {scheme.kindColors.flight}"></span>
+									</div>
+									<span class="scheme-separator">|</span>
+									<div class="scheme-palette-colors">
+										{#each scheme.paletteColors.slice(0, 4) as color}
+											<span class="scheme-color-dot" style="background: {color}"></span>
+										{/each}
+									</div>
 								</div>
-								<span class="palette-name">{palette.name}</span>
-								{#if settingsStore.userSettings.defaultPaletteId === palette.id}
+								<span class="scheme-name">{scheme.name}</span>
+								{#if settingsStore.userSettings.defaultColorSchemeId === scheme.id}
 									<span class="default-badge">Active</span>
 								{/if}
 							</button>
-							<div class="palette-actions">
+							<div class="scheme-actions">
 								<button
 									type="button"
-									class="palette-action-btn"
-									onclick={() => openEditPaletteEditor(palette)}
-									title="Edit palette"
+									class="scheme-action-btn"
+									onclick={() => openEditSchemeEditor(scheme)}
+									title="Edit scheme"
 								>
 									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -194,9 +201,9 @@
 								</button>
 								<button
 									type="button"
-									class="palette-action-btn danger"
-									onclick={() => handleDeletePalette(palette.id)}
-									title="Delete palette"
+									class="scheme-action-btn danger"
+									onclick={() => handleDeleteScheme(scheme.id)}
+									title="Delete scheme"
 								>
 									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -226,31 +233,11 @@
 		margin-bottom: var(--space-2);
 	}
 
-	.colors-subsection {
+	.schemes-section {
 		margin-top: var(--space-4);
-		padding-top: var(--space-4);
-		border-top: 1px solid var(--border-color);
 	}
 
-	.subsection-title {
-		font-size: 0.875rem;
-		font-weight: 600;
-		margin: 0 0 var(--space-1) 0;
-	}
-
-	.subsection-description {
-		font-size: 0.75rem;
-		color: var(--text-tertiary);
-		margin: 0 0 var(--space-3) 0;
-	}
-
-	.palettes-section {
-		margin-top: var(--space-4);
-		padding-top: var(--space-4);
-		border-top: 1px solid var(--border-color);
-	}
-
-	.palettes-header {
+	.schemes-header {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
@@ -258,19 +245,19 @@
 		margin-bottom: var(--space-3);
 	}
 
-	.palettes-title {
+	.schemes-title {
 		font-size: 0.875rem;
 		font-weight: 600;
 		margin: 0;
 	}
 
-	.palettes-description {
+	.schemes-description {
 		font-size: 0.75rem;
 		color: var(--text-tertiary);
 		margin: var(--space-1) 0 0 0;
 	}
 
-	.add-palette-btn {
+	.add-scheme-btn {
 		display: flex;
 		align-items: center;
 		gap: var(--space-1);
@@ -293,7 +280,7 @@
 		}
 	}
 
-	.palette-selector {
+	.scheme-selector {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
@@ -314,16 +301,36 @@
 		gap: var(--space-2);
 	}
 
-	.palette-preview {
+	.scheme-preview {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-top: var(--space-2);
+		border-top: 1px solid var(--border-color);
+		margin-top: var(--space-2);
+	}
+
+	.preview-section {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.preview-label {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		width: 60px;
+	}
+
+	.preview-colors {
 		display: flex;
 		gap: 4px;
 		align-items: center;
-		padding-top: var(--space-1);
 	}
 
 	.preview-dot {
-		width: 20px;
-		height: 20px;
+		width: 18px;
+		height: 18px;
 		border-radius: var(--radius-sm);
 		border: 1px solid color-mix(in oklch, var(--text-primary), transparent 80%);
 	}
@@ -341,13 +348,13 @@
 		margin-bottom: var(--space-2);
 	}
 
-	.palettes-list {
+	.schemes-list {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
 	}
 
-	.palette-card {
+	.scheme-card {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -362,7 +369,7 @@
 		}
 	}
 
-	.palette-select-btn {
+	.scheme-select-btn {
 		flex: 1;
 		display: flex;
 		align-items: center;
@@ -374,19 +381,31 @@
 		text-align: left;
 	}
 
-	.palette-colors {
+	.scheme-colors {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.scheme-kind-colors,
+	.scheme-palette-colors {
 		display: flex;
 		gap: 2px;
 	}
 
-	.palette-color-dot {
-		width: 16px;
-		height: 16px;
-		border-radius: var(--radius-sm);
+	.scheme-separator {
+		color: var(--text-tertiary);
+		font-size: 0.75rem;
+	}
+
+	.scheme-color-dot {
+		width: 14px;
+		height: 14px;
+		border-radius: var(--radius-xs);
 		border: 1px solid color-mix(in oklch, var(--text-primary), transparent 80%);
 	}
 
-	.palette-name {
+	.scheme-name {
 		flex: 1;
 		font-size: 0.875rem;
 		font-weight: 500;
@@ -404,12 +423,12 @@
 		border-radius: var(--radius-sm);
 	}
 
-	.palette-actions {
+	.scheme-actions {
 		display: flex;
 		gap: var(--space-1);
 	}
 
-	.palette-action-btn {
+	.scheme-action-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;

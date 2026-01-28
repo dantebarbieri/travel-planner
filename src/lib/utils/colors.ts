@@ -71,28 +71,32 @@ export const defaultKindColors: KindColors = {
 	flight: 'oklch(0.55 0.2 260)'
 };
 
+export const defaultPaletteColors: string[] = [
+	'oklch(0.7 0.15 280)', // Purple
+	'oklch(0.7 0.18 180)', // Teal
+	'oklch(0.7 0.15 340)', // Pink
+	'oklch(0.7 0.18 100)', // Lime
+	'oklch(0.65 0.2 30)', // Orange-red
+	'oklch(0.7 0.15 220)', // Sky blue
+	'oklch(0.65 0.18 310)', // Magenta
+	'oklch(0.7 0.15 70)' // Gold
+];
+
+// Legacy type for backwards compatibility
 export const defaultStayColorPalette: ColorPalette = {
 	id: 'default',
 	name: 'Default',
-	colors: [
-		'oklch(0.7 0.15 280)', // Purple
-		'oklch(0.7 0.18 180)', // Teal
-		'oklch(0.7 0.15 340)', // Pink
-		'oklch(0.7 0.18 100)', // Lime
-		'oklch(0.65 0.2 30)', // Orange-red
-		'oklch(0.7 0.15 220)', // Sky blue
-		'oklch(0.65 0.18 310)', // Magenta
-		'oklch(0.7 0.15 70)' // Gold
-	]
+	colors: defaultPaletteColors
 };
 
 // Keep backward compat
-export const stayColorPalette = defaultStayColorPalette.colors;
+export const stayColorPalette = defaultPaletteColors;
 
 export function getDefaultColorScheme(): ColorScheme {
 	return {
 		mode: 'by-kind',
-		kindColors: { ...defaultKindColors }
+		kindColors: { ...defaultKindColors },
+		paletteColors: [...defaultPaletteColors]
 	};
 }
 
@@ -250,7 +254,7 @@ function getStayForDate(stays: Stay[], date: string): Stay | undefined {
  */
 export function computeStaySegments(trip: Trip): StaySegment[] {
 	const segments: StaySegment[] = [];
-	const palette = trip.colorScheme.palette?.colors ?? defaultStayColorPalette.colors;
+	const palette = trip.colorScheme.paletteColors ?? defaultPaletteColors;
 	
 	let currentSegment: Partial<StaySegment> | null = null;
 	let colorIndex = 0;

@@ -9,7 +9,8 @@
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
-	import { computeStaySegments, dayHasMissingLodging } from '$lib/utils/colors';
+	import { computeStaySegments, dayHasMissingLodging, defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
+	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
 	import MoveItemModal from '$lib/components/modals/MoveItemModal.svelte';
@@ -597,8 +598,27 @@
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
 
-	// Compute stay segments for by-stay coloring
-	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments(trip) : []);
+	// Resolve color scheme: if a custom scheme is selected, use its colors
+	// This ensures that if the scheme is edited, the trip reflects those changes
+	const resolvedColorScheme = $derived.by<ColorScheme>(() => {
+		if (!trip) return { mode: 'by-kind', kindColors: defaultKindColors, paletteColors: defaultPaletteColors };
+		
+		const schemeId = trip.colorScheme.customSchemeId;
+		if (schemeId) {
+			const customScheme = settingsStore.userSettings.customColorSchemes.find(s => s.id === schemeId);
+			if (customScheme) {
+				return {
+					...trip.colorScheme,
+					kindColors: customScheme.kindColors,
+					paletteColors: customScheme.paletteColors
+				};
+			}
+		}
+		return trip.colorScheme;
+	});
+
+	// Compute stay segments for by-stay coloring (using resolved scheme)
+	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments({ ...trip, colorScheme: resolvedColorScheme }) : []);
 
 	// Compute per-day unit resolutions based on each day's country
 	const dayUnitResolutions = $derived<Map<string, DayUnitResolution>>(
@@ -708,7 +728,7 @@
 				</div>
 			{/if}
 
-			<div class="itinerary-container">
+			<div class="itinerary-container" style="--color-kind-stay: {resolvedColorScheme.kindColors.stay}; --color-kind-activity: {resolvedColorScheme.kindColors.activity}; --color-kind-food: {resolvedColorScheme.kindColors.food}; --color-kind-transport: {resolvedColorScheme.kindColors.transport}; --color-kind-flight: {resolvedColorScheme.kindColors.flight}">
 				{#each trip.itinerary as day (day.id)}
 					<ItineraryDayComponent
 						{day}
@@ -717,7 +737,7 @@
 						activities={trip.activities}
 						foodVenues={trip.foodVenues}
 						transportLegs={trip.transportLegs}
-						colorScheme={trip.colorScheme}
+						colorScheme={resolvedColorScheme}
 						{staySegments}
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date] || []}

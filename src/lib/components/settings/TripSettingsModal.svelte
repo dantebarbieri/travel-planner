@@ -8,7 +8,7 @@
 	import SettingRadioGroup from './controls/SettingRadioGroup.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
-	import { defaultStayColorPalette } from '$lib/utils/colors';
+	import { defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
 
 	interface Props {
 		isOpen: boolean;
@@ -50,24 +50,28 @@
 		{ mode: 'ferry', label: 'Ferry' }
 	];
 
-	// Palette options for dropdown
-	const paletteOptions = $derived([
-		{ value: '', label: 'Default Palette' },
-		...settingsStore.userSettings.customColorPalettes.map(p => ({
-			value: p.id,
-			label: p.name
+	// Color scheme options for dropdown
+	const schemeOptions = $derived([
+		{ value: '', label: 'Default Colors' },
+		...settingsStore.userSettings.customColorSchemes.map(s => ({
+			value: s.id,
+			label: s.name
 		}))
 	]);
 
-	// Get current palette ID for this trip
-	const currentPaletteId = $derived(
-		trip.colorScheme.palette?.id ?? ''
+	// Get current scheme ID for this trip
+	const currentSchemeId = $derived(trip.colorScheme.customSchemeId ?? '');
+
+	// Get the scheme (from trip override or user default)
+	const effectiveScheme = $derived(
+		currentSchemeId 
+			? settingsStore.userSettings.customColorSchemes.find(s => s.id === currentSchemeId)
+			: null
 	);
 
 	// Get colors to preview
-	const previewColors = $derived(
-		trip.colorScheme.palette?.colors ?? defaultStayColorPalette.colors
-	);
+	const previewKindColors = $derived(effectiveScheme?.kindColors ?? trip.colorScheme.kindColors);
+	const previewPaletteColors = $derived(effectiveScheme?.paletteColors ?? trip.colorScheme.paletteColors ?? defaultPaletteColors);
 
 	// Temperature
 	function setTemperatureUnit(value: string) {
@@ -119,21 +123,21 @@
 		tripStore.clearTripColorMode(trip.id);
 	}
 
-	// Palette selection
-	function handlePaletteChange(paletteId: string) {
-		if (paletteId) {
-			const palette = settingsStore.userSettings.customColorPalettes.find(p => p.id === paletteId);
-			if (palette) {
-				tripStore.setTripPalette(trip.id, palette);
+	// Color scheme selection
+	function handleSchemeChange(schemeId: string) {
+		if (schemeId) {
+			const scheme = settingsStore.userSettings.customColorSchemes.find(s => s.id === schemeId);
+			if (scheme) {
+				tripStore.setTripColorScheme(trip.id, scheme);
 			}
 		} else {
-			// Reset to default palette
-			tripStore.clearTripPalette(trip.id);
+			// Reset to default
+			tripStore.clearTripColorScheme(trip.id);
 		}
 	}
 
-	function resetPalette() {
-		tripStore.clearTripPalette(trip.id);
+	function resetColorScheme() {
+		tripStore.clearTripColorScheme(trip.id);
 	}
 </script>
 
@@ -242,30 +246,44 @@
 				/>
 			</SettingRow>
 
-			{#if trip.colorScheme.mode === 'by-stay'}
-				<SettingRow
-					label="Color Palette"
-					description="Colors used for different stays"
-					showOverrideIndicator
-					isOverridden={resolved.overrides.palette}
-					onReset={resetPalette}
-				>
-					<SettingSelect
-						value={currentPaletteId}
-						options={paletteOptions}
-						onchange={handlePaletteChange}
-					/>
-				</SettingRow>
+			<SettingRow
+				label="Color Scheme"
+				description="Colors for types and stays"
+				showOverrideIndicator
+				isOverridden={resolved.overrides.colorScheme}
+				onReset={resetColorScheme}
+			>
+				<SettingSelect
+					value={currentSchemeId}
+					options={schemeOptions}
+					onchange={handleSchemeChange}
+				/>
+			</SettingRow>
 
-				<div class="palette-preview">
-					{#each previewColors.slice(0, 8) as color}
-						<span class="preview-dot" style="background: {color}"></span>
-					{/each}
-					{#if previewColors.length > 8}
-						<span class="preview-more">+{previewColors.length - 8}</span>
-					{/if}
+			<!-- Preview of current colors -->
+			<div class="scheme-preview">
+				<div class="preview-row">
+					<span class="preview-label">By Type:</span>
+					<div class="preview-colors">
+						<span class="preview-dot" style="background: {previewKindColors.stay}" title="Stays"></span>
+						<span class="preview-dot" style="background: {previewKindColors.activity}" title="Activities"></span>
+						<span class="preview-dot" style="background: {previewKindColors.food}" title="Food"></span>
+						<span class="preview-dot" style="background: {previewKindColors.transport}" title="Transport"></span>
+						<span class="preview-dot" style="background: {previewKindColors.flight}" title="Flights"></span>
+					</div>
 				</div>
-			{/if}
+				<div class="preview-row">
+					<span class="preview-label">By Stay:</span>
+					<div class="preview-colors">
+						{#each previewPaletteColors.slice(0, 8) as color}
+							<span class="preview-dot" style="background: {color}"></span>
+						{/each}
+						{#if previewPaletteColors.length > 8}
+							<span class="preview-more">+{previewPaletteColors.length - 8}</span>
+						{/if}
+					</div>
+				</div>
+			</div>
 		</div>
 	</div>
 </Modal>
@@ -340,19 +358,37 @@
 		margin-bottom: var(--space-2);
 	}
 
-	.palette-preview {
+	.scheme-preview {
 		display: flex;
-		gap: 4px;
-		align-items: center;
-		padding: var(--space-2) var(--space-3);
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-3);
 		margin-top: var(--space-2);
 		background: var(--surface-secondary);
 		border-radius: var(--radius-md);
 	}
 
+	.preview-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.preview-label {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		width: 60px;
+	}
+
+	.preview-colors {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+	}
+
 	.preview-dot {
-		width: 20px;
-		height: 20px;
+		width: 18px;
+		height: 18px;
 		border-radius: var(--radius-sm);
 		border: 1px solid color-mix(in oklch, var(--text-primary), transparent 80%);
 	}

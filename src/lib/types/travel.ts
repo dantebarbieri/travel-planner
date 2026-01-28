@@ -372,8 +372,10 @@ export interface ColorScheme {
 	kindColors: KindColors;
 	/** Map of stay IDs (or inferred stay keys) to their assigned colors */
 	stayColors?: Record<string, string>;
-	/** Custom palette for this trip (if not using default) */
-	palette?: ColorPalette;
+	/** Palette colors for by-stay mode */
+	paletteColors?: string[];
+	/** ID of the custom color scheme being used (if any) */
+	customSchemeId?: string;
 }
 
 /**

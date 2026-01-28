@@ -17,23 +17,29 @@ export type MapApp = 'google' | 'apple' | 'system';
 /** Modes that can be disabled by user preference */
 export type DisableableTransportMode = 'biking' | 'walking' | 'rideshare' | 'ferry';
 
-// ============ Color Palette Definitions ============
+// ============ Color Scheme Definitions ============
 
-export interface CustomColorPalette {
+/**
+ * A complete custom color scheme containing both:
+ * - kindColors: colors for "By Type" mode (stays, activities, food, transport, flights)
+ * - paletteColors: colors for "By Stay" mode (each stay gets a unique color)
+ */
+export interface CustomColorScheme {
 	id: string;
 	name: string;
-	colors: string[]; // Array of oklch color strings
+	kindColors: {
+		stay: string;
+		activity: string;
+		food: string;
+		transport: string;
+		flight: string;
+	};
+	paletteColors: string[]; // Array of oklch color strings for by-stay mode
 }
 
-// ============ Kind Colors ============
-
-export interface CustomKindColors {
-	stay: string;
-	activity: string;
-	food: string;
-	transport: string;
-	flight: string;
-}
+// Legacy type aliases for backwards compatibility
+export type CustomColorPalette = CustomColorScheme;
+export type CustomKindColors = CustomColorScheme['kindColors'];
 
 // ============ User Settings (Global Defaults) ============
 
@@ -54,9 +60,8 @@ export interface UserSettings {
 
 	// Color customization
 	defaultColorMode: 'by-kind' | 'by-stay';
-	customColorPalettes: CustomColorPalette[];
-	defaultPaletteId?: string; // ID of default palette for by-stay mode
-	customKindColors?: CustomKindColors; // Custom colors for by-kind mode
+	customColorSchemes: CustomColorScheme[];
+	defaultColorSchemeId?: string; // ID of default color scheme
 
 	// Home location (for "home" as travel origin)
 	homeCity?: import('./travel').Location;
@@ -99,10 +104,10 @@ export interface TripSettings {
 	disabledTransportModes?: MaybeOverridden<DisableableTransportMode[]>;
 
 	// Trip-specific color scheme override tracking
-	// The actual mode/palette values are stored on Trip.colorScheme
+	// The actual mode/scheme values are stored on Trip.colorScheme
 	// These flags track whether those values are explicit overrides
 	colorModeOverridden?: boolean;
-	paletteOverridden?: boolean;
+	colorSchemeOverridden?: boolean;
 }
 
 // ============ Resolved Settings (Computed at Runtime) ============
@@ -119,7 +124,7 @@ export interface ResolvedSettings {
 	preferredMapApp: MapApp;
 	disabledTransportModes: DisableableTransportMode[];
 	colorMode: 'by-kind' | 'by-stay';
-	palette: CustomColorPalette | null;
+	colorScheme: CustomColorScheme | null;
 	homeCity: import('./travel').Location | null;
 }
 
@@ -134,7 +139,7 @@ export interface ResolvedTripSettings extends ResolvedSettings {
 		timeFormat: boolean;
 		disabledTransportModes: boolean;
 		colorMode: boolean;
-		palette: boolean;
+		colorScheme: boolean;
 	};
 }
 
@@ -148,7 +153,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
 	preferredMapApp: 'system',
 	disabledTransportModes: [],
 	defaultColorMode: 'by-kind',
-	customColorPalettes: [],
+	customColorSchemes: [],
 	autoSaveEnabled: true,
 	autoSaveIntervalMs: 1000
 };

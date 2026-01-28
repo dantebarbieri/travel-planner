@@ -156,15 +156,19 @@ class StorageService {
 				.mode as UserSettings['defaultColorMode'];
 		}
 
-		// Migrate custom palettes (new field)
-		if (Array.isArray(oldSettings.customColorPalettes)) {
-			settings.customColorPalettes =
-				oldSettings.customColorPalettes as UserSettings['customColorPalettes'];
+		// Migrate custom color schemes (renamed from customColorPalettes)
+		if (Array.isArray(oldSettings.customColorSchemes)) {
+			settings.customColorSchemes =
+				oldSettings.customColorSchemes as UserSettings['customColorSchemes'];
+		} else if (Array.isArray(oldSettings.customColorPalettes)) {
+			// Migrate old customColorPalettes to new customColorSchemes format
+			// Old palettes only had colors, new schemes have kindColors + paletteColors
+			settings.customColorSchemes = [];
 		}
 
-		// Migrate default palette ID (new field)
-		if (typeof oldSettings.defaultPaletteId === 'string') {
-			settings.defaultPaletteId = oldSettings.defaultPaletteId;
+		// Migrate default color scheme ID (renamed from defaultPaletteId)
+		if (typeof oldSettings.defaultColorSchemeId === 'string') {
+			settings.defaultColorSchemeId = oldSettings.defaultColorSchemeId;
 		}
 
 		// Migrate home city

@@ -9,13 +9,12 @@ import type {
 	TimeFormat,
 	MapApp,
 	DisableableTransportMode,
-	CustomColorPalette,
-	CustomKindColors
+	CustomColorScheme
 } from '$lib/types/settings';
 import type { Trip, Location, KindColors } from '$lib/types/travel';
 import { storageService } from '$lib/services/storageService';
 import { detectPreferredMapsApp } from '$lib/services/mapService';
-import { defaultKindColors, defaultStayColorPalette } from '$lib/utils/colors';
+import { defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
 import {
 	DEFAULT_USER_SETTINGS,
 	isOverridden,
@@ -63,9 +62,9 @@ const resolvedUserSettings = $derived<ResolvedSettings>({
 	preferredMapApp: state.userSettings.preferredMapApp,
 	disabledTransportModes: state.userSettings.disabledTransportModes,
 	colorMode: state.userSettings.defaultColorMode,
-	palette: state.userSettings.defaultPaletteId
-		? (state.userSettings.customColorPalettes.find(
-				(p) => p.id === state.userSettings.defaultPaletteId
+	colorScheme: state.userSettings.defaultColorSchemeId
+		? (state.userSettings.customColorSchemes.find(
+				(s) => s.id === state.userSettings.defaultColorSchemeId
 			) ?? null)
 		: null,
 	homeCity: state.userSettings.homeCity ?? null
@@ -146,48 +145,48 @@ function setDefaultColorMode(mode: 'by-kind' | 'by-stay'): void {
 	updateUserSettings({ defaultColorMode: mode });
 }
 
-function setDefaultPalette(paletteId: string | undefined): void {
-	updateUserSettings({ defaultPaletteId: paletteId });
+function setDefaultColorScheme(schemeId: string | undefined): void {
+	updateUserSettings({ defaultColorSchemeId: schemeId });
 }
 
-// ============ Custom Palette Management ============
+// ============ Custom Color Scheme Management ============
 
-function addCustomPalette(palette: CustomColorPalette): void {
-	const palettes = [...state.userSettings.customColorPalettes, palette];
-	updateUserSettings({ customColorPalettes: palettes });
+function addCustomColorScheme(scheme: CustomColorScheme): void {
+	const schemes = [...state.userSettings.customColorSchemes, scheme];
+	updateUserSettings({ customColorSchemes: schemes });
 }
 
-function updateCustomPalette(paletteId: string, updates: Partial<CustomColorPalette>): void {
-	const palettes = state.userSettings.customColorPalettes.map((p) =>
-		p.id === paletteId ? { ...p, ...updates } : p
+function updateCustomColorScheme(schemeId: string, updates: Partial<CustomColorScheme>): void {
+	const schemes = state.userSettings.customColorSchemes.map((s) =>
+		s.id === schemeId ? { ...s, ...updates } : s
 	);
-	updateUserSettings({ customColorPalettes: palettes });
+	updateUserSettings({ customColorSchemes: schemes });
 }
 
-function deleteCustomPalette(paletteId: string): void {
-	const palettes = state.userSettings.customColorPalettes.filter((p) => p.id !== paletteId);
-	const updates: Partial<UserSettings> = { customColorPalettes: palettes };
+function deleteCustomColorScheme(schemeId: string): void {
+	const schemes = state.userSettings.customColorSchemes.filter((s) => s.id !== schemeId);
+	const updates: Partial<UserSettings> = { customColorSchemes: schemes };
 
-	// Clear default palette if it was the deleted one
-	if (state.userSettings.defaultPaletteId === paletteId) {
-		updates.defaultPaletteId = undefined;
+	// Clear default scheme if it was the deleted one
+	if (state.userSettings.defaultColorSchemeId === schemeId) {
+		updates.defaultColorSchemeId = undefined;
 	}
 
 	updateUserSettings(updates);
 }
 
-// ============ Custom Kind Colors Management ============
-
-function setCustomKindColors(kindColors: CustomKindColors): void {
-	updateUserSettings({ customKindColors: kindColors });
-}
-
-function resetKindColors(): void {
-	updateUserSettings({ customKindColors: undefined });
-}
-
 function getEffectiveKindColors(): KindColors {
-	return state.userSettings.customKindColors ?? defaultKindColors;
+	const scheme = state.userSettings.defaultColorSchemeId
+		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId)
+		: null;
+	return scheme?.kindColors ?? defaultKindColors;
+}
+
+function getEffectivePaletteColors(): string[] {
+	const scheme = state.userSettings.defaultColorSchemeId
+		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId)
+		: null;
+	return scheme?.paletteColors ?? defaultPaletteColors;
 }
 
 // ============ Theme Application ============
@@ -241,6 +240,16 @@ function resolveSettingsForTrip(trip: Trip): ResolvedTripSettings {
 	const tripSettings = trip.settings ?? {};
 	const user = state.userSettings;
 
+	// Determine the effective color scheme
+	let colorScheme: CustomColorScheme | null = null;
+	if (tripSettings.colorSchemeOverridden && trip.colorScheme.customSchemeId) {
+		// Trip has a specific scheme override
+		colorScheme = user.customColorSchemes.find((s) => s.id === trip.colorScheme.customSchemeId) ?? null;
+	} else if (user.defaultColorSchemeId) {
+		// Use user's default scheme
+		colorScheme = user.customColorSchemes.find((s) => s.id === user.defaultColorSchemeId) ?? null;
+	}
+
 	return {
 		theme: user.theme, // Theme is always global
 		temperatureUnit: getSettingValue(tripSettings.temperatureUnit, user.temperatureUnit),
@@ -252,12 +261,7 @@ function resolveSettingsForTrip(trip: Trip): ResolvedTripSettings {
 			user.disabledTransportModes
 		),
 		colorMode: tripSettings.colorModeOverridden ? trip.colorScheme.mode : user.defaultColorMode,
-		palette:
-			tripSettings.paletteOverridden && trip.colorScheme.palette
-				? trip.colorScheme.palette
-				: user.defaultPaletteId
-					? (user.customColorPalettes.find((p) => p.id === user.defaultPaletteId) ?? null)
-					: null,
+		colorScheme,
 		homeCity: user.homeCity ?? null,
 
 		// Track which settings are overridden
@@ -267,7 +271,7 @@ function resolveSettingsForTrip(trip: Trip): ResolvedTripSettings {
 			timeFormat: isOverridden(tripSettings.timeFormat),
 			disabledTransportModes: isOverridden(tripSettings.disabledTransportModes),
 			colorMode: tripSettings.colorModeOverridden ?? false,
-			palette: tripSettings.paletteOverridden ?? false
+			colorScheme: tripSettings.colorSchemeOverridden ?? false
 		}
 	};
 }
@@ -339,17 +343,14 @@ export const settingsStore = {
 	setDisabledTransportModes,
 	setHomeCity,
 	setDefaultColorMode,
-	setDefaultPalette,
+	setDefaultColorScheme,
 
-	// Custom palettes
-	addCustomPalette,
-	updateCustomPalette,
-	deleteCustomPalette,
-
-	// Kind colors
-	setCustomKindColors,
-	resetKindColors,
+	// Custom color schemes
+	addCustomColorScheme,
+	updateCustomColorScheme,
+	deleteCustomColorScheme,
 	getEffectiveKindColors,
+	getEffectivePaletteColors,
 
 	// Theme
 	applyThemeToDOM,
