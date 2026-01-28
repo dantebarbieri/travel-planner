@@ -229,9 +229,9 @@
 		border-width: 2px;
 	}
 
-	/* Past day - dimmed */
+	/* Past day - visually de-emphasized without making text too hard to read */
 	.itinerary-day.is-past {
-		opacity: 0.6;
+		opacity: 0.75;
 	}
 
 	/* Today indicator - accent bar at top */
