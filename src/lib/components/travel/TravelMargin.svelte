@@ -3,6 +3,7 @@
 	import type { DisableableTransportMode } from '$lib/types/settings';
 	import { formatDuration, formatDistance } from '$lib/utils/dates';
 	import { getDistanceBetweenLocations } from '$lib/services/geoService';
+	import { getDirectionsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -13,6 +14,8 @@
 		estimates?: TravelEstimate[];
 		/** Resolved distance unit for this day's location */
 		distanceUnit?: 'km' | 'miles';
+		/** Whether the itinerary is in edit mode */
+		isEditing?: boolean;
 		onModeChange?: (mode: TravelMode) => void;
 	}
 
@@ -22,10 +25,14 @@
 		selectedMode = 'driving',
 		estimates = [],
 		distanceUnit = 'km',
+		isEditing = false,
 		onModeChange
 	}: Props = $props();
 
 	const distance = $derived(getDistanceBetweenLocations(fromLocation, toLocation));
+
+	// Get resolved map app from settings
+	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
 	// Map between TravelMode and DisableableTransportMode names
 	const travelModeToDisableable: Record<TravelMode, DisableableTransportMode | null> = {
@@ -80,23 +87,46 @@
 		onModeChange?.(mode);
 		showSelector = false;
 	}
+
+	/**
+	 * Convert our TravelMode to the format expected by map services.
+	 * TravelMode uses 'bicycling' but getDirectionsUrl expects the same.
+	 */
+	function handleIndicatorClick() {
+		if (isEditing) {
+			// In edit mode, toggle the mode selector
+			showSelector = !showSelector;
+		} else {
+			// In readonly mode, open directions in maps app
+			openDirections();
+		}
+	}
+
+	function openDirections() {
+		const url = getDirectionsUrl(fromLocation, toLocation, selectedMode, mapApp);
+		window.open(url, '_blank');
+	}
 </script>
 
 <div class="travel-margin">
 	<button
 		type="button"
 		class="travel-indicator"
-		onclick={() => (showSelector = !showSelector)}
-		title="Change travel mode"
+		class:readonly={!isEditing}
+		onclick={handleIndicatorClick}
+		title={isEditing ? 'Change travel mode' : 'Open directions in maps'}
 	>
 		<Icon name={modeIcon} size={16} />
 		<span class="travel-info">
 			<span class="duration">{formatDuration(currentEstimate.duration)}</span>
 			<span class="distance">{formatDistance(currentEstimate.distance, distanceUnit)}</span>
 		</span>
+		{#if !isEditing}
+			<Icon name="externalLink" size={12} />
+		{/if}
 	</button>
 
-	{#if showSelector}
+	{#if showSelector && isEditing}
 		<div class="mode-selector">
 			{#each modes as mode}
 				{@const estimate = estimates.find((e) => e.mode === mode)}
@@ -155,6 +185,10 @@
 			background: var(--surface-primary);
 			border-color: var(--color-primary);
 			color: var(--text-primary);
+		}
+
+		&.readonly:hover {
+			border-color: var(--color-info);
 		}
 	}
 
