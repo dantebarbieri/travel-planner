@@ -16,10 +16,11 @@
 
 	let { leg, isDeparture = false, isArrival = false, isEditing = false, onclick }: Props = $props();
 
-	// Get resolved distance unit from settings
-	const distanceUnit = $derived(
-		settingsStore.getConcreteDistanceUnit(settingsStore.userSettings.distanceUnit)
-	);
+	// Get resolved distance unit from settings - use $derived.by for explicit dependency tracking
+	const distanceUnit = $derived.by(() => {
+		const unit = settingsStore.userSettings.distanceUnit;
+		return settingsStore.getConcreteDistanceUnit(unit);
+	});
 
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {

@@ -24,10 +24,11 @@
 
 	const distance = $derived(getDistanceBetweenLocations(fromLocation, toLocation));
 
-	// Get resolved distance unit from settings
-	const distanceUnit = $derived(
-		settingsStore.getConcreteDistanceUnit(settingsStore.userSettings.distanceUnit)
-	);
+	// Get resolved distance unit from settings - use $derived.by for explicit dependency tracking
+	const distanceUnit = $derived.by(() => {
+		const unit = settingsStore.userSettings.distanceUnit;
+		return settingsStore.getConcreteDistanceUnit(unit);
+	});
 
 	// Map between TravelMode and DisableableTransportMode names
 	const travelModeToDisableable: Record<TravelMode, DisableableTransportMode | null> = {
