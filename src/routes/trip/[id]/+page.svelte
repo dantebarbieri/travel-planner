@@ -2,8 +2,10 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
+	import { resolveAllDayUnits, type DayUnitResolution } from '$lib/utils/units';
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
@@ -598,8 +600,21 @@
 	// Compute stay segments for by-stay coloring
 	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments(trip) : []);
 
-	// Get primary country for location-based settings (use first city's country)
-	const primaryCountry = $derived(trip?.cities[0]?.country);
+	// Compute per-day unit resolutions based on each day's country
+	const dayUnitResolutions = $derived<Map<string, DayUnitResolution>>(
+		trip
+			? resolveAllDayUnits(
+					trip,
+					settingsStore.userSettings.temperatureUnit,
+					settingsStore.userSettings.distanceUnit
+				)
+			: new Map()
+	);
+
+	// Helper function to get unit resolution for a specific day
+	function getDayUnitResolution(dayId: string): DayUnitResolution | undefined {
+		return dayUnitResolutions.get(dayId);
+	}
 	
 	// Check which days have missing lodging (city assigned but no stay)
 	function checkDayMissingLodging(day: ItineraryDay): boolean {
@@ -707,7 +722,7 @@
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date] || []}
 						{isEditing}
-						tripCountry={primaryCountry}
+						unitResolution={getDayUnitResolution(day.id)}
 						onAddItem={() => handleAddItem(day)}
 						onReorder={(items) => handleReorder(day.id, items)}
 						onRemoveItem={(itemId) => handleRemoveItem(day.id, itemId)}

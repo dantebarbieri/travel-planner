@@ -12,6 +12,7 @@
 		TravelMode,
 		StaySegment
 	} from '$lib/types/travel';
+	import type { DayUnitResolution } from '$lib/utils/units';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
@@ -33,8 +34,8 @@
 		hasMissingLodging?: boolean;
 		weatherList?: WeatherCondition[];
 		isEditing?: boolean;
-		/** Country for location-based settings resolution */
-		tripCountry?: string;
+		/** Resolved unit information for this day */
+		unitResolution?: DayUnitResolution;
 		onAddItem?: () => void;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
@@ -58,7 +59,7 @@
 		hasMissingLodging = false,
 		weatherList = [],
 		isEditing = false,
-		tripCountry,
+		unitResolution,
 		onAddItem,
 		onReorder,
 		onItemClick,
@@ -157,7 +158,7 @@
 		{hasMissingLodging}
 		{weatherList}
 		isToday={isDayToday}
-		{tripCountry}
+		{unitResolution}
 	/>
 
 	<div class="day-content">
