@@ -30,20 +30,24 @@ type WeatherDataType = 'historical' | 'forecast' | 'estimate';
 
 /**
  * Determines the type of weather data for a date:
- * - historical: Past dates (definitive data, no asterisk)
- * - forecast: 0-14 days in future (accurate forecast, no asterisk)
- * - estimate: 14+ days in future (seasonal estimate, show asterisk)
+ * - historical: Past dates (definitive data, shows †)
+ * - forecast: 0-14 days in future (accurate forecast, no indicator)
+ * - estimate: 14+ days in future (seasonal estimate, shows *)
  */
 function getWeatherDataType(date: string): WeatherDataType {
+	// Parse dates as local dates to avoid timezone issues
+	// date string is "YYYY-MM-DD" format
+	const [year, month, day] = date.split('-').map(Number);
+	const targetDate = new Date(year, month - 1, day);
+	targetDate.setHours(0, 0, 0, 0);
+
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);
-	const targetDate = new Date(date);
-	targetDate.setHours(0, 0, 0, 0);
 
 	const diffDays = Math.floor((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
 	if (diffDays < 0) return 'historical';      // Past = definitive
-	if (diffDays <= FORECAST_WINDOW_DAYS) return 'forecast';  // Near future
+	if (diffDays <= FORECAST_WINDOW_DAYS) return 'forecast';  // Today + near future
 	return 'estimate';                           // Far future = show asterisk
 }
 
