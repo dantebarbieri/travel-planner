@@ -13,6 +13,7 @@ import type {
 } from '$lib/types/settings';
 import type { Trip, Location } from '$lib/types/travel';
 import { storageService } from '$lib/services/storageService';
+import { detectPreferredMapsApp } from '$lib/services/mapService';
 import {
 	DEFAULT_USER_SETTINGS,
 	isOverridden,
@@ -278,6 +279,16 @@ function getConcreteDistanceUnit(unit: DistanceUnit, destinationCountry?: string
 	return unit;
 }
 
+/**
+ * Get the concrete map app for opening directions, resolving 'system' to platform default.
+ */
+function getConcreteMapApp(app: MapApp): 'google' | 'apple' {
+	if (app === 'system') {
+		return detectPreferredMapsApp();
+	}
+	return app;
+}
+
 // ============ Export Store ============
 
 export const settingsStore = {
@@ -326,5 +337,6 @@ export const settingsStore = {
 	// Trip resolution
 	resolveSettingsForTrip,
 	getConcreteTemperatureUnit,
-	getConcreteDistanceUnit
+	getConcreteDistanceUnit,
+	getConcreteMapApp
 };

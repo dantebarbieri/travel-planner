@@ -6,6 +6,7 @@
 	import type { MapApp } from '$lib/types/settings';
 
 	const mapAppOptions = [
+		{ value: 'system', label: 'System Default' },
 		{ value: 'google', label: 'Google Maps' },
 		{ value: 'apple', label: 'Apple Maps' }
 	];
@@ -22,7 +23,7 @@
 <div class="section">
 	<h3 class="section-title">General</h3>
 
-	<SettingRow label="Map App" description="Which app to open for directions">
+	<SettingRow label="Map App" description="Which app to open for directions (System uses Apple Maps on Apple devices, Google Maps elsewhere)">
 		<SettingSelect
 			value={settingsStore.userSettings.preferredMapApp}
 			options={mapAppOptions}

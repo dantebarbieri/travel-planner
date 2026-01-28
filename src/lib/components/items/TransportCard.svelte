@@ -22,6 +22,9 @@
 		return settingsStore.getConcreteDistanceUnit(unit);
 	});
 
+	// Get resolved map app from settings
+	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
+
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
 			flight: 'flight',
@@ -113,7 +116,7 @@
 	);
 
 	function openDirections() {
-		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving'), '_blank');
+		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving', mapApp), '_blank');
 	}
 </script>
 

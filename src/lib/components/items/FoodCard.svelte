@@ -4,6 +4,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		venue: FoodVenue;
@@ -13,6 +14,9 @@
 	}
 
 	let { venue, mealSlot, isEditing = false, onclick }: Props = $props();
+
+	// Get resolved map app from settings
+	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
 	const mealLabel = $derived.by(() => {
 		const labels: Record<MealType, string> = {
@@ -53,7 +57,7 @@
 	});
 
 	function openInMaps() {
-		window.open(getMapsUrl(venue.location), '_blank');
+		window.open(getMapsUrl(venue.location, mapApp), '_blank');
 	}
 
 	function openMenu() {

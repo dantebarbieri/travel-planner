@@ -10,7 +10,7 @@ export type TimeFormat = '12h' | '24h';
 
 // ============ Map Preferences ============
 
-export type MapApp = 'google' | 'apple';
+export type MapApp = 'google' | 'apple' | 'system';
 
 // ============ Transport Mode Preferences ============
 
@@ -131,10 +131,10 @@ export interface ResolvedTripSettings extends ResolvedSettings {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
 	theme: 'system',
-	temperatureUnit: 'celsius',
-	distanceUnit: 'km',
-	timeFormat: '24h',
-	preferredMapApp: 'google',
+	temperatureUnit: 'trip-location',
+	distanceUnit: 'trip-location',
+	timeFormat: '12h',
+	preferredMapApp: 'system',
 	disabledTransportModes: [],
 	defaultColorMode: 'by-kind',
 	customColorPalettes: [],
