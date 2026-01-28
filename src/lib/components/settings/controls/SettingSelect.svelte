@@ -9,9 +9,10 @@
 		options: Option[];
 		onchange: (value: string) => void;
 		disabled?: boolean;
+		ariaLabelledBy?: string;
 	}
 
-	let { value, options, onchange, disabled = false }: Props = $props();
+	let { value, options, onchange, disabled = false, ariaLabelledBy }: Props = $props();
 
 	function handleChange(e: Event) {
 		const target = e.target as HTMLSelectElement;
@@ -19,7 +20,13 @@
 	}
 </script>
 
-<select class="setting-select" {value} onchange={handleChange} {disabled}>
+<select 
+	class="setting-select" 
+	{value} 
+	onchange={handleChange} 
+	{disabled}
+	aria-labelledby={ariaLabelledBy}
+>
 	{#each options as option}
 		<option value={option.value}>{option.label}</option>
 	{/each}

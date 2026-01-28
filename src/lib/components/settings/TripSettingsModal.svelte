@@ -5,8 +5,10 @@
 	import SettingRow from './controls/SettingRow.svelte';
 	import SettingSelect from './controls/SettingSelect.svelte';
 	import SettingToggle from './controls/SettingToggle.svelte';
+	import SettingRadioGroup from './controls/SettingRadioGroup.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
+	import { defaultStayColorPalette } from '$lib/utils/colors';
 
 	interface Props {
 		isOpen: boolean;
@@ -36,12 +38,36 @@
 		{ value: '12h', label: '12-hour (2:30 PM)' }
 	];
 
+	const colorModeOptions = [
+		{ value: 'by-kind', label: 'By Type' },
+		{ value: 'by-stay', label: 'By Stay' }
+	];
+
 	const transportModes: { mode: DisableableTransportMode; label: string }[] = [
 		{ mode: 'biking', label: 'Biking' },
 		{ mode: 'walking', label: 'Walking' },
 		{ mode: 'rideshare', label: 'Rideshare' },
 		{ mode: 'ferry', label: 'Ferry' }
 	];
+
+	// Palette options for dropdown
+	const paletteOptions = $derived([
+		{ value: '', label: 'Default Palette' },
+		...settingsStore.userSettings.customColorPalettes.map(p => ({
+			value: p.id,
+			label: p.name
+		}))
+	]);
+
+	// Get current palette ID for this trip
+	const currentPaletteId = $derived(
+		trip.colorScheme.palette?.id ?? ''
+	);
+
+	// Get colors to preview
+	const previewColors = $derived(
+		trip.colorScheme.palette?.colors ?? defaultStayColorPalette.colors
+	);
 
 	// Temperature
 	function setTemperatureUnit(value: string) {
@@ -82,6 +108,32 @@
 
 	function resetTransportModes() {
 		tripStore.clearTripSettingOverride(trip.id, 'disabledTransportModes');
+	}
+
+	// Color mode
+	function handleColorModeChange(value: string) {
+		tripStore.setTripColorMode(trip.id, value as 'by-kind' | 'by-stay');
+	}
+
+	function resetColorMode() {
+		tripStore.clearTripColorMode(trip.id);
+	}
+
+	// Palette selection
+	function handlePaletteChange(paletteId: string) {
+		if (paletteId) {
+			const palette = settingsStore.userSettings.customColorPalettes.find(p => p.id === paletteId);
+			if (palette) {
+				tripStore.setTripPalette(trip.id, palette);
+			}
+		} else {
+			// Reset to default palette
+			tripStore.clearTripPalette(trip.id);
+		}
+	}
+
+	function resetPalette() {
+		tripStore.clearTripPalette(trip.id);
 	}
 </script>
 
@@ -166,6 +218,55 @@
 				</SettingRow>
 			{/each}
 		</div>
+
+		<div class="settings-section">
+			<div class="section-header">
+				<div>
+					<h3 class="section-title">Colors</h3>
+					<p class="section-description">Customize how items are colored in this trip's itinerary.</p>
+				</div>
+			</div>
+
+			<SettingRow
+				label="Color Mode"
+				description="How items are colored"
+				showOverrideIndicator
+				isOverridden={resolved.overrides.colorMode}
+				onReset={resetColorMode}
+			>
+				<SettingRadioGroup
+					name="tripColorMode"
+					value={trip.colorScheme.mode}
+					options={colorModeOptions}
+					onchange={handleColorModeChange}
+				/>
+			</SettingRow>
+
+			{#if trip.colorScheme.mode === 'by-stay'}
+				<SettingRow
+					label="Color Palette"
+					description="Colors used for different stays"
+					showOverrideIndicator
+					isOverridden={resolved.overrides.palette}
+					onReset={resetPalette}
+				>
+					<SettingSelect
+						value={currentPaletteId}
+						options={paletteOptions}
+						onchange={handlePaletteChange}
+					/>
+				</SettingRow>
+
+				<div class="palette-preview">
+					{#each previewColors.slice(0, 8) as color}
+						<span class="preview-dot" style="background: {color}"></span>
+					{/each}
+					{#if previewColors.length > 8}
+						<span class="preview-more">+{previewColors.length - 8}</span>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	</div>
 </Modal>
 
@@ -237,5 +338,28 @@
 		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-md);
 		margin-bottom: var(--space-2);
+	}
+
+	.palette-preview {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+		padding: var(--space-2) var(--space-3);
+		margin-top: var(--space-2);
+		background: var(--surface-secondary);
+		border-radius: var(--radius-md);
+	}
+
+	.preview-dot {
+		width: 20px;
+		height: 20px;
+		border-radius: var(--radius-sm);
+		border: 1px solid color-mix(in oklch, var(--text-primary), transparent 80%);
+	}
+
+	.preview-more {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		margin-left: var(--space-1);
 	}
 </style>

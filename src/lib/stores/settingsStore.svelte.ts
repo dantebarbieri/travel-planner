@@ -9,11 +9,13 @@ import type {
 	TimeFormat,
 	MapApp,
 	DisableableTransportMode,
-	CustomColorPalette
+	CustomColorPalette,
+	CustomKindColors
 } from '$lib/types/settings';
-import type { Trip, Location } from '$lib/types/travel';
+import type { Trip, Location, KindColors } from '$lib/types/travel';
 import { storageService } from '$lib/services/storageService';
 import { detectPreferredMapsApp } from '$lib/services/mapService';
+import { defaultKindColors, defaultStayColorPalette } from '$lib/utils/colors';
 import {
 	DEFAULT_USER_SETTINGS,
 	isOverridden,
@@ -174,6 +176,20 @@ function deleteCustomPalette(paletteId: string): void {
 	updateUserSettings(updates);
 }
 
+// ============ Custom Kind Colors Management ============
+
+function setCustomKindColors(kindColors: CustomKindColors): void {
+	updateUserSettings({ customKindColors: kindColors });
+}
+
+function resetKindColors(): void {
+	updateUserSettings({ customKindColors: undefined });
+}
+
+function getEffectiveKindColors(): KindColors {
+	return state.userSettings.customKindColors ?? defaultKindColors;
+}
+
 // ============ Theme Application ============
 
 function applyThemeToDOM(): void {
@@ -329,6 +345,11 @@ export const settingsStore = {
 	addCustomPalette,
 	updateCustomPalette,
 	deleteCustomPalette,
+
+	// Kind colors
+	setCustomKindColors,
+	resetKindColors,
+	getEffectiveKindColors,
 
 	// Theme
 	applyThemeToDOM,

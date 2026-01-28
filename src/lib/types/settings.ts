@@ -25,6 +25,16 @@ export interface CustomColorPalette {
 	colors: string[]; // Array of oklch color strings
 }
 
+// ============ Kind Colors ============
+
+export interface CustomKindColors {
+	stay: string;
+	activity: string;
+	food: string;
+	transport: string;
+	flight: string;
+}
+
 // ============ User Settings (Global Defaults) ============
 
 export interface UserSettings {
@@ -46,6 +56,7 @@ export interface UserSettings {
 	defaultColorMode: 'by-kind' | 'by-stay';
 	customColorPalettes: CustomColorPalette[];
 	defaultPaletteId?: string; // ID of default palette for by-stay mode
+	customKindColors?: CustomKindColors; // Custom colors for by-kind mode
 
 	// Home location (for "home" as travel origin)
 	homeCity?: import('./travel').Location;

@@ -9,6 +9,7 @@ import type {
 	DailyItem,
 	NewDailyItem,
 	ColorScheme,
+	ColorPalette,
 	Location
 } from '$lib/types/travel';
 import type { TripSettings } from '$lib/types/settings';
@@ -698,6 +699,88 @@ function toggleColorMode(tripId: string): void {
 	saveTrips();
 }
 
+function setTripColorMode(tripId: string, mode: 'by-kind' | 'by-stay'): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newScheme: ColorScheme = {
+			...t.colorScheme,
+			mode
+		};
+		if (mode === 'by-stay') {
+			// Compute stay segments and build color map
+			const segments = computeStaySegments(t);
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
+		}
+		return {
+			...t,
+			colorScheme: newScheme,
+			settings: { ...t.settings, colorModeOverridden: true },
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function clearTripColorMode(tripId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newSettings = { ...t.settings };
+		delete newSettings.colorModeOverridden;
+		return {
+			...t,
+			settings: newSettings,
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function setTripPalette(tripId: string, palette: ColorPalette): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newScheme: ColorScheme = {
+			...t.colorScheme,
+			palette
+		};
+		// Recompute stay colors with new palette
+		if (t.colorScheme.mode === 'by-stay') {
+			const segments = computeStaySegments({ ...t, colorScheme: newScheme });
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
+		}
+		return {
+			...t,
+			colorScheme: newScheme,
+			settings: { ...t.settings, paletteOverridden: true },
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function clearTripPalette(tripId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newScheme: ColorScheme = {
+			...t.colorScheme
+		};
+		delete newScheme.palette;
+		// Recompute stay colors with default palette
+		if (t.colorScheme.mode === 'by-stay') {
+			const segments = computeStaySegments({ ...t, colorScheme: newScheme });
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
+		}
+		const newSettings = { ...t.settings };
+		delete newSettings.paletteOverridden;
+		return {
+			...t,
+			colorScheme: newScheme,
+			settings: newSettings,
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 // ============ Itinerary Generation ============
 
 function regenerateItinerary(trip: Trip): Trip {
@@ -877,6 +960,10 @@ export const tripStore = {
 	// Color Scheme
 	updateColorScheme,
 	toggleColorMode,
+	setTripColorMode,
+	clearTripColorMode,
+	setTripPalette,
+	clearTripPalette,
 
 	// Trip Settings
 	updateTripSettings,

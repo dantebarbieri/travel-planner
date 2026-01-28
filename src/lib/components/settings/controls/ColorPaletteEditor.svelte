@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { CustomColorPalette } from '$lib/types/settings';
 	import { generateTripId } from '$lib/utils/ids';
-	import { oklchToHex, hexToOklch } from '$lib/utils/colors';
+	import { oklchToHex, hexToOklch, defaultStayColorPalette } from '$lib/utils/colors';
 
 	interface Props {
 		palette?: CustomColorPalette;
@@ -12,25 +12,21 @@
 	let { palette, onsave, oncancel }: Props = $props();
 
 	// Default colors for new palette (8 colors for stay segments)
-	const defaultColors = [
-		'oklch(0.7 0.15 280)', // Purple
-		'oklch(0.65 0.2 145)', // Green
-		'oklch(0.7 0.18 50)', // Orange
-		'oklch(0.6 0.15 230)', // Blue
-		'oklch(0.7 0.18 20)', // Red
-		'oklch(0.7 0.15 180)', // Cyan
-		'oklch(0.65 0.15 320)', // Pink
-		'oklch(0.7 0.18 90)' // Yellow
-	];
+	const defaultColors = [...defaultStayColorPalette.colors];
 
-	// Initialize state from props
-	const initialName = palette?.name ?? '';
-	const initialColors = palette?.colors ?? [...defaultColors];
+	// Local state for editing
+	let name = $state('');
+	let colors = $state<string[]>([]);
 
-	let name = $state(initialName);
-	let colors = $state<string[]>([...initialColors]);
+	// Sync state with props when palette changes
+	$effect(() => {
+		name = palette?.name ?? '';
+		colors = palette?.colors ? [...palette.colors] : [...defaultColors];
+	});
 
-	let editingColorIndex = $state<number | null>(null);
+	// Drag and drop state
+	let draggedIndex = $state<number | null>(null);
+	let dragOverIndex = $state<number | null>(null);
 
 	function handleColorChange(index: number, hexValue: string) {
 		// Convert hex from color picker to oklch for storage
@@ -59,6 +55,47 @@
 		});
 	}
 
+	function resetToDefault() {
+		colors = [...defaultColors];
+	}
+
+	// Drag and drop handlers
+	function handleDragStart(e: DragEvent, index: number) {
+		draggedIndex = index;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', index.toString());
+		}
+	}
+
+	function handleDragOver(e: DragEvent, index: number) {
+		e.preventDefault();
+		if (draggedIndex !== null && draggedIndex !== index) {
+			dragOverIndex = index;
+		}
+	}
+
+	function handleDragLeave() {
+		dragOverIndex = null;
+	}
+
+	function handleDrop(e: DragEvent, index: number) {
+		e.preventDefault();
+		if (draggedIndex !== null && draggedIndex !== index) {
+			const newColors = [...colors];
+			const [draggedColor] = newColors.splice(draggedIndex, 1);
+			newColors.splice(index, 0, draggedColor);
+			colors = newColors;
+		}
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	function handleDragEnd() {
+		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
 </script>
 
 <div class="palette-editor">
@@ -81,12 +118,43 @@
 		<div class="form-field">
 			<div class="field-header">
 				<span class="field-label">Colors</span>
-				<span class="color-count">{colors.length} colors</span>
+				<div class="field-actions">
+					<button
+						type="button"
+						class="reset-btn"
+						onclick={resetToDefault}
+						title="Reset to default colors"
+					>
+						Reset
+					</button>
+					<span class="color-count">{colors.length} colors</span>
+				</div>
 			</div>
 
-			<div class="color-grid">
+			<div class="color-grid" role="list">
 				{#each colors as color, index}
-					<div class="color-item">
+					<div
+						class="color-item"
+						class:dragging={draggedIndex === index}
+						class:drag-over={dragOverIndex === index}
+						draggable="true"
+						role="listitem"
+						ondragstart={(e) => handleDragStart(e, index)}
+						ondragover={(e) => handleDragOver(e, index)}
+						ondragleave={handleDragLeave}
+						ondrop={(e) => handleDrop(e, index)}
+						ondragend={handleDragEnd}
+					>
+						<div class="drag-handle" title="Drag to reorder">
+							<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+								<circle cx="2" cy="2" r="1.5" />
+								<circle cx="8" cy="2" r="1.5" />
+								<circle cx="2" cy="7" r="1.5" />
+								<circle cx="8" cy="7" r="1.5" />
+								<circle cx="2" cy="12" r="1.5" />
+								<circle cx="8" cy="12" r="1.5" />
+							</svg>
+						</div>
 						<input
 							type="color"
 							class="color-input"
@@ -190,6 +258,27 @@
 		color: var(--text-tertiary);
 	}
 
+	.field-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
+	.reset-btn {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--color-primary);
+		background: transparent;
+		border: none;
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+
+		&:hover {
+			background: color-mix(in oklch, var(--color-primary), transparent 90%);
+		}
+	}
+
 	.color-grid {
 		display: flex;
 		flex-wrap: wrap;
@@ -198,9 +287,44 @@
 
 	.color-item {
 		position: relative;
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		padding: var(--space-1);
+		background: var(--surface-secondary);
+		border: 2px solid transparent;
+		border-radius: var(--radius-md);
+		cursor: grab;
+		transition: 
+			border-color var(--transition-fast),
+			opacity var(--transition-fast),
+			transform var(--transition-fast);
 
 		&:hover .color-remove {
 			opacity: 1;
+		}
+
+		&.dragging {
+			opacity: 0.5;
+			cursor: grabbing;
+		}
+
+		&.drag-over {
+			border-color: var(--color-primary);
+			transform: scale(1.02);
+		}
+	}
+
+	.drag-handle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		color: var(--text-tertiary);
+		cursor: grab;
+
+		&:active {
+			cursor: grabbing;
 		}
 	}
 

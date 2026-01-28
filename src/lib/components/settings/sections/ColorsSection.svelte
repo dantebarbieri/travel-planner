@@ -1,9 +1,13 @@
 <script lang="ts">
-	import type { CustomColorPalette } from '$lib/types/settings';
+	import type { CustomColorPalette, CustomKindColors } from '$lib/types/settings';
+	import type { KindColors } from '$lib/types/travel';
 	import SettingRow from '../controls/SettingRow.svelte';
 	import SettingRadioGroup from '../controls/SettingRadioGroup.svelte';
+	import SettingSelect from '../controls/SettingSelect.svelte';
 	import ColorPaletteEditor from '../controls/ColorPaletteEditor.svelte';
+	import KindColorsEditor from '../controls/KindColorsEditor.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
+	import { defaultStayColorPalette } from '$lib/utils/colors';
 
 	const colorModeOptions = [
 		{ value: 'by-kind', label: 'By Type' },
@@ -13,12 +17,39 @@
 	let showPaletteEditor = $state(false);
 	let editingPalette = $state<CustomColorPalette | undefined>(undefined);
 
+	// Get palette options for dropdown (default + custom)
+	const paletteOptions = $derived([
+		{ value: '', label: 'Default Palette' },
+		...settingsStore.userSettings.customColorPalettes.map(p => ({
+			value: p.id,
+			label: p.name
+		}))
+	]);
+
+	// Get the currently selected palette (for preview)
+	const selectedPalette = $derived(
+		settingsStore.userSettings.defaultPaletteId
+			? settingsStore.userSettings.customColorPalettes.find(
+					p => p.id === settingsStore.userSettings.defaultPaletteId
+				)
+			: null
+	);
+
+	// Get colors to preview (selected custom palette or default)
+	const previewColors = $derived(
+		selectedPalette?.colors ?? defaultStayColorPalette.colors
+	);
+
 	function handleColorModeChange(value: string) {
 		settingsStore.setDefaultColorMode(value as 'by-kind' | 'by-stay');
 	}
 
 	function handleDefaultPaletteChange(paletteId: string) {
 		settingsStore.setDefaultPalette(paletteId || undefined);
+	}
+
+	function handleKindColorsChange(kindColors: KindColors) {
+		settingsStore.setCustomKindColors(kindColors as CustomKindColors);
 	}
 
 	function openNewPaletteEditor() {
@@ -72,12 +103,25 @@
 			/>
 		</SettingRow>
 
+		<!-- Kind Colors Editor (for by-kind mode) -->
+		<div class="colors-subsection">
+			<h4 class="subsection-title">By Type Colors</h4>
+			<p class="subsection-description">
+				Customize the colors used for each item type when "By Type" mode is selected.
+			</p>
+			<KindColorsEditor
+				kindColors={settingsStore.getEffectiveKindColors()}
+				onchange={handleKindColorsChange}
+			/>
+		</div>
+
+		<!-- Stay Palettes Section -->
 		<div class="palettes-section">
 			<div class="palettes-header">
 				<div>
-					<h4 class="palettes-title">Custom Palettes</h4>
+					<h4 class="palettes-title">Stay Palettes</h4>
 					<p class="palettes-description">
-						Create color palettes for the "By Stay" mode
+						Color palettes for "By Stay" mode. Each stay gets a unique color from the selected palette.
 					</p>
 				</div>
 				<button type="button" class="add-palette-btn" onclick={openNewPaletteEditor}>
@@ -88,12 +132,32 @@
 				</button>
 			</div>
 
-			{#if settingsStore.userSettings.customColorPalettes.length === 0}
-				<div class="empty-palettes">
-					<p>No custom palettes yet. Create one to use with "By Stay" mode.</p>
+			<!-- Palette Selection Dropdown -->
+			<div class="palette-selector">
+				<span class="selector-label" id="palette-selector-label">Active Palette</span>
+				<div class="selector-row">
+					<SettingSelect
+						value={settingsStore.userSettings.defaultPaletteId ?? ''}
+						options={paletteOptions}
+						onchange={handleDefaultPaletteChange}
+						ariaLabelledBy="palette-selector-label"
+					/>
 				</div>
-			{:else}
+				<!-- Preview of selected palette colors -->
+				<div class="palette-preview">
+					{#each previewColors.slice(0, 8) as color}
+						<span class="preview-dot" style="background: {color}"></span>
+					{/each}
+					{#if previewColors.length > 8}
+						<span class="preview-more">+{previewColors.length - 8}</span>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Custom Palettes List -->
+			{#if settingsStore.userSettings.customColorPalettes.length > 0}
 				<div class="palettes-list">
+					<span class="list-label">Custom Palettes</span>
 					{#each settingsStore.userSettings.customColorPalettes as palette}
 						<div
 							class="palette-card"
@@ -113,7 +177,7 @@
 								</div>
 								<span class="palette-name">{palette.name}</span>
 								{#if settingsStore.userSettings.defaultPaletteId === palette.id}
-									<span class="default-badge">Default</span>
+									<span class="default-badge">Active</span>
 								{/if}
 							</button>
 							<div class="palette-actions">
@@ -160,6 +224,24 @@
 		letter-spacing: 0.05em;
 		color: var(--text-tertiary);
 		margin-bottom: var(--space-2);
+	}
+
+	.colors-subsection {
+		margin-top: var(--space-4);
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--border-color);
+	}
+
+	.subsection-title {
+		font-size: 0.875rem;
+		font-weight: 600;
+		margin: 0 0 var(--space-1) 0;
+	}
+
+	.subsection-description {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		margin: 0 0 var(--space-3) 0;
 	}
 
 	.palettes-section {
@@ -211,17 +293,52 @@
 		}
 	}
 
-	.empty-palettes {
-		padding: var(--space-4);
-		text-align: center;
+	.palette-selector {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+		padding: var(--space-3);
 		background: var(--surface-secondary);
 		border-radius: var(--radius-md);
+	}
 
-		p {
-			margin: 0;
-			font-size: 0.875rem;
-			color: var(--text-tertiary);
-		}
+	.selector-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+	}
+
+	.selector-row {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.palette-preview {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+		padding-top: var(--space-1);
+	}
+
+	.preview-dot {
+		width: 20px;
+		height: 20px;
+		border-radius: var(--radius-sm);
+		border: 1px solid color-mix(in oklch, var(--text-primary), transparent 80%);
+	}
+
+	.preview-more {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		margin-left: var(--space-1);
+	}
+
+	.list-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-tertiary);
+		margin-bottom: var(--space-2);
 	}
 
 	.palettes-list {
