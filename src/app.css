@@ -98,6 +98,12 @@
 	/* Item card background mixing (light mode defaults) */
 	--item-bg-mix: white;
 	--item-bg-mix-amount: 90%;
+
+	/* Badge color mixing (for semantic badge variants) */
+	--badge-bg-mix: oklch(1 0 0);
+	--badge-bg-mix-amount: 80%;
+	--badge-text-mix: oklch(0 0 0);
+	--badge-text-mix-amount: 30%;
 }
 
 /* Dark Mode */
@@ -124,6 +130,12 @@
 		/* Mixing base for item backgrounds in dark mode - mix with dark surface */
 		--item-bg-mix: oklch(0.13 0 0);
 		--item-bg-mix-amount: 80%;
+
+		/* Badge mixing for dark mode - creates darker backgrounds with lighter text */
+		--badge-bg-mix: oklch(0.2 0 0);
+		--badge-bg-mix-amount: 70%;
+		--badge-text-mix: oklch(0.95 0 0);
+		--badge-text-mix-amount: 20%;
 	}
 }
 
@@ -510,30 +522,30 @@ a {
 }
 
 .badge-success {
-	background: color-mix(in oklch, var(--color-success), white 80%);
-	color: color-mix(in oklch, var(--color-success), black 30%);
+	background: color-mix(in oklch, var(--color-success), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+	color: color-mix(in oklch, var(--color-success), var(--badge-text-mix) var(--badge-text-mix-amount));
 }
 
 .badge-warning {
-	background: color-mix(in oklch, var(--color-warning), white 80%);
-	color: color-mix(in oklch, var(--color-warning), black 30%);
+	background: color-mix(in oklch, var(--color-warning), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+	color: color-mix(in oklch, var(--color-warning), var(--badge-text-mix) var(--badge-text-mix-amount));
 }
 
 .badge-error {
-	background: color-mix(in oklch, var(--color-error), white 80%);
-	color: color-mix(in oklch, var(--color-error), black 30%);
+	background: color-mix(in oklch, var(--color-error), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+	color: color-mix(in oklch, var(--color-error), var(--badge-text-mix) var(--badge-text-mix-amount));
 }
 
 .badge-info {
-	background: color-mix(in oklch, var(--color-info), white 80%);
-	color: color-mix(in oklch, var(--color-info), black 30%);
+	background: color-mix(in oklch, var(--color-info), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+	color: color-mix(in oklch, var(--color-info), var(--badge-text-mix) var(--badge-text-mix-amount));
 }
 
 /* ============ Print Styles ============ */
 @media print {
 	:root {
-		--surface-primary: white;
-		--text-primary: black;
+		--surface-primary: oklch(1 0 0);
+		--text-primary: oklch(0 0 0);
 	}
 
 	.no-print {

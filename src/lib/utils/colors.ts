@@ -151,7 +151,7 @@ export function darkenColor(oklchColor: string, amount: number = 0.1): string {
 
 export function getContrastColor(oklchColor: string): string {
 	const match = oklchColor.match(/oklch\(([\d.]+)/);
-	if (!match) return 'black';
+	if (!match) return 'oklch(0 0 0)';
 	const lightness = parseFloat(match[1]);
 	return lightness > 0.6 ? 'oklch(0.2 0 0)' : 'oklch(0.98 0 0)';
 }

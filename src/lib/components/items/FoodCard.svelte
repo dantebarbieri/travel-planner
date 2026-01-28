@@ -153,7 +153,7 @@
 		width: 32px;
 		height: 32px;
 		background: var(--item-color, var(--color-kind-food));
-		color: white;
+		color: var(--text-inverse);
 		border-radius: var(--radius-md);
 	}
 

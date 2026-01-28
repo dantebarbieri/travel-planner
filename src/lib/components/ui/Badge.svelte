@@ -33,23 +33,23 @@
 	}
 
 	.badge-success {
-		background: color-mix(in oklch, var(--color-success), white 80%);
-		color: color-mix(in oklch, var(--color-success), black 30%);
+		background: color-mix(in oklch, var(--color-success), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+		color: color-mix(in oklch, var(--color-success), var(--badge-text-mix) var(--badge-text-mix-amount));
 	}
 
 	.badge-warning {
-		background: color-mix(in oklch, var(--color-warning), white 80%);
-		color: color-mix(in oklch, var(--color-warning), black 30%);
+		background: color-mix(in oklch, var(--color-warning), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+		color: color-mix(in oklch, var(--color-warning), var(--badge-text-mix) var(--badge-text-mix-amount));
 	}
 
 	.badge-error {
-		background: color-mix(in oklch, var(--color-error), white 80%);
-		color: color-mix(in oklch, var(--color-error), black 30%);
+		background: color-mix(in oklch, var(--color-error), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+		color: color-mix(in oklch, var(--color-error), var(--badge-text-mix) var(--badge-text-mix-amount));
 	}
 
 	.badge-info {
-		background: color-mix(in oklch, var(--color-info), white 80%);
-		color: color-mix(in oklch, var(--color-info), black 30%);
+		background: color-mix(in oklch, var(--color-info), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+		color: color-mix(in oklch, var(--color-info), var(--badge-text-mix) var(--badge-text-mix-amount));
 	}
 
 	.badge-sm {
