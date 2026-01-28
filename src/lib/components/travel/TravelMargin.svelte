@@ -2,8 +2,8 @@
 	import type { Location, TravelMode, TravelEstimate } from '$lib/types/travel';
 	import type { DisableableTransportMode } from '$lib/types/settings';
 	import { formatDuration, formatDistance } from '$lib/utils/dates';
-	import { getDistanceBetweenLocations } from '$lib/services/geoService';
 	import { getDirectionsUrl } from '$lib/services/mapService';
+	import { getRoute } from '$lib/services/routingService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -11,7 +11,6 @@
 		fromLocation: Location;
 		toLocation: Location;
 		selectedMode?: TravelMode;
-		estimates?: TravelEstimate[];
 		/** Resolved distance unit for this day's location */
 		distanceUnit?: 'km' | 'miles';
 		/** Whether the itinerary is in edit mode */
@@ -23,13 +22,10 @@
 		fromLocation,
 		toLocation,
 		selectedMode = 'driving',
-		estimates = [],
 		distanceUnit = 'km',
 		isEditing = false,
 		onModeChange
 	}: Props = $props();
-
-	const distance = $derived(getDistanceBetweenLocations(fromLocation, toLocation));
 
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
@@ -52,23 +48,67 @@
 		})
 	);
 
-	const currentEstimate = $derived.by(() => {
-		const found = estimates.find((e) => e.mode === selectedMode);
-		if (found) return found;
+	// Route data state - null until loaded
+	let routeData = $state<TravelEstimate | null>(null);
+	let isLoading = $state(true);
 
-		// Generate rough estimate if not provided
-		const speeds: Record<TravelMode, number> = {
-			driving: 35,
-			walking: 5,
-			transit: 25,
-			bicycling: 15
-		};
-		const duration = Math.round((distance / speeds[selectedMode]) * 60);
-		return {
-			mode: selectedMode,
-			duration,
-			distance
-		};
+	// Load route data when locations or mode change
+	$effect(() => {
+		// Capture dependencies
+		const from = fromLocation;
+		const to = toLocation;
+		const mode = selectedMode;
+
+		// Start loading
+		isLoading = true;
+		routeData = null;
+
+		getRoute(from, to, mode)
+			.then((result) => {
+				// Only update if mode hasn't changed
+				if (mode === selectedMode) {
+					routeData = result;
+				}
+			})
+			.finally(() => {
+				isLoading = false;
+			});
+	});
+
+	// Preload other mode routes when selector is shown
+	$effect(() => {
+		if (showSelector) {
+			// Preload routes for all modes in background
+			for (const mode of modes) {
+				if (mode !== selectedMode) {
+					getRoute(fromLocation, toLocation, mode);
+				}
+			}
+		}
+	});
+
+	// Cached routes for mode selector display
+	let modeRoutes = $state<Map<TravelMode, TravelEstimate>>(new Map());
+	let modeRoutesLoading = $state(true);
+
+	// Load mode routes when selector is shown
+	$effect(() => {
+		if (showSelector) {
+			modeRoutesLoading = true;
+			modeRoutes = new Map();
+
+			// Load all routes in parallel
+			Promise.all(
+				modes.map(async (mode) => {
+					const route = await getRoute(fromLocation, toLocation, mode);
+					modeRoutes.set(mode, route);
+					// Trigger reactivity
+					modeRoutes = new Map(modeRoutes);
+				})
+			).finally(() => {
+				modeRoutesLoading = false;
+			});
+		}
 	});
 
 	const modeIcon = $derived.by(() => {
@@ -88,10 +128,6 @@
 		showSelector = false;
 	}
 
-	/**
-	 * Convert our TravelMode to the format expected by map services.
-	 * TravelMode uses 'bicycling' but getDirectionsUrl expects the same.
-	 */
 	function handleIndicatorClick() {
 		if (isEditing) {
 			// In edit mode, toggle the mode selector
@@ -113,13 +149,24 @@
 		type="button"
 		class="travel-indicator"
 		class:readonly={!isEditing}
+		class:loading={isLoading}
 		onclick={handleIndicatorClick}
 		title={isEditing ? 'Change travel mode' : 'Open directions in maps'}
 	>
 		<Icon name={modeIcon} size={16} />
 		<span class="travel-info">
-			<span class="duration">{formatDuration(currentEstimate.duration)}</span>
-			<span class="distance">{formatDistance(currentEstimate.distance, distanceUnit)}</span>
+			{#if isLoading || !routeData}
+				<span class="duration"><span class="spinner"></span></span>
+				<span class="distance">Loading...</span>
+			{:else}
+				<span class="duration">
+					{formatDuration(routeData.duration)}
+					{#if routeData.isEstimate}
+						<span class="estimate-indicator" title="Estimated (API unavailable)">~</span>
+					{/if}
+				</span>
+				<span class="distance">{formatDistance(routeData.distance, distanceUnit)}</span>
+			{/if}
 		</span>
 		{#if !isEditing}
 			<Icon name="externalLink" size={12} />
@@ -129,7 +176,7 @@
 	{#if showSelector && isEditing}
 		<div class="mode-selector">
 			{#each modes as mode}
-				{@const estimate = estimates.find((e) => e.mode === mode)}
+				{@const estimate = modeRoutes.get(mode)}
 				{@const modeIconName =
 					mode === 'driving'
 						? 'car'
@@ -147,7 +194,14 @@
 					<Icon name={modeIconName} size={16} />
 					<span class="mode-label">{mode}</span>
 					{#if estimate}
-						<span class="mode-duration">{formatDuration(estimate.duration)}</span>
+						<span class="mode-duration">
+							{formatDuration(estimate.duration)}
+							{#if estimate.isEstimate}
+								<span class="estimate-indicator" title="Estimated (API unavailable)">~</span>
+							{/if}
+						</span>
+					{:else}
+						<span class="mode-duration"><span class="spinner"></span></span>
 					{/if}
 				</button>
 			{/each}
@@ -200,12 +254,36 @@
 	}
 
 	.duration {
+		display: flex;
+		align-items: center;
+		gap: 2px;
 		font-weight: 500;
 		color: var(--text-primary);
 	}
 
 	.distance {
 		color: var(--text-tertiary);
+	}
+
+	.estimate-indicator {
+		font-size: 0.625rem;
+		color: var(--text-tertiary);
+		margin-left: 1px;
+	}
+
+	.spinner {
+		width: 8px;
+		height: 8px;
+		border: 1.5px solid var(--text-tertiary);
+		border-top-color: var(--color-primary);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.mode-selector {

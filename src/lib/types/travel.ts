@@ -234,10 +234,12 @@ export interface TransportLeg {
 
 export interface TravelEstimate {
 	mode: TravelMode;
-	duration: number;
-	distance: number;
+	duration: number; // in minutes
+	distance: number; // in km
 	estimatedCost?: number;
 	currency?: string;
+	/** Whether this is a calculated estimate vs real routing data */
+	isEstimate?: boolean;
 }
 
 // ============ Weather ============

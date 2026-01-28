@@ -276,7 +276,6 @@
 				fromLocation={prevLocation}
 				toLocation={currentLocation}
 				selectedMode={item.travelMode || 'driving'}
-				estimates={item.travelFromPrevious ? [item.travelFromPrevious] : []}
 				{distanceUnit}
 				{isEditing}
 				onModeChange={(mode) => handleModeChange(item.id, mode)}
