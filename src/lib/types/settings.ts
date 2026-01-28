@@ -177,24 +177,39 @@ export function getSettingValue<T>(tripSetting: MaybeOverridden<T>, userDefault:
 	return userDefault;
 }
 
-/** Countries that use imperial units (Fahrenheit, miles) */
-const IMPERIAL_COUNTRIES = [
+/** Countries that use Fahrenheit for temperature */
+const FAHRENHEIT_COUNTRIES = [
 	'united states',
 	'usa',
-	'us',
 	'liberia',
 	'myanmar',
 	'burma',
-	// UK uses miles for distance but celsius for temperature
-];
-
-/** Countries that use Fahrenheit but metric for distance */
-const FAHRENHEIT_ONLY_COUNTRIES = [
 	'cayman islands',
 	'bahamas',
 	'belize',
 	'palau'
 ];
+
+/** Countries that use miles for distance (UK uses Celsius but miles) */
+const MILES_COUNTRIES = [
+	'united states',
+	'usa',
+	'united kingdom',
+	'liberia',
+	'myanmar',
+	'burma'
+];
+
+/** Check if country matches any in the list using word boundary matching */
+function matchesCountry(normalized: string, countries: string[]): boolean {
+	return countries.some(c => {
+		// Exact match
+		if (normalized === c) return true;
+		// Word boundary match (e.g., "united states of america" contains "united states")
+		const pattern = new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+		return pattern.test(normalized);
+	});
+}
 
 /**
  * Resolve 'trip-location' unit to actual unit based on destination country.
@@ -204,14 +219,7 @@ export function resolveLocationBasedTemperature(
 ): 'celsius' | 'fahrenheit' {
 	if (!country) return 'celsius';
 	const normalized = country.toLowerCase().trim();
-
-	if (IMPERIAL_COUNTRIES.some(c => normalized.includes(c))) {
-		return 'fahrenheit';
-	}
-	if (FAHRENHEIT_ONLY_COUNTRIES.some(c => normalized.includes(c))) {
-		return 'fahrenheit';
-	}
-	return 'celsius';
+	return matchesCountry(normalized, FAHRENHEIT_COUNTRIES) ? 'fahrenheit' : 'celsius';
 }
 
 export function resolveLocationBasedDistance(
@@ -219,11 +227,5 @@ export function resolveLocationBasedDistance(
 ): 'km' | 'miles' {
 	if (!country) return 'km';
 	const normalized = country.toLowerCase().trim();
-
-	// US, UK, and a few others use miles
-	const milesCountries = ['united states', 'usa', 'us', 'united kingdom', 'uk', 'liberia', 'myanmar', 'burma'];
-	if (milesCountries.some(c => normalized.includes(c))) {
-		return 'miles';
-	}
-	return 'km';
+	return matchesCountry(normalized, MILES_COUNTRIES) ? 'miles' : 'km';
 }
