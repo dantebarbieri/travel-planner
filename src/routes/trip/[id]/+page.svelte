@@ -132,7 +132,8 @@
 		try {
 			switch (format) {
 				case 'json':
-					storageService.downloadJson(trip);
+					// Pass custom schemes so the trip's scheme can be embedded
+					storageService.downloadJson(trip, settingsStore.userSettings.customColorSchemes);
 					break;
 				case 'pdf':
 					await documentService.exportToPDF(trip);

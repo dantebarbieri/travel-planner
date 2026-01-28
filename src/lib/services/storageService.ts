@@ -1,6 +1,15 @@
 import type { Trip } from '$lib/types/travel';
-import type { UserSettings } from '$lib/types/settings';
+import type { UserSettings, CustomColorScheme } from '$lib/types/settings';
 import { DEFAULT_USER_SETTINGS } from '$lib/types/settings';
+
+/**
+ * Extended trip format for JSON export/import.
+ * Includes an optional embedded color scheme so trips can be shared with their custom colors.
+ */
+export interface ExportedTrip extends Trip {
+	/** The custom color scheme used by this trip (embedded for sharing) */
+	embeddedColorScheme?: CustomColorScheme;
+}
 
 const STORAGE_KEYS = {
 	TRIPS: 'travel-planner-trips',
@@ -192,20 +201,41 @@ class StorageService {
 
 	// ============ Import/Export ============
 
-	exportToJson(trip: Trip): string {
-		return JSON.stringify(trip, null, 2);
+	/**
+	 * Export a trip to JSON, optionally embedding the custom color scheme if one is used.
+	 * @param trip The trip to export
+	 * @param customSchemes The user's custom color schemes (to look up the embedded scheme)
+	 */
+	exportToJson(trip: Trip, customSchemes: CustomColorScheme[] = []): string {
+		const exportedTrip: ExportedTrip = { ...trip };
+		
+		// If trip uses a custom color scheme, embed it in the export
+		const schemeId = trip.colorScheme.customSchemeId;
+		if (schemeId) {
+			const scheme = customSchemes.find(s => s.id === schemeId);
+			if (scheme) {
+				exportedTrip.embeddedColorScheme = scheme;
+			}
+		}
+		
+		return JSON.stringify(exportedTrip, null, 2);
 	}
 
-	importFromJson(jsonString: string): Trip {
+	importFromJson(jsonString: string): ExportedTrip {
 		const trip = JSON.parse(jsonString);
 		if (!trip.id || !trip.name || !trip.startDate || !trip.endDate) {
 			throw new Error('Invalid trip format: missing required fields');
 		}
-		return trip as Trip;
+		return trip as ExportedTrip;
 	}
 
-	downloadJson(trip: Trip): void {
-		const json = this.exportToJson(trip);
+	/**
+	 * Download a trip as a JSON file, embedding the custom color scheme if one is used.
+	 * @param trip The trip to download
+	 * @param customSchemes The user's custom color schemes (to look up the embedded scheme)
+	 */
+	downloadJson(trip: Trip, customSchemes: CustomColorScheme[] = []): void {
+		const json = this.exportToJson(trip, customSchemes);
 		const blob = new Blob([json], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
@@ -217,7 +247,7 @@ class StorageService {
 		URL.revokeObjectURL(url);
 	}
 
-	async readJsonFile(file: File): Promise<Trip> {
+	async readJsonFile(file: File): Promise<ExportedTrip> {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = (e) => {

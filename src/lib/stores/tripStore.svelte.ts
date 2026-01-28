@@ -12,9 +12,9 @@ import type {
 	KindColors,
 	Location
 } from '$lib/types/travel';
-import type { TripSettings } from '$lib/types/settings';
+import type { TripSettings, CustomColorScheme } from '$lib/types/settings';
 import { createOverride } from '$lib/types/settings';
-import { storageService } from '$lib/services/storageService';
+import { storageService, type ExportedTrip } from '$lib/services/storageService';
 import { generateTripId, generateCityId, generateDayId, generateItemId } from '$lib/utils/ids';
 import { 
 	getDefaultColorScheme, 
@@ -136,19 +136,39 @@ function deleteTrip(id: string): void {
 	saveTrips();
 }
 
-function importTrip(trip: Trip): Trip {
+function importTrip(exportedTrip: ExportedTrip): { trip: Trip; embeddedColorScheme?: CustomColorScheme } {
+	// Extract embedded color scheme before importing
+	const { embeddedColorScheme, ...tripData } = exportedTrip;
+	
 	// Generate new ID to avoid conflicts
 	const importedTrip: Trip = {
-		...trip,
+		...tripData,
 		id: generateTripId(),
-		name: trip.name + ' (Imported)',
+		name: tripData.name + ' (Imported)',
 		createdAt: new Date().toISOString(),
 		updatedAt: new Date().toISOString()
 	};
+	
+	// If there's an embedded color scheme, generate a new ID for it
+	// to avoid conflicts with existing schemes
+	let schemeToAdd: CustomColorScheme | undefined;
+	if (embeddedColorScheme) {
+		const newSchemeId = generateTripId(); // Use same ID generator for uniqueness
+		schemeToAdd = {
+			...embeddedColorScheme,
+			id: newSchemeId,
+			name: embeddedColorScheme.name + ' (Imported)'
+		};
+		// Update the trip's colorScheme to reference the new scheme ID
+		importedTrip.colorScheme = {
+			...importedTrip.colorScheme,
+			customSchemeId: newSchemeId
+		};
+	}
 
 	state.trips = [...state.trips, importedTrip];
 	saveTrips();
-	return importedTrip;
+	return { trip: importedTrip, embeddedColorScheme: schemeToAdd };
 }
 
 function setCurrentTrip(id: string | null): void {
