@@ -1,27 +1,24 @@
 /**
- * Routing service using OSRM (Open Source Routing Machine) public demo server.
+ * Routing service using OSRM (Open Source Routing Machine) servers.
  * 
- * OSRM uses OpenStreetMap data and provides free routing for:
- * - driving (car)
- * - walking (foot)
- * - cycling (bike)
+ * We use the routing.openstreetmap.de servers which have dedicated profiles:
+ * - routed-car for driving
+ * - routed-foot for walking
+ * - routed-bike for cycling
  * 
  * Note: Transit is not supported by OSRM, so we fall back to estimates.
  * 
- * The public demo server has usage limits and should not be used for heavy production traffic.
- * For production use, consider hosting your own OSRM instance or using a paid service.
+ * These are public servers with usage limits - for production use, consider
+ * hosting your own OSRM instance or using a paid service.
  */
 
 import type { Location, TravelMode, TravelEstimate } from '$lib/types/travel';
 
-// OSRM public demo server
-const OSRM_BASE_URL = 'https://router.project-osrm.org';
-
-// Map our TravelMode to OSRM profile names
-const OSRM_PROFILES: Record<TravelMode, string | null> = {
-	driving: 'car',
-	walking: 'foot',
-	bicycling: 'bike',
+// OSRM servers with dedicated profiles at routing.openstreetmap.de
+const OSRM_SERVERS: Record<TravelMode, string | null> = {
+	driving: 'https://routing.openstreetmap.de/routed-car',
+	walking: 'https://routing.openstreetmap.de/routed-foot',
+	bicycling: 'https://routing.openstreetmap.de/routed-bike',
 	transit: null // OSRM doesn't support transit
 };
 
@@ -106,21 +103,27 @@ async function fetchOSRMRoute(
 	to: Location,
 	mode: TravelMode
 ): Promise<TravelEstimate> {
-	const profile = OSRM_PROFILES[mode];
+	const serverUrl = OSRM_SERVERS[mode];
 	
 	// If mode not supported by OSRM, return estimate
-	if (!profile) {
+	if (!serverUrl) {
 		return calculateEstimate(from, to, mode);
 	}
 
 	const coordinates = `${from.geo.longitude},${from.geo.latitude};${to.geo.longitude},${to.geo.latitude}`;
-	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coordinates}?overview=false`;
+	const url = `${serverUrl}/route/v1/driving/${coordinates}?overview=false`;
 
 	const response = await fetch(url, {
 		headers: {
 			'Accept': 'application/json'
 		}
 	});
+
+	// Check for server error
+	if (response.status === 400 || response.status === 404) {
+		console.warn(`OSRM server error for ${mode}, falling back to estimate`);
+		return calculateEstimate(from, to, mode);
+	}
 
 	if (!response.ok) {
 		throw new Error(`OSRM API error: ${response.status}`);
