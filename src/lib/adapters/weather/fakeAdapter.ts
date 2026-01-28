@@ -26,18 +26,25 @@ function getCityPattern(city: string) {
 	return cityWeatherPatterns.default;
 }
 
+type WeatherDataType = 'historical' | 'forecast' | 'estimate';
+
 /**
- * Determines if a date is within the forecast window (2 weeks from today)
- * Dates beyond this window are considered "historical estimates"
+ * Determines the type of weather data for a date:
+ * - historical: Past dates (definitive data, no asterisk)
+ * - forecast: 0-14 days in future (accurate forecast, no asterisk)
+ * - estimate: 14+ days in future (seasonal estimate, show asterisk)
  */
-function isWithinForecastWindow(date: string): boolean {
+function getWeatherDataType(date: string): WeatherDataType {
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);
 	const targetDate = new Date(date);
 	targetDate.setHours(0, 0, 0, 0);
 
 	const diffDays = Math.floor((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-	return diffDays >= 0 && diffDays <= FORECAST_WINDOW_DAYS;
+
+	if (diffDays < 0) return 'historical';      // Past = definitive
+	if (diffDays <= FORECAST_WINDOW_DAYS) return 'forecast';  // Near future
+	return 'estimate';                           // Far future = show asterisk
 }
 
 function generateWeatherForDate(location: Location, date: string, isHistorical: boolean): WeatherCondition {
@@ -98,14 +105,18 @@ export const fakeWeatherAdapter: WeatherAdapter = {
 	},
 
 	/**
-	 * Smart weather fetch - uses forecast for dates within 2 weeks, historical estimates otherwise
+	 * Smart weather fetch:
+	 * - Past dates: definitive historical data (no asterisk)
+	 * - 0-14 days future: forecast data (no asterisk)
+	 * - 14+ days future: seasonal estimate (show asterisk)
 	 */
 	async getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
 		return dates.map((date) => {
-			const isForecast = isWithinForecastWindow(date);
-			return generateWeatherForDate(location, date, !isForecast);
+			const dataType = getWeatherDataType(date);
+			// Only show asterisk for estimates (far future), not historical or forecast
+			return generateWeatherForDate(location, date, dataType === 'estimate');
 		});
 	}
 };

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { TransportLeg } from '$lib/types/travel';
-	import { formatTime, formatDuration, formatDateShort, getTimezoneAbbreviation, getTimezoneOffset, calculateRealDuration, parseISODate } from '$lib/utils/dates';
+	import { formatTime, formatDuration, formatDateShort, formatDistance, getTimezoneAbbreviation, getTimezoneOffset, calculateRealDuration, parseISODate } from '$lib/utils/dates';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getDirectionsUrl } from '$lib/services/mapService';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		leg: TransportLeg;
@@ -14,6 +15,11 @@
 	}
 
 	let { leg, isDeparture = false, isArrival = false, isEditing = false, onclick }: Props = $props();
+
+	// Get resolved distance unit from settings
+	const distanceUnit = $derived(
+		settingsStore.getConcreteDistanceUnit(settingsStore.userSettings.distanceUnit)
+	);
 
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
@@ -168,7 +174,7 @@
 					<span class="flight-number">{leg.flightNumber}</span>
 				{/if}
 				{#if leg.distance}
-					<span class="distance">{leg.distance} km</span>
+					<span class="distance">{formatDistance(leg.distance, distanceUnit)}</span>
 				{/if}
 				{#if priceDisplay}
 					<span class="price">{priceDisplay}</span>

@@ -4,6 +4,7 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import WeatherBadge from '$lib/components/weather/WeatherBadge.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		dayNumber: number;
@@ -14,20 +15,37 @@
 		weatherList?: WeatherCondition[]; // For multiple cities
 		/** Whether this day has a city but no lodging booked */
 		hasMissingLodging?: boolean;
+		/** Whether this day is today */
+		isToday?: boolean;
+		/** Country for location-based temperature unit resolution */
+		tripCountry?: string;
 	}
 
-	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false }: Props = $props();
+	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false, isToday = false, tripCountry }: Props = $props();
 
 	const dayOfWeek = $derived(formatDayOfWeek(date));
 	const formattedDate = $derived(formatDate(date, { month: 'short', day: 'numeric' }));
 
 	// Use weatherList if provided, otherwise wrap single weather in array
 	const allWeather = $derived(weatherList.length > 0 ? weatherList : weather ? [weather] : []);
+
+	// Get resolved temperature unit from settings
+	const temperatureUnit = $derived(
+		settingsStore.getConcreteTemperatureUnit(
+			settingsStore.userSettings.temperatureUnit,
+			tripCountry
+		)
+	);
 </script>
 
 <header class="day-header" class:has-warning={hasMissingLodging}>
 	<div class="day-info">
-		<Badge>Day {dayNumber}</Badge>
+		<div class="day-badges">
+			<Badge>Day {dayNumber}</Badge>
+			{#if isToday}
+				<Badge variant="primary">Today</Badge>
+			{/if}
+		</div>
 		<div class="day-details">
 			<h2 class="day-title">
 				{#if title}
@@ -55,7 +73,7 @@
 	{#if allWeather.length > 0}
 		<div class="weather-section">
 			{#each allWeather as w (w.location.name)}
-				<WeatherBadge weather={w} showDetails={allWeather.length === 1} />
+				<WeatherBadge weather={w} {temperatureUnit} showDetails={allWeather.length === 1} />
 			{/each}
 		</div>
 	{/if}
@@ -76,6 +94,13 @@
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);
+	}
+
+	.day-badges {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		align-items: flex-start;
 	}
 
 	.day-details {

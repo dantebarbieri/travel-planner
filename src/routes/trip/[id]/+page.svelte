@@ -594,9 +594,12 @@
 
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
-	
+
 	// Compute stay segments for by-stay coloring
 	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments(trip) : []);
+
+	// Get primary country for location-based settings (use first city's country)
+	const primaryCountry = $derived(trip?.cities[0]?.country);
 	
 	// Check which days have missing lodging (city assigned but no stay)
 	function checkDayMissingLodging(day: ItineraryDay): boolean {
@@ -704,6 +707,7 @@
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date] || []}
 						{isEditing}
+						tripCountry={primaryCountry}
 						onAddItem={() => handleAddItem(day)}
 						onReorder={(items) => handleReorder(day.id, items)}
 						onRemoveItem={(itemId) => handleRemoveItem(day.id, itemId)}

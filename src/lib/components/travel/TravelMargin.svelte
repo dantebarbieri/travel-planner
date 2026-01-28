@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { Location, TravelMode, TravelEstimate } from '$lib/types/travel';
+	import type { DisableableTransportMode } from '$lib/types/settings';
 	import { formatDuration, formatDistance } from '$lib/utils/dates';
 	import { getDistanceBetweenLocations } from '$lib/services/geoService';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
 	interface Props {
@@ -21,6 +23,29 @@
 	}: Props = $props();
 
 	const distance = $derived(getDistanceBetweenLocations(fromLocation, toLocation));
+
+	// Get resolved distance unit from settings
+	const distanceUnit = $derived(
+		settingsStore.getConcreteDistanceUnit(settingsStore.userSettings.distanceUnit)
+	);
+
+	// Map between TravelMode and DisableableTransportMode names
+	const travelModeToDisableable: Record<TravelMode, DisableableTransportMode | null> = {
+		driving: null,        // Not disableable
+		walking: 'walking',   // Matches
+		transit: null,        // Not disableable
+		bicycling: 'biking'   // Different name!
+	};
+
+	// Filter modes based on disabled transport settings
+	const allModes: TravelMode[] = ['driving', 'walking', 'transit', 'bicycling'];
+	const modes = $derived(
+		allModes.filter(mode => {
+			const disableableName = travelModeToDisableable[mode];
+			if (!disableableName) return true; // Can't be disabled
+			return !settingsStore.userSettings.disabledTransportModes.includes(disableableName);
+		})
+	);
 
 	const currentEstimate = $derived.by(() => {
 		const found = estimates.find((e) => e.mode === selectedMode);
@@ -57,8 +82,6 @@
 		onModeChange?.(mode);
 		showSelector = false;
 	}
-
-	const modes: TravelMode[] = ['driving', 'walking', 'transit', 'bicycling'];
 </script>
 
 <div class="travel-margin">
@@ -71,7 +94,7 @@
 		<Icon name={modeIcon} size={16} />
 		<span class="travel-info">
 			<span class="duration">{formatDuration(currentEstimate.duration)}</span>
-			<span class="distance">{formatDistance(currentEstimate.distance)}</span>
+			<span class="distance">{formatDistance(currentEstimate.distance, distanceUnit)}</span>
 		</span>
 	</button>
 

@@ -532,6 +532,15 @@ a {
 	}
 }
 
+/* Date/time input picker icons for dark theme */
+:root[data-theme='dark'] input[type='date'],
+:root[data-theme='dark'] input[type='time'],
+:root[data-theme='dark'] input[type='datetime-local'] {
+	&::-webkit-calendar-picker-indicator {
+		filter: invert(1) brightness(0.8);
+	}
+}
+
 .label {
 	display: block;
 	margin-bottom: var(--space-1);

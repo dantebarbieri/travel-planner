@@ -17,6 +17,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { getSegmentForDay, getDayBackgroundColor } from '$lib/utils/colors';
+	import { isToday, isPast } from '$lib/utils/dates';
 
 	interface Props {
 		day: ItineraryDay;
@@ -32,6 +33,8 @@
 		hasMissingLodging?: boolean;
 		weatherList?: WeatherCondition[];
 		isEditing?: boolean;
+		/** Country for location-based settings resolution */
+		tripCountry?: string;
 		onAddItem?: () => void;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
@@ -55,6 +58,7 @@
 		hasMissingLodging = false,
 		weatherList = [],
 		isEditing = false,
+		tripCountry,
 		onAddItem,
 		onReorder,
 		onItemClick,
@@ -65,6 +69,10 @@
 		onDuplicateItem,
 		onTravelModeChange
 	}: Props = $props();
+
+	// Check if this day is today or in the past
+	const isDayToday = $derived(isToday(day.date));
+	const isDayPast = $derived(isPast(day.date));
 
 	const dayCities = $derived(cities.filter((c) => day.cityIds.includes(c.id)));
 
@@ -131,10 +139,12 @@
 	});
 </script>
 
-<article 
-	class="itinerary-day" 
+<article
+	class="itinerary-day"
 	class:has-day-color={!!dayBgColor}
 	class:has-missing-lodging={hasMissingLodging}
+	class:is-today={isDayToday}
+	class:is-past={isDayPast}
 	data-day-id={day.id}
 	data-color-mode={colorScheme.mode}
 	style={dayStyle}
@@ -146,6 +156,8 @@
 		cityName={cityNames}
 		{hasMissingLodging}
 		{weatherList}
+		isToday={isDayToday}
+		{tripCountry}
 	/>
 
 	<div class="day-content">
@@ -213,6 +225,28 @@
 	.itinerary-day.has-missing-lodging {
 		border-color: var(--color-warning);
 		border-width: 2px;
+	}
+
+	/* Past day - dimmed */
+	.itinerary-day.is-past {
+		opacity: 0.6;
+	}
+
+	/* Today indicator - accent bar at top */
+	.itinerary-day.is-today {
+		position: relative;
+		border-color: var(--color-primary);
+
+		&::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 3px;
+			background: var(--color-primary);
+			border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+		}
 	}
 
 	.day-content {

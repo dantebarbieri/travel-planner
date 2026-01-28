@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
-		variant?: 'default' | 'success' | 'warning' | 'error' | 'info';
+		variant?: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info';
 		size?: 'sm' | 'md';
 		children: Snippet;
 	}
@@ -30,6 +30,11 @@
 	.badge-default {
 		background: var(--surface-secondary);
 		color: var(--text-secondary);
+	}
+
+	.badge-primary {
+		background: color-mix(in oklch, var(--color-primary), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+		color: color-mix(in oklch, var(--color-primary), var(--badge-text-mix) var(--badge-text-mix-amount));
 	}
 
 	.badge-success {
