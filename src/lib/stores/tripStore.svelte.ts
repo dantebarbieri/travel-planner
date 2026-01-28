@@ -11,6 +11,8 @@ import type {
 	ColorScheme,
 	Location
 } from '$lib/types/travel';
+import type { TripSettings } from '$lib/types/settings';
+import { createOverride } from '$lib/types/settings';
 import { storageService } from '$lib/services/storageService';
 import { generateTripId, generateCityId, generateDayId, generateItemId } from '$lib/utils/ids';
 import { 
@@ -762,6 +764,50 @@ function getCityIdsForDate(trip: Trip, date: string): string[] {
 	return citiesFromRange;
 }
 
+// ============ Trip Settings ============
+
+function updateTripSettings(tripId: string, settings: Partial<TripSettings>): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			settings: { ...t.settings, ...settings },
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function setTripSettingOverride<K extends keyof TripSettings>(
+	tripId: string,
+	key: K,
+	value: NonNullable<TripSettings[K]> extends { value: infer T } ? T : TripSettings[K]
+): void {
+	// For boolean flags like colorModeOverridden, set directly
+	if (key === 'colorModeOverridden' || key === 'paletteOverridden') {
+		updateTripSettings(tripId, { [key]: value } as Partial<TripSettings>);
+	} else {
+		// For MaybeOverridden fields, wrap in createOverride
+		updateTripSettings(tripId, {
+			[key]: createOverride(value)
+		} as Partial<TripSettings>);
+	}
+}
+
+function clearTripSettingOverride(tripId: string, key: keyof TripSettings): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newSettings = { ...t.settings };
+		delete newSettings[key];
+		return {
+			...t,
+			settings: newSettings,
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 // ============ Export Store ============
 
 export const tripStore = {
@@ -830,5 +876,10 @@ export const tripStore = {
 
 	// Color Scheme
 	updateColorScheme,
-	toggleColorMode
+	toggleColorMode,
+
+	// Trip Settings
+	updateTripSettings,
+	setTripSettingOverride,
+	clearTripSettingOverride
 };

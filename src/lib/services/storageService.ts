@@ -1,4 +1,6 @@
-import type { Trip, UserSettings } from '$lib/types/travel';
+import type { Trip } from '$lib/types/travel';
+import type { UserSettings } from '$lib/types/settings';
+import { DEFAULT_USER_SETTINGS } from '$lib/types/settings';
 
 const STORAGE_KEYS = {
 	TRIPS: 'travel-planner-trips',
@@ -85,7 +87,11 @@ class StorageService {
 		if (!this.isAvailable()) return null;
 		try {
 			const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-			return data ? JSON.parse(data) : null;
+			if (!data) return null;
+
+			const parsed = JSON.parse(data);
+			// Migrate and merge with defaults to handle new fields
+			return this.migrateSettings(parsed);
 		} catch {
 			return null;
 		}
@@ -98,6 +104,86 @@ class StorageService {
 		} catch (e) {
 			console.error('Failed to save settings:', e);
 		}
+	}
+
+	/**
+	 * Migrate old settings format to new format.
+	 * Handles backwards compatibility when new settings fields are added.
+	 */
+	private migrateSettings(oldSettings: Record<string, unknown>): UserSettings {
+		// Start with defaults
+		const settings: UserSettings = { ...DEFAULT_USER_SETTINGS };
+
+		// Migrate theme (new field, default to 'system')
+		if (typeof oldSettings.theme === 'string') {
+			settings.theme = oldSettings.theme as UserSettings['theme'];
+		}
+
+		// Migrate temperature unit
+		if (typeof oldSettings.temperatureUnit === 'string') {
+			settings.temperatureUnit = oldSettings.temperatureUnit as UserSettings['temperatureUnit'];
+		}
+
+		// Migrate distance unit
+		if (typeof oldSettings.distanceUnit === 'string') {
+			settings.distanceUnit = oldSettings.distanceUnit as UserSettings['distanceUnit'];
+		}
+
+		// Migrate time format
+		if (typeof oldSettings.timeFormat === 'string') {
+			settings.timeFormat = oldSettings.timeFormat as UserSettings['timeFormat'];
+		}
+
+		// Migrate map app preference
+		if (typeof oldSettings.preferredMapApp === 'string') {
+			settings.preferredMapApp = oldSettings.preferredMapApp as UserSettings['preferredMapApp'];
+		}
+
+		// Migrate disabled transport modes (new field)
+		if (Array.isArray(oldSettings.disabledTransportModes)) {
+			settings.disabledTransportModes =
+				oldSettings.disabledTransportModes as UserSettings['disabledTransportModes'];
+		}
+
+		// Migrate color mode (was defaultColorScheme.mode, now defaultColorMode)
+		if (typeof oldSettings.defaultColorMode === 'string') {
+			settings.defaultColorMode = oldSettings.defaultColorMode as UserSettings['defaultColorMode'];
+		} else if (
+			oldSettings.defaultColorScheme &&
+			typeof (oldSettings.defaultColorScheme as Record<string, unknown>).mode === 'string'
+		) {
+			settings.defaultColorMode = (oldSettings.defaultColorScheme as Record<string, unknown>)
+				.mode as UserSettings['defaultColorMode'];
+		}
+
+		// Migrate custom palettes (new field)
+		if (Array.isArray(oldSettings.customColorPalettes)) {
+			settings.customColorPalettes =
+				oldSettings.customColorPalettes as UserSettings['customColorPalettes'];
+		}
+
+		// Migrate default palette ID (new field)
+		if (typeof oldSettings.defaultPaletteId === 'string') {
+			settings.defaultPaletteId = oldSettings.defaultPaletteId;
+		}
+
+		// Migrate home city
+		if (oldSettings.homeCity && typeof oldSettings.homeCity === 'object') {
+			settings.homeCity = oldSettings.homeCity as UserSettings['homeCity'];
+		}
+
+		// Migrate auto-save settings
+		if (typeof oldSettings.autoSaveEnabled === 'boolean') {
+			settings.autoSaveEnabled = oldSettings.autoSaveEnabled;
+		}
+		// Handle old field name (autoSaveInterval) -> new name (autoSaveIntervalMs)
+		if (typeof oldSettings.autoSaveIntervalMs === 'number') {
+			settings.autoSaveIntervalMs = oldSettings.autoSaveIntervalMs;
+		} else if (typeof oldSettings.autoSaveInterval === 'number') {
+			settings.autoSaveIntervalMs = oldSettings.autoSaveInterval;
+		}
+
+		return settings;
 	}
 
 	// ============ Import/Export ============

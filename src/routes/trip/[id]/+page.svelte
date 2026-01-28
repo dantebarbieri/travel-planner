@@ -18,6 +18,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { storageService } from '$lib/services/storageService';
 	import { documentService } from '$lib/services/documentService';
+	import TripSettingsModal from '$lib/components/settings/TripSettingsModal.svelte';
 	import { onMount } from 'svelte';
 
 	const tripId = $derived($page.params.id);
@@ -43,6 +44,7 @@
 	let showMoveItemModal = $state(false);
 	let moveItemId = $state<string | null>(null);
 	let moveItemFromDayId = $state<string | null>(null);
+	let showTripSettingsModal = $state(false);
 
 	onMount(async () => {
 		if (trip) {
@@ -635,6 +637,9 @@
 				<Button variant="ghost" size="sm" onclick={toggleColorMode} title="Toggle color mode">
 					Color: {trip.colorScheme.mode === 'by-kind' ? 'By Type' : 'By Stay'}
 				</Button>
+				<Button variant="ghost" size="sm" onclick={() => (showTripSettingsModal = true)} title="Trip settings">
+					<Icon name="settings" size={16} />
+				</Button>
 				<Button variant="ghost" size="sm" onclick={openExportModal}>
 					<Icon name="export" size={16} />
 					Export
@@ -861,6 +866,14 @@
 			<div class="export-loading">Preparing export...</div>
 		{/if}
 	</Modal>
+{/if}
+
+{#if trip}
+	<TripSettingsModal
+		isOpen={showTripSettingsModal}
+		{trip}
+		onclose={() => (showTripSettingsModal = false)}
+	/>
 {/if}
 
 <style>

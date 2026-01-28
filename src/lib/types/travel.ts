@@ -394,6 +394,8 @@ export interface StaySegment {
 
 // ============ Trip ============
 
+import type { TripSettings } from './settings';
+
 export interface Trip {
 	id: TripId;
 	name: string;
@@ -407,22 +409,17 @@ export interface Trip {
 	transportLegs: TransportLeg[];
 	itinerary: ItineraryDay[];
 	colorScheme: ColorScheme;
+	/** Per-trip settings overrides */
+	settings?: TripSettings;
 	createdAt: string;
 	updatedAt: string;
 }
 
 // ============ User Settings ============
 
-export interface UserSettings {
-	homeCity?: Location;
-	defaultColorScheme: ColorScheme;
-	preferredMapApp: 'google' | 'apple';
-	temperatureUnit: 'celsius' | 'fahrenheit';
-	distanceUnit: 'km' | 'miles';
-	timeFormat: '12h' | '24h';
-	autoSaveEnabled: boolean;
-	autoSaveInterval: number;
-}
+// User settings are now defined in settings.ts
+// This re-export maintains backwards compatibility
+export type { UserSettings } from './settings';
 
 // ============ Adapter Interfaces ============
 
