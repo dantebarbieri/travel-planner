@@ -55,7 +55,7 @@
 	</div>
 	{#if showDetails}
 		<span class="condition">{conditionLabel}</span>
-		{#if weather.precipitation && weather.precipitation > 20}
+		{#if weather.precipitation && (weather.precipitation > 20 || weather.condition === 'rain' || weather.condition === 'snow' || weather.condition === 'storm')}
 			<span class="precipitation">{weather.precipitation}%</span>
 		{/if}
 	{/if}
