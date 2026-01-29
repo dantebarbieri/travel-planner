@@ -22,6 +22,12 @@ import type { WeatherConditionType } from '$lib/types/travel';
  * 96, 99: Thunderstorm with hail
  */
 export function mapWmoCodeToCondition(code: number): WeatherConditionType {
+	// Validate input
+	if (code === null || code === undefined || !Number.isFinite(code)) {
+		console.warn(`Invalid WMO weather code: ${code}. Defaulting to 'overcast'.`);
+		return 'overcast';
+	}
+
 	if (code === 0) return 'clear';
 	if (code === 1) return 'mostly_clear';
 	if (code === 2) return 'partly_cloudy';
@@ -34,7 +40,8 @@ export function mapWmoCodeToCondition(code: number): WeatherConditionType {
 	if (code >= 85 && code <= 86) return 'snow';
 	if (code >= 95 && code <= 99) return 'storm';
 
-	// Default to overcast for any unknown codes
+	// Log warning for unknown codes
+	console.warn(`Unknown WMO weather code: ${code}. Defaulting to 'overcast'.`);
 	return 'overcast';
 }
 

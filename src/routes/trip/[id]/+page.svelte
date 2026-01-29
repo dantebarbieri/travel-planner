@@ -99,10 +99,8 @@
 			try {
 				// Use smart weather fetch (forecast vs historical based on date)
 				const forecasts = await weatherAdapter.getWeather(location, [day.date]);
-				if (forecasts[0]) {
+				if (forecasts.length > 0 && forecasts[0]) {
 					conditions.push(forecasts[0]);
-				} else {
-					hasError = true;
 				}
 			} catch (error) {
 				console.error(`Failed to load weather for ${city.name} on ${day.date}:`, error);
