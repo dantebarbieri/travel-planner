@@ -67,7 +67,8 @@ const airlineCache = new Map<string, AdsbdbAirline[]>();
  */
 function airportToLocation(airport: AdsbdbAirport): Location {
 	// Try to get full airport data with timezone from local dataset
-	const airportData = getAirportByCode(airport.iata_code);
+	// Try IATA first, fallback to ICAO if not found
+	const airportData = getAirportByCode(airport.iata_code) || getAirportByCode(airport.icao_code);
 	
 	return {
 		name: `${airport.name} (${airport.iata_code})`,
