@@ -21,33 +21,44 @@
 
 	const weatherIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
-			sunny: 'sunny',
+			clear: 'clear',
+			mostly_clear: 'mostlyClear',
 			partly_cloudy: 'partlyCloudy',
-			cloudy: 'cloudy',
+			overcast: 'overcast',
+			fog: 'fog',
+			drizzle: 'drizzle',
 			rain: 'rain',
 			snow: 'snow',
-			storm: 'storm',
-			fog: 'fog'
+			storm: 'storm'
 		};
-		return iconMap[weather.condition] || 'sunny';
+		return iconMap[weather.condition] || 'clear';
 	});
 
 	const conditionLabel = $derived.by(() => {
 		const labelMap: Record<string, string> = {
-			sunny: 'Sunny',
+			clear: 'Clear',
+			mostly_clear: 'Mostly Clear',
 			partly_cloudy: 'Partly Cloudy',
-			cloudy: 'Cloudy',
+			overcast: 'Overcast',
+			fog: 'Foggy',
+			drizzle: 'Drizzle',
 			rain: 'Rain',
 			snow: 'Snow',
-			storm: 'Storm',
-			fog: 'Foggy'
+			storm: 'Thunderstorm'
 		};
 		return labelMap[weather.condition] || weather.condition;
 	});
+
+	// Conditions that show precipitation regardless of threshold
+	const precipConditions = ['drizzle', 'rain', 'snow', 'storm'];
+	const showPrecip = $derived(
+		weather.precipitation != null &&
+			(weather.precipitation > 20 || precipConditions.includes(weather.condition))
+	);
 </script>
 
 <div class="weather-badge" class:show-details={showDetails}>
-	<Icon name={weatherIcon} size={20} />
+	<Icon name={weatherIcon} size={20} animate={true} />
 	<div class="weather-temps">
 		<span class="temp-high">{convertTemp(weather.tempHigh)}{tempUnit}</span>
 		<span class="temp-separator">/</span>
@@ -55,7 +66,7 @@
 	</div>
 	{#if showDetails}
 		<span class="condition">{conditionLabel}</span>
-		{#if weather.precipitation && weather.precipitation > 20}
+		{#if showPrecip}
 			<span class="precipitation">{weather.precipitation}%</span>
 		{/if}
 	{/if}

@@ -245,13 +245,15 @@ export interface TravelEstimate {
 // ============ Weather ============
 
 export type WeatherConditionType =
-	| 'sunny'
+	| 'clear'
+	| 'mostly_clear'
 	| 'partly_cloudy'
-	| 'cloudy'
+	| 'overcast'
+	| 'fog'
+	| 'drizzle'
 	| 'rain'
 	| 'snow'
-	| 'storm'
-	| 'fog';
+	| 'storm';
 
 export interface WeatherCondition {
 	date: string;
