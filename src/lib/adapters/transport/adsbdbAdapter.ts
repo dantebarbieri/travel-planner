@@ -5,6 +5,7 @@
  */
 
 import type { Location, Airline, FlightSearchResult, FlightAdapter } from '$lib/types/travel';
+import { getAirportByCode } from '$lib/adapters/airports/airportAdapter';
 
 // === adsbdb API Response Types ===
 
@@ -62,8 +63,13 @@ const airlineCache = new Map<string, AdsbdbAirline[]>();
 
 /**
  * Convert adsbdb airport to our Location type
+ * Enriches with timezone data from local airports dataset
  */
 function airportToLocation(airport: AdsbdbAirport): Location {
+	// Try to get full airport data with timezone from local dataset
+	// Try IATA first, fallback to ICAO if not found
+	const airportData = getAirportByCode(airport.iata_code) || getAirportByCode(airport.icao_code);
+	
 	return {
 		name: `${airport.name} (${airport.iata_code})`,
 		address: {
@@ -75,7 +81,8 @@ function airportToLocation(airport: AdsbdbAirport): Location {
 		geo: {
 			latitude: airport.latitude,
 			longitude: airport.longitude
-		}
+		},
+		timezone: airportData?.location.timezone
 	};
 }
 
