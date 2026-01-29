@@ -229,11 +229,14 @@ async function fetchFutureDatesSequentially(
 				results.push(estimate);
 				previousWeather = estimate;
 			} catch (historicalError) {
+				// Log detailed error but don't throw - continue with remaining dates
 				const baseError =
 					historicalError instanceof Error ? historicalError : new Error(String(historicalError));
-				throw new Error(
+				console.error(
 					`Failed to obtain weather data (prediction or historical) for ${date}: ${baseError.message}`
 				);
+				// Skip this date but keep previousWeather for next iteration
+				// This allows predictions to continue for subsequent days
 			}
 		}
 	}

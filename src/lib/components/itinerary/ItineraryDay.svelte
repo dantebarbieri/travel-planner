@@ -33,6 +33,8 @@
 		/** Whether this day has a city but no lodging booked */
 		hasMissingLodging?: boolean;
 		weatherList?: WeatherCondition[];
+		weatherLoading?: boolean;
+		weatherError?: boolean;
 		isEditing?: boolean;
 		/** Resolved unit information for this day */
 		unitResolution?: DayUnitResolution;
@@ -58,6 +60,8 @@
 		staySegments = [],
 		hasMissingLodging = false,
 		weatherList = [],
+		weatherLoading = false,
+		weatherError = false,
 		isEditing = false,
 		unitResolution,
 		onAddItem,
@@ -157,6 +161,8 @@
 		cityName={cityNames}
 		{hasMissingLodging}
 		{weatherList}
+		{weatherLoading}
+		{weatherError}
 		isToday={isDayToday}
 		{unitResolution}
 	/>
