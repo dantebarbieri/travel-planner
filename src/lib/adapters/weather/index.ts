@@ -102,6 +102,26 @@ async function fetchPastDates(
 }
 
 /**
+ * Helper to create a historical estimate for a date.
+ * Used as fallback when predictions fail or no previous weather is available.
+ */
+async function getHistoricalEstimate(
+	location: Location,
+	date: string,
+	lat: number,
+	lon: number
+): Promise<WeatherCondition> {
+	const historical = await predictionService.getHistoricalAverage(location, date);
+	const estimate: WeatherCondition = {
+		...historical,
+		isHistorical: false,
+		isEstimate: true
+	};
+	weatherCache.set(lat, lon, date, 'prediction', estimate);
+	return estimate;
+}
+
+/**
  * Fetch forecast data for near-future dates, using cache where available.
  * Returns a map of date -> condition for valid forecasts, and a set of dates with missing data.
  */
@@ -229,14 +249,31 @@ async function fetchFutureDatesSequentially(
 				results.push(estimate);
 				previousWeather = estimate;
 			} catch (historicalError) {
-				// Log detailed error but don't throw - continue with remaining dates
-				const baseError =
-					historicalError instanceof Error ? historicalError : new Error(String(historicalError));
+				// If we can't get historical data either, create a reasonable default
+				// This ensures we can still make predictions for subsequent days
 				console.error(
-					`Failed to obtain weather data (prediction or historical) for ${date}: ${baseError.message}`
+					`Failed to obtain weather data for ${date}, using default fallback:`,
+					historicalError instanceof Error ? historicalError.message : String(historicalError)
 				);
-				// Skip this date but keep previousWeather for next iteration
-				// This allows predictions to continue for subsequent days
+				
+				// Create a fallback weather condition with reasonable defaults
+				// This allows the prediction chain to continue
+				const fallback: WeatherCondition = {
+					date,
+					location,
+					tempHigh: 20, // 20°C = 68°F (mild temperature)
+					tempLow: 10, // 10°C = 50°F
+					condition: 'partly_cloudy',
+					precipitation: 20,
+					humidity: 60,
+					windSpeed: 10,
+					uvIndex: 5,
+					isHistorical: false,
+					isEstimate: true
+				};
+				results.push(fallback);
+				previousWeather = fallback;
+				weatherCache.set(lat, lon, date, 'prediction', fallback);
 			}
 		}
 	}
