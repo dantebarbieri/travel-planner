@@ -84,15 +84,15 @@ export function blendWeatherConditions(
 ): WeatherCondition {
 	// Normalize weights so they sum to 1.0
 	const totalWeight = weights.forecast + weights.historical;
-	let normalizedWeights =
+	const normalizedWeights =
 		Number.isFinite(totalWeight) && totalWeight > 0
 			? {
 					forecast: weights.forecast / totalWeight,
 					historical: weights.historical / totalWeight
 				}
 			: {
-					forecast: CACHE_CONFIG.FORECAST_WEIGHT,
-					historical: CACHE_CONFIG.HISTORICAL_WEIGHT
+					forecast: 0.3, // Default: 30% forecast
+					historical: 0.7 // Default: 70% historical
 				};
 
 	const { forecast: forecastWeight, historical: historicalWeight } = normalizedWeights;

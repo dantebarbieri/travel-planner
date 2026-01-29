@@ -206,15 +206,9 @@ async function fetchFutureDatesSequentially(
 		try {
 			if (!previousWeather) {
 				// No prior weather context available; fall back to historical average
-				const historical = await predictionService.getHistoricalAverage(location, date);
-				const estimate: WeatherCondition = {
-					...historical,
-					isHistorical: false,
-					isEstimate: true
-				};
+				const estimate = await getHistoricalEstimate(location, date, lat, lon);
 				results.push(estimate);
 				previousWeather = estimate;
-				weatherCache.set(lat, lon, date, 'prediction', estimate);
 			} else {
 				const prediction = await predictionService.predictFutureWeather(
 					location,
@@ -231,15 +225,9 @@ async function fetchFutureDatesSequentially(
 			console.warn(`Failed to predict weather for ${date}:`, error);
 			// If we can't predict, try to use just historical data
 			try {
-				const historical = await predictionService.getHistoricalAverage(location, date);
-				const estimate: WeatherCondition = {
-					...historical,
-					isHistorical: false,
-					isEstimate: true
-				};
+				const estimate = await getHistoricalEstimate(location, date, lat, lon);
 				results.push(estimate);
 				previousWeather = estimate;
-				weatherCache.set(lat, lon, date, 'prediction', estimate);
 			} catch (historicalError) {
 				const baseError =
 					historicalError instanceof Error ? historicalError : new Error(String(historicalError));

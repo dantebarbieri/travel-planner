@@ -179,6 +179,7 @@ export function cleanupCache(): void {
  */
 function cleanupOldestEntries(count: number): void {
 	if (typeof localStorage === 'undefined') return;
+	if (count <= 0) return;
 
 	const entries: { key: string; cachedAt: number }[] = [];
 

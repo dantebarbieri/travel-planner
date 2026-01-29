@@ -14,6 +14,9 @@ class RateLimiter {
 	private readonly minDelayMs: number;
 
 	constructor(minDelayMs = 100) {
+		if (minDelayMs <= 0) {
+			throw new Error('Rate limiter minDelayMs must be greater than 0');
+		}
 		this.minDelayMs = minDelayMs;
 	}
 
@@ -77,8 +80,10 @@ function transformForecastResponse(
 	for (let i = 0; i < daily.time.length; i++) {
 		// Skip entries with null or undefined temperature data
 		if (
-			daily.temperature_2m_max[i] == null ||
-			daily.temperature_2m_min[i] == null ||
+			daily.temperature_2m_max[i] === null ||
+			daily.temperature_2m_max[i] === undefined ||
+			daily.temperature_2m_min[i] === null ||
+			daily.temperature_2m_min[i] === undefined ||
 			!Number.isFinite(daily.temperature_2m_max[i]) ||
 			!Number.isFinite(daily.temperature_2m_min[i])
 		) {
@@ -123,15 +128,19 @@ function transformHistoricalResponse(
 	for (let i = 0; i < daily.time.length; i++) {
 		// Convert precipitation_sum (mm) to approximate percentage
 		// Use thresholds: 0-1mm=10%, 1-5mm=30%, 5-10mm=50%, 10-20mm=70%, 20+mm=90%
-		let precipitationPct = 0;
 		const precipMm = daily.precipitation_sum[i];
-		if (precipMm > 0) {
-			if (precipMm < 1) precipitationPct = 10;
-			else if (precipMm < 5) precipitationPct = 30;
-			else if (precipMm < 10) precipitationPct = 50;
-			else if (precipMm < 20) precipitationPct = 70;
-			else precipitationPct = 90;
-		}
+		const precipitationPct =
+			precipMm === null || precipMm === undefined || !Number.isFinite(precipMm) || precipMm <= 0
+				? 0
+				: precipMm < 1
+					? 10
+					: precipMm < 5
+						? 30
+						: precipMm < 10
+							? 50
+							: precipMm < 20
+								? 70
+								: 90;
 
 		conditions.push({
 			date: daily.time[i],
@@ -236,7 +245,8 @@ export async function fetchHistorical(
  * Used for averaging historical patterns for predictions.
  * @param targetDate - Target date in YYYY-MM-DD format (year will be replaced)
  * @param years - Number of past years to fetch
- * @returns Array of weather conditions and a count of successfully fetched years
+ * @returns Array of weather conditions
+ * @throws Error if less than half of the requested years are available
  */
 export async function fetchHistoricalForYears(
 	location: Location,
