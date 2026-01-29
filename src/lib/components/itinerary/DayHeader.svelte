@@ -13,6 +13,8 @@
 		cityName: string;
 		weather?: WeatherCondition;
 		weatherList?: WeatherCondition[]; // For multiple cities
+		weatherLoading?: boolean;
+		weatherError?: boolean;
 		/** Whether this day has a city but no lodging booked */
 		hasMissingLodging?: boolean;
 		/** Whether this day is today */
@@ -21,7 +23,7 @@
 		unitResolution?: DayUnitResolution;
 	}
 
-	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false, isToday = false, unitResolution }: Props = $props();
+	let { dayNumber, date, title, cityName, weather, weatherList = [], weatherLoading = false, weatherError = false, hasMissingLodging = false, isToday = false, unitResolution }: Props = $props();
 
 	const dayOfWeek = $derived(formatDayOfWeek(date));
 	const formattedDate = $derived(formatDate(date, { month: 'short', day: 'numeric' }));
@@ -79,7 +81,21 @@
 			</div>
 		</div>
 	</div>
-	{#if allWeather.length > 0}
+	{#if weatherLoading}
+		<div class="weather-section">
+			<div class="weather-loading">
+				<Icon name="loading" size={16} />
+				<span>Loading weather...</span>
+			</div>
+		</div>
+	{:else if weatherError}
+		<div class="weather-section">
+			<div class="weather-error" title="Failed to load weather data">
+				<Icon name="error" size={16} />
+				<span>Weather unavailable</span>
+			</div>
+		</div>
+	{:else if allWeather.length > 0}
 		<div class="weather-section">
 			{#each allWeather as w (w.location.name)}
 				<WeatherBadge weather={w} {temperatureUnit} showDetails={allWeather.length === 1} />
@@ -158,6 +174,25 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
+	}
+
+	.weather-loading,
+	.weather-error {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-1) var(--space-2);
+		background: var(--surface-primary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-full);
+		font-size: 0.875rem;
+		white-space: nowrap;
+		color: var(--text-secondary);
+	}
+
+	.weather-error {
+		color: var(--color-error);
+		border-color: var(--color-error);
 	}
 
 	@container day (max-width: 500px) {

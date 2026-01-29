@@ -11,6 +11,13 @@ if (typeof window !== 'undefined') {
 
 /**
  * Classify a date into categories for routing to appropriate data source.
+ *
+ * NOTE: Uses the local system time to determine if a date is in the past,
+ * forecast range, or future. This may not be accurate for trips in different
+ * timezones. For example, if a user in New York plans a trip to Tokyo,
+ * the date classification might be off by a day relative to the trip's timezone.
+ * This is an acceptable trade-off for simplicity, as weather forecasts have
+ * similar limitations.
  */
 function classifyDate(date: string): DateCategory {
 	const [year, month, day] = date.split('-').map(Number);
@@ -95,6 +102,26 @@ async function fetchPastDates(
 }
 
 /**
+ * Helper to create a historical estimate for a date.
+ * Used as fallback when predictions fail or no previous weather is available.
+ */
+async function getHistoricalEstimate(
+	location: Location,
+	date: string,
+	lat: number,
+	lon: number
+): Promise<WeatherCondition> {
+	const historical = await predictionService.getHistoricalAverage(location, date);
+	const estimate: WeatherCondition = {
+		...historical,
+		isHistorical: false,
+		isEstimate: true
+	};
+	weatherCache.set(lat, lon, date, 'prediction', estimate);
+	return estimate;
+}
+
+/**
  * Fetch forecast data for near-future dates, using cache where available.
  * Returns a map of date -> condition for valid forecasts, and a set of dates with missing data.
  */
@@ -151,48 +178,6 @@ async function fetchForecastDates(
 }
 
 /**
- * Get predictions for far-future dates (beyond forecast range).
- */
-async function fetchFutureDates(
-	location: Location,
-	dates: string[],
-	lastForecast: WeatherCondition | null
-): Promise<WeatherCondition[]> {
-	if (dates.length === 0) return [];
-
-	const lat = location.geo.latitude;
-	const lon = location.geo.longitude;
-
-	// Check cache for each date
-	const cached = weatherCache.getMany(lat, lon, dates, 'prediction');
-	const uncachedDates = dates.filter((d) => !cached.has(d));
-
-	if (uncachedDates.length === 0) {
-		// All dates were cached
-		return dates.map((d) => cached.get(d)!);
-	}
-
-	try {
-		// Generate predictions for uncached dates
-		const predictions = await predictionService.predictFutureWeatherRange(
-			location,
-			uncachedDates,
-			lastForecast
-		);
-
-		// Build result map (predictions are already cached by the service)
-		const predictedMap = new Map(predictions.map((c) => [c.date, c]));
-
-		// Return in original order, merging cached and predicted
-		return dates.map((d) => cached.get(d) ?? predictedMap.get(d)!).filter(Boolean);
-	} catch (error) {
-		console.error('Failed to generate weather predictions:', error);
-		// Return only cached results
-		return dates.map((d) => cached.get(d)).filter((c): c is WeatherCondition => c !== undefined);
-	}
-}
-
-/**
  * Get predictions for dates that need prediction, handling gaps in forecast data.
  * This processes dates sequentially, using either forecast data or previous predictions
  * as the seed for the next day's prediction.
@@ -239,31 +224,56 @@ async function fetchFutureDatesSequentially(
 
 		// Generate a prediction for this date
 		try {
-			const prediction = await predictionService.predictFutureWeather(
-				location,
-				date,
-				previousWeather!
-			);
-			results.push(prediction);
-			previousWeather = prediction;
+			if (!previousWeather) {
+				// No prior weather context available; fall back to historical average
+				const estimate = await getHistoricalEstimate(location, date, lat, lon);
+				results.push(estimate);
+				previousWeather = estimate;
+			} else {
+				const prediction = await predictionService.predictFutureWeather(
+					location,
+					date,
+					previousWeather
+				);
+				results.push(prediction);
+				previousWeather = prediction;
 
-			// Cache the prediction
-			weatherCache.set(lat, lon, date, 'prediction', prediction);
+				// Cache the prediction
+				weatherCache.set(lat, lon, date, 'prediction', prediction);
+			}
 		} catch (error) {
 			console.warn(`Failed to predict weather for ${date}:`, error);
 			// If we can't predict, try to use just historical data
 			try {
-				const historical = await predictionService.getHistoricalAverage(location, date);
-				const estimate: WeatherCondition = {
-					...historical,
+				const estimate = await getHistoricalEstimate(location, date, lat, lon);
+				results.push(estimate);
+				previousWeather = estimate;
+			} catch (historicalError) {
+				// If we can't get historical data either, create a reasonable default
+				// This ensures we can still make predictions for subsequent days
+				console.error(
+					`Failed to obtain weather data for ${date}, using default fallback:`,
+					historicalError instanceof Error ? historicalError.message : String(historicalError)
+				);
+				
+				// Create a fallback weather condition with reasonable defaults
+				// This allows the prediction chain to continue
+				const fallback: WeatherCondition = {
+					date,
+					location,
+					tempHigh: 20, // 20°C = 68°F (mild temperature)
+					tempLow: 10, // 10°C = 50°F
+					condition: 'partly_cloudy',
+					precipitation: 20,
+					humidity: 60,
+					windSpeed: 10,
+					uvIndex: 5,
 					isHistorical: false,
 					isEstimate: true
 				};
-				results.push(estimate);
-				previousWeather = estimate;
-				weatherCache.set(lat, lon, date, 'prediction', estimate);
-			} catch {
-				// Skip this date if we can't get any data
+				results.push(fallback);
+				previousWeather = fallback;
+				weatherCache.set(lat, lon, date, 'prediction', fallback);
 			}
 		}
 	}

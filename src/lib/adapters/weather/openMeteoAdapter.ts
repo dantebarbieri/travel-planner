@@ -6,16 +6,52 @@ const FORECAST_API_URL = 'https://api.open-meteo.com/v1/forecast';
 const HISTORICAL_API_URL = 'https://archive-api.open-meteo.com/v1/archive';
 
 /**
- * Round coordinates to 2 decimal places for cache efficiency.
- * Open-Meteo uses ~11km grid resolution, so 2 decimals is sufficient.
+ * Simple rate limiter to prevent API abuse.
+ * Tracks request timestamps and enforces a minimum delay between requests.
+ */
+class RateLimiter {
+	private lastRequestTime = 0;
+	private readonly minDelayMs: number;
+
+	constructor(minDelayMs = 100) {
+		if (minDelayMs <= 0) {
+			throw new Error('Rate limiter minDelayMs must be greater than 0');
+		}
+		this.minDelayMs = minDelayMs;
+	}
+
+	async waitForSlot(): Promise<void> {
+		const now = Date.now();
+		const timeSinceLastRequest = now - this.lastRequestTime;
+
+		if (timeSinceLastRequest < this.minDelayMs) {
+			const delay = this.minDelayMs - timeSinceLastRequest;
+			await new Promise((resolve) => setTimeout(resolve, delay));
+		}
+
+		this.lastRequestTime = Date.now();
+	}
+}
+
+// Single rate limiter instance shared across all API calls
+const rateLimiter = new RateLimiter(100); // 100ms minimum between requests
+
+/**
+ * Round coordinates for cache efficiency.
+ *
+ * Rounds to 2 decimal places (~1.1km), which is a good trade-off for
+ * Open-Meteo's ~11km grid resolution and keeps the number of cache entries small.
+ *
+ * NOTE: Using coarse rounding means nearby locations (e.g., different
+ * neighborhoods or airport vs. downtown) may share the same cache key.
+ * This is acceptable given the API's resolution but may miss microclimates.
  */
 function roundCoord(coord: number): number {
 	return Math.round(coord * 100) / 100;
 }
 
 /**
- * Convert Fahrenheit to Celsius with better precision.
- * Fetching in Fahrenheit gives more resolution since it has smaller increments.
+ * Convert Fahrenheit to Celsius.
  */
 function fahrenheitToCelsius(f: number): number {
 	return Math.round(((f - 32) * 5) / 9);
@@ -27,23 +63,6 @@ function fahrenheitToCelsius(f: number): number {
 function extractTime(isoDateTime: string): string {
 	const match = isoDateTime.match(/T(\d{2}:\d{2})/);
 	return match ? match[1] : '06:00';
-}
-
-/**
- * Check if a weather condition has valid data.
- * Filters out null/invalid responses from the API (e.g., 0/0 temps in Fahrenheit = -18/-18 in Celsius).
- */
-function isValidForecast(condition: WeatherCondition): boolean {
-	// 0°F high AND 0°F low is almost certainly null data (converts to -18°C)
-	// Real weather would rarely have both high and low at exactly -18°C
-	if (condition.tempHigh === -18 && condition.tempLow === -18) {
-		return false;
-	}
-	// Also check for null values that might slip through
-	if (condition.tempHigh === null || condition.tempLow === null) {
-		return false;
-	}
-	return true;
 }
 
 /**
@@ -59,11 +78,18 @@ function transformForecastResponse(
 	const conditions: WeatherCondition[] = [];
 
 	for (let i = 0; i < daily.time.length; i++) {
-		// Skip entries with null temperature data
-		if (daily.temperature_2m_max[i] === null || daily.temperature_2m_min[i] === null) {
+		// Skip entries with null or undefined temperature data
+		if (
+			daily.temperature_2m_max[i] === null ||
+			daily.temperature_2m_max[i] === undefined ||
+			daily.temperature_2m_min[i] === null ||
+			daily.temperature_2m_min[i] === undefined ||
+			!Number.isFinite(daily.temperature_2m_max[i]) ||
+			!Number.isFinite(daily.temperature_2m_min[i])
+		) {
 			continue;
 		}
-		// Skip entries where both temps are exactly 0°F (likely null data)
+		// Skip entries where both temps are exactly 0°F (likely null data placeholder)
 		if (daily.temperature_2m_max[i] === 0 && daily.temperature_2m_min[i] === 0) {
 			continue;
 		}
@@ -100,13 +126,29 @@ function transformHistoricalResponse(
 	const conditions: WeatherCondition[] = [];
 
 	for (let i = 0; i < daily.time.length; i++) {
+		// Convert precipitation_sum (mm) to approximate percentage
+		// Use thresholds: 0-1mm=10%, 1-5mm=30%, 5-10mm=50%, 10-20mm=70%, 20+mm=90%
+		const precipMm = daily.precipitation_sum[i];
+		const precipitationPct =
+			precipMm === null || precipMm === undefined || !Number.isFinite(precipMm) || precipMm <= 0
+				? 0
+				: precipMm < 1
+					? 10
+					: precipMm < 5
+						? 30
+						: precipMm < 10
+							? 50
+							: precipMm < 20
+								? 70
+								: 90;
+
 		conditions.push({
 			date: daily.time[i],
 			location,
 			tempHigh: fahrenheitToCelsius(daily.temperature_2m_max[i]),
 			tempLow: fahrenheitToCelsius(daily.temperature_2m_min[i]),
 			condition: mapWmoCodeToCondition(daily.weathercode[i]),
-			precipitation: daily.precipitation_sum[i] > 0 ? Math.min(100, daily.precipitation_sum[i] * 10) : 0,
+			precipitation: precipitationPct,
 			humidity: Math.round(daily.relative_humidity_2m_mean[i]),
 			windSpeed: Math.round(daily.windspeed_10m_max[i]),
 			isHistorical: true,
@@ -122,6 +164,8 @@ function transformHistoricalResponse(
  * Returns weather for today + up to 16 days ahead.
  */
 export async function fetchForecast(location: Location): Promise<WeatherCondition[]> {
+	await rateLimiter.waitForSlot();
+
 	const lat = roundCoord(location.geo.latitude);
 	const lon = roundCoord(location.geo.longitude);
 
@@ -164,6 +208,8 @@ export async function fetchHistorical(
 	startDate: string,
 	endDate: string
 ): Promise<WeatherCondition[]> {
+	await rateLimiter.waitForSlot();
+
 	const lat = roundCoord(location.geo.latitude);
 	const lon = roundCoord(location.geo.longitude);
 
@@ -199,6 +245,8 @@ export async function fetchHistorical(
  * Used for averaging historical patterns for predictions.
  * @param targetDate - Target date in YYYY-MM-DD format (year will be replaced)
  * @param years - Number of past years to fetch
+ * @returns Array of weather conditions
+ * @throws Error if less than half of the requested years are available
  */
 export async function fetchHistoricalForYears(
 	location: Location,
@@ -208,6 +256,8 @@ export async function fetchHistoricalForYears(
 	const [, month, day] = targetDate.split('-');
 	const currentYear = new Date().getFullYear();
 	const results: WeatherCondition[] = [];
+	let successCount = 0;
+	let failCount = 0;
 
 	// Fetch each year's data individually to handle leap years and data availability
 	for (let i = 1; i <= years; i++) {
@@ -218,11 +268,23 @@ export async function fetchHistoricalForYears(
 			const conditions = await fetchHistorical(location, date, date);
 			if (conditions.length > 0) {
 				results.push(conditions[0]);
+				successCount++;
 			}
-		} catch {
+		} catch (error) {
+			failCount++;
 			// Skip years where data is unavailable (e.g., Feb 29 in non-leap years)
-			console.warn(`Historical data unavailable for ${date}`);
+			console.warn(
+				`Historical data unavailable for ${date}:`,
+				error instanceof Error ? error.message : String(error)
+			);
 		}
+	}
+
+	// Throw error if too few years were successfully fetched
+	if (successCount < Math.ceil(years / 2)) {
+		throw new Error(
+			`Insufficient historical data: only ${successCount}/${years} years available for ${targetDate}`
+		);
 	}
 
 	return results;

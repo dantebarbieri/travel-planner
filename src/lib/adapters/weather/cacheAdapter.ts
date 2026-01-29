@@ -89,9 +89,9 @@ export function setInCache(
 	try {
 		localStorage.setItem(key, JSON.stringify(entry));
 	} catch (e) {
-		// localStorage might be full - try to clean up and retry
+		// localStorage might be full - try targeted cleanup and retry
 		if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-			cleanupCache();
+			cleanupOldestEntries(10); // Remove oldest 10 entries
 			try {
 				localStorage.setItem(key, JSON.stringify(entry));
 			} catch {
@@ -170,6 +170,46 @@ export function cleanupCache(): void {
 
 	if (keysToRemove.length > 0) {
 		console.debug(`Weather cache cleanup: removed ${keysToRemove.length} expired entries`);
+	}
+}
+
+/**
+ * Remove the oldest N cache entries to free up space.
+ * Used when localStorage is full (QuotaExceededError).
+ */
+function cleanupOldestEntries(count: number): void {
+	if (typeof localStorage === 'undefined') return;
+	if (count <= 0) return;
+
+	const entries: { key: string; cachedAt: number }[] = [];
+
+	// Collect all weather cache entries with their timestamps
+	for (let i = 0; i < localStorage.length; i++) {
+		const key = localStorage.key(i);
+		if (!key?.startsWith(CACHE_CONFIG.CACHE_PREFIX + ':')) continue;
+
+		try {
+			const stored = localStorage.getItem(key);
+			if (!stored) continue;
+
+			const entry: CacheEntry = JSON.parse(stored);
+			entries.push({ key, cachedAt: entry.cachedAt });
+		} catch {
+			// Invalid entry - will be removed
+			entries.push({ key, cachedAt: 0 });
+		}
+	}
+
+	// Sort by age (oldest first) and remove the oldest N
+	entries.sort((a, b) => a.cachedAt - b.cachedAt);
+	const toRemove = entries.slice(0, count);
+
+	for (const { key } of toRemove) {
+		localStorage.removeItem(key);
+	}
+
+	if (toRemove.length > 0) {
+		console.debug(`Weather cache: removed ${toRemove.length} oldest entries`);
 	}
 }
 

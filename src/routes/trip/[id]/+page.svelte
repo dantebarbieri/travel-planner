@@ -28,7 +28,12 @@
 	const trip = $derived(tripStore.state.trips.find((t) => t.id === tripId));
 
 	// Weather data keyed by date, with array of conditions (one per city for that day)
-	let weatherData = $state<Record<string, WeatherCondition[]>>({});
+	type WeatherState = {
+		loading: boolean;
+		error: boolean;
+		data: WeatherCondition[];
+	};
+	let weatherData = $state<Record<string, WeatherState>>({});
 	let isEditing = $state(false);
 	let showAddCityModal = $state(false);
 	let citySearchValue = $state('');
@@ -67,14 +72,19 @@
 	async function loadWeatherForDay(day: ItineraryDay) {
 		if (!trip) return;
 
+		// Set loading state
+		weatherData[day.date] = { loading: true, error: false, data: [] };
+
 		// Get all cities for this day
 		const dayCities = trip.cities.filter((c) => day.cityIds.includes(c.id));
 		if (dayCities.length === 0) {
-			weatherData[day.date] = [];
+			weatherData[day.date] = { loading: false, error: false, data: [] };
 			return;
 		}
 
 		const conditions: WeatherCondition[] = [];
+		let hasError = false;
+		
 		for (const city of dayCities) {
 			const location = {
 				name: city.name,
@@ -91,12 +101,20 @@
 				const forecasts = await weatherAdapter.getWeather(location, [day.date]);
 				if (forecasts[0]) {
 					conditions.push(forecasts[0]);
+				} else {
+					hasError = true;
 				}
-			} catch {
-				// Ignore weather errors for this city
+			} catch (error) {
+				console.error(`Failed to load weather for ${city.name} on ${day.date}:`, error);
+				hasError = true;
 			}
 		}
-		weatherData[day.date] = conditions;
+		
+		weatherData[day.date] = { 
+			loading: false, 
+			error: hasError && conditions.length === 0, // Only show error if no weather loaded at all
+			data: conditions 
+		};
 	}
 
 	// Reload weather when itinerary changes (cities assigned to days change)
@@ -744,7 +762,9 @@
 						colorScheme={resolvedColorScheme}
 						{staySegments}
 						hasMissingLodging={checkDayMissingLodging(day)}
-						weatherList={weatherData[day.date] || []}
+						weatherList={weatherData[day.date]?.data || []}
+						weatherLoading={weatherData[day.date]?.loading || false}
+						weatherError={weatherData[day.date]?.error || false}
 						{isEditing}
 						unitResolution={getDayUnitResolution(day.id)}
 						onAddItem={() => handleAddItem(day)}

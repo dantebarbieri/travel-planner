@@ -73,6 +73,7 @@ export function averageWeatherConditions(
 /**
  * Blend forecast and historical data to create a prediction.
  * Uses configured weights (default: 70% historical, 30% forecast).
+ * Weights are automatically normalized to sum to 1.0.
  */
 export function blendWeatherConditions(
 	forecast: WeatherCondition,
@@ -81,33 +82,45 @@ export function blendWeatherConditions(
 	location: Location,
 	weights = { forecast: CACHE_CONFIG.FORECAST_WEIGHT, historical: CACHE_CONFIG.HISTORICAL_WEIGHT }
 ): WeatherCondition {
+	// Normalize weights so they sum to 1.0
+	const totalWeight = weights.forecast + weights.historical;
+	const normalizedWeights =
+		Number.isFinite(totalWeight) && totalWeight > 0
+			? {
+					forecast: weights.forecast / totalWeight,
+					historical: weights.historical / totalWeight
+				}
+			: {
+					forecast: 0.3, // Default: 30% forecast
+					historical: 0.7 // Default: 70% historical
+				};
+
+	const { forecast: forecastWeight, historical: historicalWeight } = normalizedWeights;
+
 	const tempHigh = Math.round(
-		forecast.tempHigh * weights.forecast + historical.tempHigh * weights.historical
+		forecast.tempHigh * forecastWeight + historical.tempHigh * historicalWeight
 	);
 	const tempLow = Math.round(
-		forecast.tempLow * weights.forecast + historical.tempLow * weights.historical
+		forecast.tempLow * forecastWeight + historical.tempLow * historicalWeight
 	);
 	const precipitation = Math.round(
-		(forecast.precipitation ?? 0) * weights.forecast +
-			(historical.precipitation ?? 0) * weights.historical
+		(forecast.precipitation ?? 0) * forecastWeight +
+			(historical.precipitation ?? 0) * historicalWeight
 	);
 	const humidity = Math.round(
-		(forecast.humidity ?? 50) * weights.forecast +
-			(historical.humidity ?? 50) * weights.historical
+		(forecast.humidity ?? 50) * forecastWeight + (historical.humidity ?? 50) * historicalWeight
 	);
 	const windSpeed = Math.round(
-		(forecast.windSpeed ?? 10) * weights.forecast +
-			(historical.windSpeed ?? 10) * weights.historical
+		(forecast.windSpeed ?? 10) * forecastWeight + (historical.windSpeed ?? 10) * historicalWeight
 	);
 	const uvIndex = Math.round(
-		(forecast.uvIndex ?? 3) * weights.forecast + (historical.uvIndex ?? 3) * weights.historical
+		(forecast.uvIndex ?? 3) * forecastWeight + (historical.uvIndex ?? 3) * historicalWeight
 	);
 
 	// Blend condition by averaging severity values
 	const forecastSeverity = conditionToSeverity(forecast.condition);
 	const historicalSeverity = conditionToSeverity(historical.condition);
-	const blendedSeverity =
-		forecastSeverity * weights.forecast + historicalSeverity * weights.historical;
+	const blendedSeverity = forecastSeverity * forecastWeight + historicalSeverity * historicalWeight;
 	const condition = severityToCondition(blendedSeverity);
 
 	return {
@@ -172,12 +185,20 @@ export async function getHistoricalAverage(
  * 2. Get historical average for the target date (same month-day from past years)
  * 3. Blend them: 30% forecast trend + 70% historical average
  * 4. For days further out, use previous prediction as the "forecast" component
+ *
+ * @throws Error if previousDayWeather is null or if historical data is unavailable
  */
 export async function predictFutureWeather(
 	location: Location,
 	targetDate: string,
-	previousDayWeather: WeatherCondition
+	previousDayWeather: WeatherCondition | null
 ): Promise<WeatherCondition> {
+	if (!previousDayWeather) {
+		throw new Error(
+			`Cannot predict weather for ${targetDate}: no previous weather data available`
+		);
+	}
+
 	const lat = location.geo.latitude;
 	const lon = location.geo.longitude;
 
