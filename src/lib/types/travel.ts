@@ -509,6 +509,8 @@ export interface FlightSearchParams {
 export interface Airline {
 	name: string;
 	code: string;
+	icaoCode?: string;
+	country?: string;
 }
 
 export interface FlightSearchResult {
@@ -518,10 +520,10 @@ export interface FlightSearchResult {
 	origin: Location;
 	destination: Location;
 	departureDate: string;
-	departureTime: string;
-	arrivalDate: string;
-	arrivalTime: string;
-	duration: number;
+	departureTime?: string;
+	arrivalDate?: string;
+	arrivalTime?: string;
+	duration?: number;
 	aircraft?: string;
 	price?: number;
 	currency?: string;
@@ -529,7 +531,6 @@ export interface FlightSearchResult {
 
 export interface FlightAdapter {
 	searchAirlines(query: string): Promise<Airline[]>;
-	searchFlights(params: FlightSearchParams): Promise<FlightSearchResult[]>;
 	getFlightDetails(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult | null>;
 }
 

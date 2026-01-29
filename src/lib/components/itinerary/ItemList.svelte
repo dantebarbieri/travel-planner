@@ -15,6 +15,7 @@
 	import FoodCard from '$lib/components/items/FoodCard.svelte';
 	import TransportCard from '$lib/components/items/TransportCard.svelte';
 	import TravelMargin from '$lib/components/travel/TravelMargin.svelte';
+	import FlightTravelMargin from '$lib/components/travel/FlightTravelMargin.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
 	import ContextMenuItem from '$lib/components/ui/ContextMenuItem.svelte';
@@ -367,6 +368,18 @@
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
 						/>
+						<!-- Show flight travel margin after flight departure if next item is arrival of same flight -->
+						{#if item.isDeparture && leg.mode === 'flight' && items[index + 1]}
+							{@const nextItem = items[index + 1]}
+							{#if isTransportItem(nextItem) && nextItem.isArrival && nextItem.transportLegId === item.transportLegId}
+								<FlightTravelMargin
+									duration={leg.duration}
+									originTimezone={leg.origin.timezone}
+									destTimezone={leg.destination.timezone}
+									departureDate={leg.departureDate}
+								/>
+							{/if}
+						{/if}
 					{/if}
 				{/if}
 			</div>

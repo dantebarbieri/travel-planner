@@ -259,3 +259,93 @@ export function calculateRealDuration(
 
 	return Math.round(arrUtcMinutes - depUtcMinutes);
 }
+
+/**
+ * Get the timezone offset difference between two timezones
+ * Returns the difference in minutes (positive = destination is ahead)
+ * 
+ * @example
+ * // SFO to NYC (3 hours ahead)
+ * getTimezoneOffsetDifference('America/Los_Angeles', 'America/New_York') // { hours: 3, minutes: 0, totalMinutes: 180 }
+ * 
+ * // NYC to India (9.5 hours ahead)
+ * getTimezoneOffsetDifference('America/New_York', 'Asia/Kolkata') // { hours: 9, minutes: 30, totalMinutes: 570 }
+ */
+export function getTimezoneOffsetDifference(
+	fromTimezone: string,
+	toTimezone: string,
+	date?: Date
+): { hours: number; minutes: number; totalMinutes: number } {
+	const d = date || new Date();
+
+	function getOffsetMinutes(timezone: string): number {
+		try {
+			const formatter = new Intl.DateTimeFormat('en-US', {
+				timeZone: timezone,
+				timeZoneName: 'longOffset'
+			});
+			const parts = formatter.formatToParts(d);
+			const tzPart = parts.find((p) => p.type === 'timeZoneName');
+			
+			if (tzPart?.value) {
+				const match = tzPart.value.match(/GMT([+-])(\d+)(?::(\d+))?/);
+				if (match) {
+					const sign = match[1] === '+' ? 1 : -1;
+					const hours = parseInt(match[2], 10);
+					const mins = match[3] ? parseInt(match[3], 10) : 0;
+					return sign * (hours * 60 + mins);
+				}
+			}
+			return 0;
+		} catch {
+			return 0;
+		}
+	}
+
+	const fromOffset = getOffsetMinutes(fromTimezone);
+	const toOffset = getOffsetMinutes(toTimezone);
+	const totalMinutes = toOffset - fromOffset;
+
+	const absMinutes = Math.abs(totalMinutes);
+	const hours = Math.floor(absMinutes / 60) * Math.sign(totalMinutes);
+	const minutes = absMinutes % 60;
+
+	return {
+		hours: hours === 0 && totalMinutes < 0 ? -0 : hours, // Preserve sign for small offsets
+		minutes,
+		totalMinutes
+	};
+}
+
+/**
+ * Format timezone offset difference as a string
+ * @example
+ * formatTimezoneChange('America/Los_Angeles', 'America/New_York') // "+3h"
+ * formatTimezoneChange('America/New_York', 'America/Los_Angeles') // "-3h"
+ * formatTimezoneChange('America/New_York', 'Asia/Kolkata') // "+9h 30m"
+ * formatTimezoneChange('Europe/London', 'Asia/Kathmandu') // "+5h 45m"
+ */
+export function formatTimezoneChange(
+	fromTimezone: string,
+	toTimezone: string,
+	date?: Date
+): string | null {
+	if (!fromTimezone || !toTimezone || fromTimezone === toTimezone) {
+		return null;
+	}
+
+	const diff = getTimezoneOffsetDifference(fromTimezone, toTimezone, date);
+	
+	if (diff.totalMinutes === 0) {
+		return null;
+	}
+
+	const sign = diff.totalMinutes > 0 ? '+' : '-';
+	const absHours = Math.abs(diff.hours);
+	
+	if (diff.minutes === 0) {
+		return `${sign}${absHours}h`;
+	}
+	
+	return `${sign}${absHours}h ${diff.minutes}m`;
+}
