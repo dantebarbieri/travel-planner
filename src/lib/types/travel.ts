@@ -206,6 +206,15 @@ export type TransportMode =
 
 export type TravelMode = 'driving' | 'walking' | 'transit' | 'bicycling';
 
+export type SeatPosition = 'window' | 'middle' | 'aisle';
+
+export interface PassengerSeat {
+	row: string;
+	seat: string;
+	position?: SeatPosition;
+	passenger?: string;
+}
+
 export interface TransportLeg {
 	id: TransportLegId;
 	mode: TransportMode;
@@ -224,6 +233,7 @@ export interface TransportLeg {
 	price?: number;
 	currency?: string;
 	seatInfo?: string;
+	seats?: PassengerSeat[];
 	terminal?: string;
 	gate?: string;
 	notes?: string;
@@ -509,6 +519,8 @@ export interface FlightSearchParams {
 export interface Airline {
 	name: string;
 	code: string;
+	icaoCode?: string;
+	country?: string;
 }
 
 export interface FlightSearchResult {
@@ -518,10 +530,10 @@ export interface FlightSearchResult {
 	origin: Location;
 	destination: Location;
 	departureDate: string;
-	departureTime: string;
-	arrivalDate: string;
-	arrivalTime: string;
-	duration: number;
+	departureTime?: string;
+	arrivalDate?: string;
+	arrivalTime?: string;
+	duration?: number;
 	aircraft?: string;
 	price?: number;
 	currency?: string;
@@ -529,7 +541,6 @@ export interface FlightSearchResult {
 
 export interface FlightAdapter {
 	searchAirlines(query: string): Promise<Airline[]>;
-	searchFlights(params: FlightSearchParams): Promise<FlightSearchResult[]>;
 	getFlightDetails(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult | null>;
 }
 

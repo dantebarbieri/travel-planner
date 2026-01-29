@@ -15,6 +15,7 @@
 	import FoodCard from '$lib/components/items/FoodCard.svelte';
 	import TransportCard from '$lib/components/items/TransportCard.svelte';
 	import TravelMargin from '$lib/components/travel/TravelMargin.svelte';
+	import FlightTravelMargin from '$lib/components/travel/FlightTravelMargin.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
 	import ContextMenuItem from '$lib/components/ui/ContextMenuItem.svelte';
@@ -102,7 +103,10 @@
 		}
 		if (isTransportItem(item)) {
 			const leg = getTransportLeg(item.transportLegId);
-			return leg?.destination;
+			if (!leg) return undefined;
+			// Departure: use origin (where you're leaving from)
+			// Arrival: use destination (where you're arriving to)
+			return item.isDeparture ? leg.origin : leg.destination;
 		}
 		return undefined;
 	}
@@ -133,10 +137,153 @@
 		dragOverIndex = null;
 	}
 
+	// Helper to check if an item is a flight departure
+	function isFlightDeparture(item: DailyItem): boolean {
+		return isTransportItem(item) && 
+			item.isDeparture === true && 
+			getTransportLeg(item.transportLegId)?.mode === 'flight';
+	}
+
+	// Helper to check if an item is a flight arrival
+	function isFlightArrival(item: DailyItem): boolean {
+		return isTransportItem(item) && 
+			item.isArrival === true && 
+			getTransportLeg(item.transportLegId)?.mode === 'flight';
+	}
+
+	// Find the paired flight item (departure/arrival of same flight) in the same day's list
+	function getFlightPair(item: DailyItem): { item: DailyItem; index: number } | null {
+		if (!isTransportItem(item)) return null;
+		const leg = getTransportLeg(item.transportLegId);
+		if (!leg || leg.mode !== 'flight') return null;
+
+		for (let i = 0; i < items.length; i++) {
+			const other = items[i];
+			if (other.id === item.id) continue;
+			if (!isTransportItem(other)) continue;
+			if (other.transportLegId !== item.transportLegId) continue;
+			return { item: other, index: i };
+		}
+		return null;
+	}
+
+	// Check if a drop position would be between a flight pair (departure then arrival)
+	function isDropBetweenFlightPair(dropIndex: number): boolean {
+		if (dropIndex <= 0 || dropIndex >= items.length) return false;
+		
+		const before = items[dropIndex - 1];
+		const after = items[dropIndex];
+		
+		if (!isTransportItem(before) || !isTransportItem(after)) return false;
+		if (before.transportLegId !== after.transportLegId) return false;
+		
+		// Same flight - check if it's departure followed by arrival
+		return isFlightDeparture(before) && isFlightArrival(after);
+	}
+
 	function handleDrop(event: DragEvent, dropIndex: number) {
 		if (!isEditing || draggedIndex === null) return;
 		event.preventDefault();
 
+		const draggedItem = items[draggedIndex];
+		const pair = getFlightPair(draggedItem);
+
+		// === SAME-DAY FLIGHT: Move departure and arrival as a unit ===
+		if (pair) {
+			const isDraggingDeparture = isFlightDeparture(draggedItem);
+			const departureIndex = isDraggingDeparture ? draggedIndex : pair.index;
+			const arrivalIndex = isDraggingDeparture ? pair.index : draggedIndex;
+			
+			// Get the departure and arrival items
+			const departureItem = items[departureIndex];
+			const arrivalItem = items[arrivalIndex];
+			
+			// Calculate where to place the pair
+			// The pair takes 2 slots, so adjust the drop index
+			const newItems = [...items];
+			
+			// Remove both items (higher index first to preserve indices)
+			const higherIdx = Math.max(departureIndex, arrivalIndex);
+			const lowerIdx = Math.min(departureIndex, arrivalIndex);
+			newItems.splice(higherIdx, 1);
+			newItems.splice(lowerIdx, 1);
+			
+			// Adjust drop index based on what was removed
+			let adjustedDrop = dropIndex;
+			if (dropIndex > higherIdx) adjustedDrop -= 2;
+			else if (dropIndex > lowerIdx) adjustedDrop -= 1;
+			
+			// Clamp to valid range (pair needs 2 slots)
+			adjustedDrop = Math.max(0, Math.min(adjustedDrop, newItems.length));
+			
+			// Insert departure then arrival at the new position
+			newItems.splice(adjustedDrop, 0, departureItem, arrivalItem);
+			
+			if (JSON.stringify(newItems.map(i => i.id)) !== JSON.stringify(items.map(i => i.id))) {
+				onReorder?.(newItems);
+			}
+			
+			draggedIndex = null;
+			dragOverIndex = null;
+			return;
+		}
+
+		// === MULTI-DAY FLIGHT or NON-FLIGHT ITEM ===
+		
+		// Check if we're trying to drop between a flight pair - reject
+		if (isDropBetweenFlightPair(dropIndex)) {
+			draggedIndex = null;
+			dragOverIndex = null;
+			return;
+		}
+
+		// Find lone departure (no pair on this day) - must stay last
+		const loneDepartureIndex = items.findIndex(i => 
+			isFlightDeparture(i) && !getFlightPair(i)
+		);
+		
+		// Find lone arrival (no pair on this day) - must stay first
+		const loneArrivalIndex = items.findIndex(i => 
+			isFlightArrival(i) && !getFlightPair(i)
+		);
+
+		// If dragging a lone departure, it must stay at the end
+		if (loneDepartureIndex === draggedIndex) {
+			if (dropIndex !== items.length - 1) {
+				draggedIndex = null;
+				dragOverIndex = null;
+				return;
+			}
+		}
+
+		// If dragging a lone arrival, it must stay at the start
+		if (loneArrivalIndex === draggedIndex) {
+			if (dropIndex !== 0) {
+				draggedIndex = null;
+				dragOverIndex = null;
+				return;
+			}
+		}
+
+		// Can't drop after a lone departure (it must be last)
+		if (loneDepartureIndex !== -1 && loneDepartureIndex !== draggedIndex) {
+			if (dropIndex > loneDepartureIndex) {
+				draggedIndex = null;
+				dragOverIndex = null;
+				return;
+			}
+		}
+
+		// Can't drop before a lone arrival (it must be first)
+		if (loneArrivalIndex !== -1 && loneArrivalIndex !== draggedIndex) {
+			if (dropIndex <= loneArrivalIndex) {
+				draggedIndex = null;
+				dragOverIndex = null;
+				return;
+			}
+		}
+
+		// Perform the single-item move
 		if (draggedIndex !== dropIndex) {
 			const newItems = [...items];
 			const [removed] = newItems.splice(draggedIndex, 1);
@@ -294,8 +441,13 @@
 		{@const isSameLocation = prevLocation && currentLocation && 
 			Math.abs(prevLocation.geo.latitude - currentLocation.geo.latitude) < 0.0001 && 
 			Math.abs(prevLocation.geo.longitude - currentLocation.geo.longitude) < 0.0001}
+		{@const prevIsFlight = prevItem && isTransportItem(prevItem) && 
+			getTransportLeg(prevItem.transportLegId)?.mode === 'flight'}
+		{@const currentIsFlight = isTransportItem(item) && 
+			getTransportLeg(item.transportLegId)?.mode === 'flight'}
+		{@const bothAreFlights = prevIsFlight && currentIsFlight}
 
-		{#if index > 0 && prevLocation && currentLocation && !isSameLocation}
+		{#if index > 0 && prevLocation && currentLocation && !isSameLocation && !bothAreFlights}
 			<TravelMargin
 				fromLocation={prevLocation}
 				toLocation={currentLocation}
@@ -367,6 +519,26 @@
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
 						/>
+						<!-- Show flight travel margin after flight departure if next item is arrival of same flight -->
+						{#if item.isDeparture && leg.mode === 'flight' && items[index + 1]}
+							{@const nextItem = items[index + 1]}
+							{#if isTransportItem(nextItem) && nextItem.isArrival && nextItem.transportLegId === item.transportLegId}
+								{@const originCode = leg.origin.name.match(/\(([A-Z]{3})\)/)?.[1]}
+								{@const destCode = leg.destination.name.match(/\(([A-Z]{3})\)/)?.[1]}
+								<FlightTravelMargin
+									duration={leg.duration}
+									originTimezone={leg.origin.timezone}
+									destTimezone={leg.destination.timezone}
+									departureDate={leg.departureDate}
+									departureTime={leg.departureTime}
+									arrivalTime={leg.arrivalTime}
+									arrivalDate={leg.arrivalDate}
+									{originCode}
+									{destCode}
+									flightNumber={leg.flightNumber}
+								/>
+							{/if}
+						{/if}
 					{/if}
 				{/if}
 			</div>
