@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { WeatherCondition } from '$lib/types/travel';
+	import type { DayUnitResolution } from '$lib/utils/units';
 	import { formatDate, formatDayOfWeek } from '$lib/utils/dates';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import WeatherBadge from '$lib/components/weather/WeatherBadge.svelte';
@@ -14,20 +15,46 @@
 		weatherList?: WeatherCondition[]; // For multiple cities
 		/** Whether this day has a city but no lodging booked */
 		hasMissingLodging?: boolean;
+		/** Whether this day is today */
+		isToday?: boolean;
+		/** Resolved unit information for this day */
+		unitResolution?: DayUnitResolution;
 	}
 
-	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false }: Props = $props();
+	let { dayNumber, date, title, cityName, weather, weatherList = [], hasMissingLodging = false, isToday = false, unitResolution }: Props = $props();
 
 	const dayOfWeek = $derived(formatDayOfWeek(date));
 	const formattedDate = $derived(formatDate(date, { month: 'short', day: 'numeric' }));
 
 	// Use weatherList if provided, otherwise wrap single weather in array
 	const allWeather = $derived(weatherList.length > 0 ? weatherList : weather ? [weather] : []);
+
+	// Get resolved temperature unit from unit resolution (default to celsius)
+	const temperatureUnit = $derived(unitResolution?.temperatureUnit ?? 'celsius');
+
+	// Format unit change message for display
+	const unitChangeMessage = $derived.by(() => {
+		if (!unitResolution?.hasUnitChange || !unitResolution.countries || unitResolution.countries.length < 2) {
+			return null;
+		}
+		return `Units change today`;
+	});
 </script>
 
 <header class="day-header" class:has-warning={hasMissingLodging}>
 	<div class="day-info">
-		<Badge>Day {dayNumber}</Badge>
+		<div class="day-badges">
+			<Badge>Day {dayNumber}</Badge>
+			{#if isToday}
+				<Badge variant="primary">Today</Badge>
+			{/if}
+			{#if unitChangeMessage}
+				<Badge variant="warning" title="Temperature and/or distance units change between countries today">
+					<Icon name="warning" size={12} />
+					{unitChangeMessage}
+				</Badge>
+			{/if}
+		</div>
 		<div class="day-details">
 			<h2 class="day-title">
 				{#if title}
@@ -55,7 +82,7 @@
 	{#if allWeather.length > 0}
 		<div class="weather-section">
 			{#each allWeather as w (w.location.name)}
-				<WeatherBadge weather={w} showDetails={allWeather.length === 1} />
+				<WeatherBadge weather={w} {temperatureUnit} showDetails={allWeather.length === 1} />
 			{/each}
 		</div>
 	{/if}
@@ -76,6 +103,13 @@
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);
+	}
+
+	.day-badges {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		align-items: flex-start;
 	}
 
 	.day-details {

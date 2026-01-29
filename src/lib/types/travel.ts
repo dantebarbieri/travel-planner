@@ -234,10 +234,12 @@ export interface TransportLeg {
 
 export interface TravelEstimate {
 	mode: TravelMode;
-	duration: number;
-	distance: number;
+	duration: number; // in minutes
+	distance: number; // in km
 	estimatedCost?: number;
 	currency?: string;
+	/** Whether this is a calculated estimate vs real routing data */
+	isEstimate?: boolean;
 }
 
 // ============ Weather ============
@@ -263,7 +265,10 @@ export interface WeatherCondition {
 	uvIndex?: number;
 	sunrise?: string;
 	sunset?: string;
+	/** True for past dates - weather data is historical, not a forecast */
 	isHistorical?: boolean;
+	/** True for far-future dates (14+ days) - weather is an estimate based on historical patterns, not a real forecast */
+	isEstimate?: boolean;
 }
 
 // ============ Daily Items ============
@@ -367,8 +372,10 @@ export interface ColorScheme {
 	kindColors: KindColors;
 	/** Map of stay IDs (or inferred stay keys) to their assigned colors */
 	stayColors?: Record<string, string>;
-	/** Custom palette for this trip (if not using default) */
-	palette?: ColorPalette;
+	/** Palette colors for by-stay mode */
+	paletteColors?: string[];
+	/** ID of the custom color scheme being used (if any) */
+	customSchemeId?: string;
 }
 
 /**
@@ -394,6 +401,8 @@ export interface StaySegment {
 
 // ============ Trip ============
 
+import type { TripSettings } from './settings';
+
 export interface Trip {
 	id: TripId;
 	name: string;
@@ -407,22 +416,17 @@ export interface Trip {
 	transportLegs: TransportLeg[];
 	itinerary: ItineraryDay[];
 	colorScheme: ColorScheme;
+	/** Per-trip settings overrides */
+	settings?: TripSettings;
 	createdAt: string;
 	updatedAt: string;
 }
 
 // ============ User Settings ============
 
-export interface UserSettings {
-	homeCity?: Location;
-	defaultColorScheme: ColorScheme;
-	preferredMapApp: 'google' | 'apple';
-	temperatureUnit: 'celsius' | 'fahrenheit';
-	distanceUnit: 'km' | 'miles';
-	timeFormat: '12h' | '24h';
-	autoSaveEnabled: boolean;
-	autoSaveInterval: number;
-}
+// User settings are now defined in settings.ts
+// This re-export maintains backwards compatibility
+export type { UserSettings } from './settings';
 
 // ============ Adapter Interfaces ============
 

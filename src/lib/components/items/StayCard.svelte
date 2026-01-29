@@ -4,6 +4,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		stay: Stay;
@@ -14,6 +15,9 @@
 	}
 
 	let { stay, isCheckIn = false, isCheckOut = false, isEditing = false, onclick }: Props = $props();
+
+	// Get resolved map app from settings
+	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
 	const stayTypeLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -33,7 +37,7 @@
 	});
 
 	function openInMaps() {
-		window.open(getMapsUrl(stay.location), '_blank');
+		window.open(getMapsUrl(stay.location, mapApp), '_blank');
 	}
 </script>
 

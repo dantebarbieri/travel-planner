@@ -26,21 +26,39 @@ function getCityPattern(city: string) {
 	return cityWeatherPatterns.default;
 }
 
+type WeatherDataType = 'historical' | 'forecast' | 'estimate';
+
 /**
- * Determines if a date is within the forecast window (2 weeks from today)
- * Dates beyond this window are considered "historical estimates"
+ * Determines the type of weather data for a date:
+ * - historical: Past dates (definitive data, shows †)
+ * - forecast: 0-14 days in future (accurate forecast, no indicator)
+ * - estimate: 14+ days in future (seasonal estimate, shows *)
  */
-function isWithinForecastWindow(date: string): boolean {
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const targetDate = new Date(date);
+function getWeatherDataType(date: string): WeatherDataType {
+	// Parse dates as local dates to avoid timezone issues
+	// date string is "YYYY-MM-DD" format
+	const [year, month, day] = date.split('-').map(Number);
+	const targetDate = new Date(year, month - 1, day);
 	targetDate.setHours(0, 0, 0, 0);
 
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+
 	const diffDays = Math.floor((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-	return diffDays >= 0 && diffDays <= FORECAST_WINDOW_DAYS;
+
+	if (diffDays < 0) return 'historical';      // Past = definitive
+	if (diffDays <= FORECAST_WINDOW_DAYS) return 'forecast';  // Today + near future
+	return 'estimate';                           // Far future = show asterisk
 }
 
-function generateWeatherForDate(location: Location, date: string, isHistorical: boolean): WeatherCondition {
+interface WeatherFlags {
+	/** True for past dates - weather data is historical, not a forecast */
+	isHistorical: boolean;
+	/** True for far-future dates - weather is an estimate, not a real forecast */
+	isEstimate: boolean;
+}
+
+function generateWeatherForDate(location: Location, date: string, flags: WeatherFlags): WeatherCondition {
 	const city = location.address.city;
 	const pattern = getCityPattern(city);
 
@@ -57,8 +75,8 @@ function generateWeatherForDate(location: Location, date: string, isHistorical: 
 	const conditionIndex = (dateNum + month) % pattern.conditions.length;
 	const condition = pattern.conditions[conditionIndex];
 
-	// Historical estimates have wider temperature ranges (less precise)
-	const tempVariance = isHistorical ? 5 : 2;
+	// Estimates (far future) have wider temperature ranges (less precise)
+	const tempVariance = flags.isEstimate ? 5 : 2;
 
 	return {
 		date,
@@ -76,7 +94,8 @@ function generateWeatherForDate(location: Location, date: string, isHistorical: 
 		uvIndex: condition === 'sunny' ? 6 + Math.floor(Math.random() * 4) : 2 + Math.floor(Math.random() * 3),
 		sunrise: '06:30',
 		sunset: '19:45',
-		isHistorical
+		isHistorical: flags.isHistorical,
+		isEstimate: flags.isEstimate
 	};
 }
 
@@ -88,24 +107,36 @@ export const fakeWeatherAdapter: WeatherAdapter = {
 	async getForecast(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
-		return dates.map((date) => generateWeatherForDate(location, date, false));
+		return dates.map((date) => generateWeatherForDate(location, date, {
+			isHistorical: false,
+			isEstimate: false
+		}));
 	},
 
 	async getHistorical(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
-		return dates.map((date) => generateWeatherForDate(location, date, true));
+		return dates.map((date) => generateWeatherForDate(location, date, {
+			isHistorical: true,
+			isEstimate: false
+		}));
 	},
 
 	/**
-	 * Smart weather fetch - uses forecast for dates within 2 weeks, historical estimates otherwise
+	 * Smart weather fetch that determines the appropriate data type:
+	 * - Past dates: historical data (marked with †)
+	 * - 0-14 days future: forecast data (no indicator)
+	 * - 14+ days future: estimate based on historical patterns (marked with *)
 	 */
 	async getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 		await delay(150 + Math.random() * 100);
 
 		return dates.map((date) => {
-			const isForecast = isWithinForecastWindow(date);
-			return generateWeatherForDate(location, date, !isForecast);
+			const dataType = getWeatherDataType(date);
+			return generateWeatherForDate(location, date, {
+				isHistorical: dataType === 'historical',
+				isEstimate: dataType === 'estimate'
+			});
 		});
 	}
 };

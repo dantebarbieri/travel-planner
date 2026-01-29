@@ -11,6 +11,57 @@ import type {
 	ColorPalette
 } from '$lib/types/travel';
 import { isStayItem } from '$lib/types/travel';
+import { parse, formatHex, oklch as toOklch } from 'culori';
+
+/**
+ * Convert an oklch color string to hex format for use with HTML color inputs.
+ * Falls back to a default purple if parsing fails.
+ */
+export function oklchToHex(oklchStr: string): string {
+	try {
+		// If it's already a hex color, return it directly
+		if (oklchStr.startsWith('#')) {
+			return oklchStr;
+		}
+		
+		// Parse the oklch string and convert to hex
+		const parsed = parse(oklchStr);
+		if (parsed) {
+			const hex = formatHex(parsed);
+			return hex || '#6366f1';
+		}
+		return '#6366f1'; // Default fallback
+	} catch {
+		return '#6366f1'; // Error fallback
+	}
+}
+
+/**
+ * Convert a hex color string to oklch format for storage.
+ */
+export function hexToOklch(hex: string): string {
+	try {
+		// If it's already an oklch color, return it directly
+		if (hex.startsWith('oklch')) {
+			return hex;
+		}
+		
+		// Parse the hex color and convert to oklch
+		const parsed = parse(hex);
+		if (parsed) {
+			const oklchColor = toOklch(parsed);
+			if (oklchColor) {
+				const l = oklchColor.l?.toFixed(2) ?? '0.5';
+				const c = oklchColor.c?.toFixed(2) ?? '0.15';
+				const h = oklchColor.h?.toFixed(0) ?? '0';
+				return `oklch(${l} ${c} ${h})`;
+			}
+		}
+		return 'oklch(0.7 0.15 280)'; // Default fallback
+	} catch {
+		return 'oklch(0.7 0.15 280)'; // Error fallback
+	}
+}
 
 export const defaultKindColors: KindColors = {
 	stay: 'oklch(0.7 0.15 280)',
@@ -20,28 +71,32 @@ export const defaultKindColors: KindColors = {
 	flight: 'oklch(0.55 0.2 260)'
 };
 
+export const defaultPaletteColors: string[] = [
+	'oklch(0.7 0.15 280)', // Purple
+	'oklch(0.7 0.18 180)', // Teal
+	'oklch(0.7 0.15 340)', // Pink
+	'oklch(0.7 0.18 100)', // Lime
+	'oklch(0.65 0.2 30)', // Orange-red
+	'oklch(0.7 0.15 220)', // Sky blue
+	'oklch(0.65 0.18 310)', // Magenta
+	'oklch(0.7 0.15 70)' // Gold
+];
+
+// Legacy type for backwards compatibility
 export const defaultStayColorPalette: ColorPalette = {
 	id: 'default',
 	name: 'Default',
-	colors: [
-		'oklch(0.7 0.15 280)', // Purple
-		'oklch(0.7 0.18 180)', // Teal
-		'oklch(0.7 0.15 340)', // Pink
-		'oklch(0.7 0.18 100)', // Lime
-		'oklch(0.65 0.2 30)', // Orange-red
-		'oklch(0.7 0.15 220)', // Sky blue
-		'oklch(0.65 0.18 310)', // Magenta
-		'oklch(0.7 0.15 70)' // Gold
-	]
+	colors: defaultPaletteColors
 };
 
 // Keep backward compat
-export const stayColorPalette = defaultStayColorPalette.colors;
+export const stayColorPalette = defaultPaletteColors;
 
 export function getDefaultColorScheme(): ColorScheme {
 	return {
 		mode: 'by-kind',
-		kindColors: { ...defaultKindColors }
+		kindColors: { ...defaultKindColors },
+		paletteColors: [...defaultPaletteColors]
 	};
 }
 
@@ -199,7 +254,7 @@ function getStayForDate(stays: Stay[], date: string): Stay | undefined {
  */
 export function computeStaySegments(trip: Trip): StaySegment[] {
 	const segments: StaySegment[] = [];
-	const palette = trip.colorScheme.palette?.colors ?? defaultStayColorPalette.colors;
+	const palette = trip.colorScheme.paletteColors ?? defaultPaletteColors;
 	
 	let currentSegment: Partial<StaySegment> | null = null;
 	let colorIndex = 0;

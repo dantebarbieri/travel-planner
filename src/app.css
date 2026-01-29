@@ -106,9 +106,62 @@
 	--badge-text-mix-amount: 30%;
 }
 
-/* Dark Mode */
+/* Dark Mode - via data-theme attribute (explicit user choice) */
+:root[data-theme='dark'] {
+	--surface-primary: var(--color-gray-900);
+	--surface-secondary: var(--color-gray-800);
+	--surface-tertiary: var(--color-gray-700);
+
+	--border-color: var(--color-gray-700);
+	--border-color-strong: var(--color-gray-600);
+
+	--text-primary: var(--color-gray-50);
+	--text-secondary: var(--color-gray-300);
+	--text-tertiary: var(--color-gray-400);
+
+	/* Kind colors - keep same hue but adjust for dark mode contrast */
+	--color-kind-stay: oklch(0.7 0.15 280);
+	--color-kind-activity: oklch(0.65 0.2 145);
+	--color-kind-food: oklch(0.7 0.18 50);
+	--color-kind-transport: oklch(0.6 0.15 230);
+	--color-kind-flight: oklch(0.55 0.2 260);
+
+	/* Mixing base for item backgrounds in dark mode - mix with dark surface */
+	--item-bg-mix: oklch(0.13 0 0);
+	--item-bg-mix-amount: 80%;
+
+	/* Badge mixing for dark mode - creates darker backgrounds with lighter text */
+	--badge-bg-mix: oklch(0.2 0 0);
+	--badge-bg-mix-amount: 70%;
+	--badge-text-mix: oklch(0.95 0 0);
+	--badge-text-mix-amount: 20%;
+}
+
+/* Light Mode - explicit (for when user selects light in system dark mode) */
+:root[data-theme='light'] {
+	--surface-primary: white;
+	--surface-secondary: var(--color-gray-50);
+	--surface-tertiary: var(--color-gray-100);
+
+	--border-color: var(--color-gray-200);
+	--border-color-strong: var(--color-gray-300);
+
+	--text-primary: var(--color-gray-900);
+	--text-secondary: var(--color-gray-600);
+	--text-tertiary: var(--color-gray-500);
+
+	--item-bg-mix: white;
+	--item-bg-mix-amount: 90%;
+
+	--badge-bg-mix: oklch(1 0 0);
+	--badge-bg-mix-amount: 80%;
+	--badge-text-mix: oklch(0 0 0);
+	--badge-text-mix-amount: 30%;
+}
+
+/* Fallback for 'system' mode when JS hasn't loaded yet */
 @media (prefers-color-scheme: dark) {
-	:root {
+	:root:not([data-theme]) {
 		--surface-primary: var(--color-gray-900);
 		--surface-secondary: var(--color-gray-800);
 		--surface-tertiary: var(--color-gray-700);
@@ -476,6 +529,15 @@ a {
 	&:disabled {
 		background: var(--surface-secondary);
 		cursor: not-allowed;
+	}
+}
+
+/* Date/time input picker icons for dark theme */
+:root[data-theme='dark'] input[type='date'],
+:root[data-theme='dark'] input[type='time'],
+:root[data-theme='dark'] input[type='datetime-local'] {
+	&::-webkit-calendar-picker-indicator {
+		filter: invert(1) brightness(0.8);
 	}
 }
 

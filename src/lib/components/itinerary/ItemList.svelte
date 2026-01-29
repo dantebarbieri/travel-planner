@@ -30,6 +30,8 @@
 		cityId?: CityId;
 		/** The stay segment ID for this day (used for by-stay coloring) */
 		segmentId?: string;
+		/** Resolved distance unit for this day's location */
+		distanceUnit?: 'km' | 'miles';
 		isEditing?: boolean;
 		onReorder?: (items: DailyItem[]) => void;
 		onItemClick?: (item: DailyItem) => void;
@@ -50,6 +52,7 @@
 		colorScheme,
 		cityId,
 		segmentId,
+		distanceUnit = 'km',
 		isEditing = false,
 		onReorder,
 		onItemClick,
@@ -258,22 +261,47 @@
 		}
 		return 'Item';
 	}
+
+	// Filter items to display - hide duplicate stay bookends when there's nothing else
+	const displayItems = $derived.by(() => {
+		// Check if we should collapse duplicate stay bookends
+		// Condition: all items are stays for the same stay, none are check-in/check-out
+		if (items.length <= 1) return items;
+
+		const allAreStays = items.every((item) => isStayItem(item));
+		if (!allAreStays) return items;
+
+		const stayItems = items.filter(isStayItem);
+		const allSameStay = stayItems.every((item) => item.stayId === stayItems[0].stayId);
+		const noneAreCheckInOut = stayItems.every((item) => !item.isCheckIn && !item.isCheckOut);
+
+		if (allSameStay && noneAreCheckInOut) {
+			// Only show the first stay item
+			return [items[0]];
+		}
+
+		return items;
+	});
 </script>
 
 <div class="item-list">
-	{#each items as item, index (item.id)}
-		{@const prevItem = index > 0 ? items[index - 1] : null}
+	{#each displayItems as item, index (item.id)}
+		{@const prevItem = index > 0 ? displayItems[index - 1] : null}
 		{@const prevLocation = prevItem ? getItemLocation(prevItem) : null}
 		{@const currentLocation = getItemLocation(item)}
 		{@const isDragging = draggedIndex === index}
 		{@const isDragOver = dragOverIndex === index}
+		{@const isSameLocation = prevLocation && currentLocation && 
+			Math.abs(prevLocation.geo.latitude - currentLocation.geo.latitude) < 0.0001 && 
+			Math.abs(prevLocation.geo.longitude - currentLocation.geo.longitude) < 0.0001}
 
-		{#if index > 0 && prevLocation && currentLocation}
+		{#if index > 0 && prevLocation && currentLocation && !isSameLocation}
 			<TravelMargin
 				fromLocation={prevLocation}
 				toLocation={currentLocation}
 				selectedMode={item.travelMode || 'driving'}
-				estimates={item.travelFromPrevious ? [item.travelFromPrevious] : []}
+				{distanceUnit}
+				{isEditing}
 				onModeChange={(mode) => handleModeChange(item.id, mode)}
 			/>
 		{/if}
@@ -290,13 +318,7 @@
 			ondragleave={handleDragLeave}
 			ondrop={(e) => handleDrop(e, index)}
 			ondragend={handleDragEnd}
-			oncontextmenu={(e) => {
-				if (!isEditing) {
-					e.preventDefault();
-					return;
-				}
-				openContextMenu(e, item.id);
-			}}
+			oncontextmenu={(e) => isEditing && openContextMenu(e, item.id)}
 			role={isEditing ? 'listitem' : undefined}
 		>
 			{#if isEditing}

@@ -1,5 +1,22 @@
+// ============ Core Date Parsing ============
+// These must be defined first as other functions depend on them
+
+export function parseISODate(isoDate: string): Date {
+	return new Date(isoDate + 'T00:00:00');
+}
+
+export function toISODateString(date: Date): string {
+	// Use local date components to avoid UTC conversion issues
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}
+
+// ============ Date Formatting ============
+
 export function formatDate(isoDate: string, options?: Intl.DateTimeFormatOptions): string {
-	const date = new Date(isoDate);
+	const date = parseISODate(isoDate);
 	return date.toLocaleDateString(
 		'en-US',
 		options ?? {
@@ -19,7 +36,7 @@ export function formatDateShort(isoDate: string): string {
 }
 
 export function formatDayOfWeek(isoDate: string): string {
-	const date = new Date(isoDate);
+	const date = parseISODate(isoDate);
 	return date.toLocaleDateString('en-US', { weekday: 'long' });
 }
 
@@ -33,13 +50,7 @@ export function formatTime(time: string, use24h: boolean = false): string {
 	return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
-export function toISODateString(date: Date): string {
-	return date.toISOString().split('T')[0];
-}
-
-export function parseISODate(isoDate: string): Date {
-	return new Date(isoDate + 'T00:00:00');
-}
+// ============ Date Arithmetic ============
 
 export function addDays(isoDate: string, days: number): string {
 	const date = parseISODate(isoDate);

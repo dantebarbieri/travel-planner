@@ -2,12 +2,15 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { fakeWeatherAdapter } from '$lib/adapters/weather/fakeAdapter';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
+	import { resolveAllDayUnits, type DayUnitResolution } from '$lib/utils/units';
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
 	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
-	import { computeStaySegments, dayHasMissingLodging } from '$lib/utils/colors';
+	import { computeStaySegments, dayHasMissingLodging, defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
+	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
 	import MoveItemModal from '$lib/components/modals/MoveItemModal.svelte';
@@ -18,6 +21,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { storageService } from '$lib/services/storageService';
 	import { documentService } from '$lib/services/documentService';
+	import TripSettingsModal from '$lib/components/settings/TripSettingsModal.svelte';
 	import { onMount } from 'svelte';
 
 	const tripId = $derived($page.params.id);
@@ -43,6 +47,7 @@
 	let showMoveItemModal = $state(false);
 	let moveItemId = $state<string | null>(null);
 	let moveItemFromDayId = $state<string | null>(null);
+	let showTripSettingsModal = $state(false);
 
 	onMount(async () => {
 		if (trip) {
@@ -127,7 +132,8 @@
 		try {
 			switch (format) {
 				case 'json':
-					storageService.downloadJson(trip);
+					// Pass custom schemes so the trip's scheme can be embedded
+					storageService.downloadJson(trip, settingsStore.userSettings.customColorSchemes);
 					break;
 				case 'pdf':
 					await documentService.exportToPDF(trip);
@@ -592,9 +598,47 @@
 
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
-	
-	// Compute stay segments for by-stay coloring
-	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments(trip) : []);
+
+	// Resolve color scheme: if a custom scheme is selected, use its colors
+	// This ensures that if the scheme is edited, the trip reflects those changes
+	const resolvedColorScheme = $derived.by<ColorScheme>(() => {
+		if (!trip) return { mode: 'by-kind', kindColors: defaultKindColors, paletteColors: defaultPaletteColors };
+		
+		const schemeId = trip.colorScheme.customSchemeId;
+		if (schemeId) {
+			const customScheme = settingsStore.userSettings.customColorSchemes.find(s => s.id === schemeId);
+			if (customScheme) {
+				return {
+					...trip.colorScheme,
+					kindColors: customScheme.kindColors,
+					paletteColors: customScheme.paletteColors
+				};
+			}
+		}
+		return trip.colorScheme;
+	});
+
+	// Compute stay segments for by-stay coloring (using resolved scheme)
+	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments({ ...trip, colorScheme: resolvedColorScheme }) : []);
+
+	// Resolve trip settings (includes trip-specific overrides)
+	const resolvedSettings = $derived(trip ? settingsStore.resolveSettingsForTrip(trip) : null);
+
+	// Compute per-day unit resolutions based on each day's country
+	const dayUnitResolutions = $derived<Map<string, DayUnitResolution>>(
+		trip && resolvedSettings
+			? resolveAllDayUnits(
+					trip,
+					resolvedSettings.temperatureUnit,
+					resolvedSettings.distanceUnit
+				)
+			: new Map()
+	);
+
+	// Helper function to get unit resolution for a specific day
+	function getDayUnitResolution(dayId: string): DayUnitResolution | undefined {
+		return dayUnitResolutions.get(dayId);
+	}
 	
 	// Check which days have missing lodging (city assigned but no stay)
 	function checkDayMissingLodging(day: ItineraryDay): boolean {
@@ -634,6 +678,9 @@
 			<div class="trip-actions">
 				<Button variant="ghost" size="sm" onclick={toggleColorMode} title="Toggle color mode">
 					Color: {trip.colorScheme.mode === 'by-kind' ? 'By Type' : 'By Stay'}
+				</Button>
+				<Button variant="ghost" size="sm" onclick={() => (showTripSettingsModal = true)} title="Trip settings">
+					<Icon name="settings" size={16} />
 				</Button>
 				<Button variant="ghost" size="sm" onclick={openExportModal}>
 					<Icon name="export" size={16} />
@@ -685,7 +732,7 @@
 				</div>
 			{/if}
 
-			<div class="itinerary-container">
+			<div class="itinerary-container" style="--color-kind-stay: {resolvedColorScheme.kindColors.stay}; --color-kind-activity: {resolvedColorScheme.kindColors.activity}; --color-kind-food: {resolvedColorScheme.kindColors.food}; --color-kind-transport: {resolvedColorScheme.kindColors.transport}; --color-kind-flight: {resolvedColorScheme.kindColors.flight}">
 				{#each trip.itinerary as day (day.id)}
 					<ItineraryDayComponent
 						{day}
@@ -694,11 +741,12 @@
 						activities={trip.activities}
 						foodVenues={trip.foodVenues}
 						transportLegs={trip.transportLegs}
-						colorScheme={trip.colorScheme}
+						colorScheme={resolvedColorScheme}
 						{staySegments}
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date] || []}
 						{isEditing}
+						unitResolution={getDayUnitResolution(day.id)}
 						onAddItem={() => handleAddItem(day)}
 						onReorder={(items) => handleReorder(day.id, items)}
 						onRemoveItem={(itemId) => handleRemoveItem(day.id, itemId)}
@@ -861,6 +909,14 @@
 			<div class="export-loading">Preparing export...</div>
 		{/if}
 	</Modal>
+{/if}
+
+{#if trip}
+	<TripSettingsModal
+		isOpen={showTripSettingsModal}
+		{trip}
+		onclose={() => (showTripSettingsModal = false)}
+	/>
 {/if}
 
 <style>

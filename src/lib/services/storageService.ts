@@ -1,4 +1,15 @@
-import type { Trip, UserSettings } from '$lib/types/travel';
+import type { Trip } from '$lib/types/travel';
+import type { UserSettings, CustomColorScheme } from '$lib/types/settings';
+import { DEFAULT_USER_SETTINGS } from '$lib/types/settings';
+
+/**
+ * Extended trip format for JSON export/import.
+ * Includes an optional embedded color scheme so trips can be shared with their custom colors.
+ */
+export interface ExportedTrip extends Trip {
+	/** The custom color scheme used by this trip (embedded for sharing) */
+	embeddedColorScheme?: CustomColorScheme;
+}
 
 const STORAGE_KEYS = {
 	TRIPS: 'travel-planner-trips',
@@ -85,7 +96,11 @@ class StorageService {
 		if (!this.isAvailable()) return null;
 		try {
 			const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-			return data ? JSON.parse(data) : null;
+			if (!data) return null;
+
+			const parsed = JSON.parse(data);
+			// Migrate and merge with defaults to handle new fields
+			return this.migrateSettings(parsed);
 		} catch {
 			return null;
 		}
@@ -100,22 +115,127 @@ class StorageService {
 		}
 	}
 
-	// ============ Import/Export ============
+	/**
+	 * Migrate old settings format to new format.
+	 * Handles backwards compatibility when new settings fields are added.
+	 */
+	private migrateSettings(oldSettings: Record<string, unknown>): UserSettings {
+		// Start with defaults
+		const settings: UserSettings = { ...DEFAULT_USER_SETTINGS };
 
-	exportToJson(trip: Trip): string {
-		return JSON.stringify(trip, null, 2);
+		// Migrate theme (new field, default to 'system')
+		if (typeof oldSettings.theme === 'string') {
+			settings.theme = oldSettings.theme as UserSettings['theme'];
+		}
+
+		// Migrate temperature unit
+		if (typeof oldSettings.temperatureUnit === 'string') {
+			settings.temperatureUnit = oldSettings.temperatureUnit as UserSettings['temperatureUnit'];
+		}
+
+		// Migrate distance unit
+		if (typeof oldSettings.distanceUnit === 'string') {
+			settings.distanceUnit = oldSettings.distanceUnit as UserSettings['distanceUnit'];
+		}
+
+		// Migrate time format
+		if (typeof oldSettings.timeFormat === 'string') {
+			settings.timeFormat = oldSettings.timeFormat as UserSettings['timeFormat'];
+		}
+
+		// Migrate map app preference
+		if (typeof oldSettings.preferredMapApp === 'string') {
+			settings.preferredMapApp = oldSettings.preferredMapApp as UserSettings['preferredMapApp'];
+		}
+
+		// Migrate disabled transport modes (new field)
+		if (Array.isArray(oldSettings.disabledTransportModes)) {
+			settings.disabledTransportModes =
+				oldSettings.disabledTransportModes as UserSettings['disabledTransportModes'];
+		}
+
+		// Migrate color mode (was defaultColorScheme.mode, now defaultColorMode)
+		if (typeof oldSettings.defaultColorMode === 'string') {
+			settings.defaultColorMode = oldSettings.defaultColorMode as UserSettings['defaultColorMode'];
+		} else if (
+			oldSettings.defaultColorScheme &&
+			typeof (oldSettings.defaultColorScheme as Record<string, unknown>).mode === 'string'
+		) {
+			settings.defaultColorMode = (oldSettings.defaultColorScheme as Record<string, unknown>)
+				.mode as UserSettings['defaultColorMode'];
+		}
+
+		// Migrate custom color schemes (renamed from customColorPalettes)
+		if (Array.isArray(oldSettings.customColorSchemes)) {
+			settings.customColorSchemes =
+				oldSettings.customColorSchemes as UserSettings['customColorSchemes'];
+		} else if (Array.isArray(oldSettings.customColorPalettes)) {
+			// Migrate old customColorPalettes to new customColorSchemes format
+			// Old palettes only had colors, new schemes have kindColors + paletteColors
+			settings.customColorSchemes = [];
+		}
+
+		// Migrate default color scheme ID (renamed from defaultPaletteId)
+		if (typeof oldSettings.defaultColorSchemeId === 'string') {
+			settings.defaultColorSchemeId = oldSettings.defaultColorSchemeId;
+		}
+
+		// Migrate home city
+		if (oldSettings.homeCity && typeof oldSettings.homeCity === 'object') {
+			settings.homeCity = oldSettings.homeCity as UserSettings['homeCity'];
+		}
+
+		// Migrate auto-save settings
+		if (typeof oldSettings.autoSaveEnabled === 'boolean') {
+			settings.autoSaveEnabled = oldSettings.autoSaveEnabled;
+		}
+		// Handle old field name (autoSaveInterval) -> new name (autoSaveIntervalMs)
+		if (typeof oldSettings.autoSaveIntervalMs === 'number') {
+			settings.autoSaveIntervalMs = oldSettings.autoSaveIntervalMs;
+		} else if (typeof oldSettings.autoSaveInterval === 'number') {
+			settings.autoSaveIntervalMs = oldSettings.autoSaveInterval;
+		}
+
+		return settings;
 	}
 
-	importFromJson(jsonString: string): Trip {
+	// ============ Import/Export ============
+
+	/**
+	 * Export a trip to JSON, optionally embedding the custom color scheme if one is used.
+	 * @param trip The trip to export
+	 * @param customSchemes The user's custom color schemes (to look up the embedded scheme)
+	 */
+	exportToJson(trip: Trip, customSchemes: CustomColorScheme[] = []): string {
+		const exportedTrip: ExportedTrip = { ...trip };
+		
+		// If trip uses a custom color scheme, embed it in the export
+		const schemeId = trip.colorScheme.customSchemeId;
+		if (schemeId) {
+			const scheme = customSchemes.find(s => s.id === schemeId);
+			if (scheme) {
+				exportedTrip.embeddedColorScheme = scheme;
+			}
+		}
+		
+		return JSON.stringify(exportedTrip, null, 2);
+	}
+
+	importFromJson(jsonString: string): ExportedTrip {
 		const trip = JSON.parse(jsonString);
 		if (!trip.id || !trip.name || !trip.startDate || !trip.endDate) {
 			throw new Error('Invalid trip format: missing required fields');
 		}
-		return trip as Trip;
+		return trip as ExportedTrip;
 	}
 
-	downloadJson(trip: Trip): void {
-		const json = this.exportToJson(trip);
+	/**
+	 * Download a trip as a JSON file, embedding the custom color scheme if one is used.
+	 * @param trip The trip to download
+	 * @param customSchemes The user's custom color schemes (to look up the embedded scheme)
+	 */
+	downloadJson(trip: Trip, customSchemes: CustomColorScheme[] = []): void {
+		const json = this.exportToJson(trip, customSchemes);
 		const blob = new Blob([json], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
@@ -127,7 +247,7 @@ class StorageService {
 		URL.revokeObjectURL(url);
 	}
 
-	async readJsonFile(file: File): Promise<Trip> {
+	async readJsonFile(file: File): Promise<ExportedTrip> {
 		return new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.onload = (e) => {

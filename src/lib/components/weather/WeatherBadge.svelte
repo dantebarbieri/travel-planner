@@ -60,7 +60,10 @@
 		{/if}
 	{/if}
 	{#if weather.isHistorical}
-		<span class="historical-indicator" title="Historical average - forecast not available for this date">*</span>
+		<span class="historical-indicator" title="Historical weather data - this date is in the past">&dagger;</span>
+	{/if}
+	{#if weather.isEstimate}
+		<span class="estimate-indicator" title="Estimated weather based on historical patterns - forecast not available this far in advance">&ast;</span>
 	{/if}
 </div>
 
@@ -110,6 +113,14 @@
 	.historical-indicator {
 		font-size: 0.875rem;
 		color: var(--text-tertiary);
+		cursor: help;
+		margin-left: -2px;
+	}
+
+	.estimate-indicator {
+		font-size: 0.875rem;
+		color: var(--color-warning);
+		font-weight: 600;
 		cursor: help;
 		margin-left: -2px;
 	}

@@ -9,6 +9,7 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import { goto } from '$app/navigation';
 	import { storageService } from '$lib/services/storageService';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import type { Location, Trip } from '$lib/types/travel';
 
 	let showCreateModal = $state(false);
@@ -89,7 +90,13 @@
 
 		try {
 			const importedTrip = await storageService.readJsonFile(file);
-			const trip = tripStore.importTrip(importedTrip);
+			const { trip, embeddedColorScheme } = tripStore.importTrip(importedTrip);
+			
+			// If trip came with an embedded color scheme, add it to user's schemes
+			if (embeddedColorScheme) {
+				settingsStore.addCustomColorScheme(embeddedColorScheme);
+			}
+			
 			goto(`/trip/${trip.id}`);
 		} catch (error) {
 			importError = error instanceof Error ? error.message : 'Failed to import trip';

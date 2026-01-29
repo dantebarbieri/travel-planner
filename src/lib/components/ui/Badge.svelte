@@ -2,15 +2,16 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
-		variant?: 'default' | 'success' | 'warning' | 'error' | 'info';
+		variant?: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info';
 		size?: 'sm' | 'md';
+		title?: string;
 		children: Snippet;
 	}
 
-	let { variant = 'default', size = 'md', children }: Props = $props();
+	let { variant = 'default', size = 'md', title, children }: Props = $props();
 </script>
 
-<span class="badge badge-{variant}" class:badge-sm={size === 'sm'}>
+<span class="badge badge-{variant}" class:badge-sm={size === 'sm'} {title}>
 	{@render children()}
 </span>
 
@@ -30,6 +31,11 @@
 	.badge-default {
 		background: var(--surface-secondary);
 		color: var(--text-secondary);
+	}
+
+	.badge-primary {
+		background: color-mix(in oklch, var(--color-primary), var(--badge-bg-mix) var(--badge-bg-mix-amount));
+		color: color-mix(in oklch, var(--color-primary), var(--badge-text-mix) var(--badge-text-mix-amount));
 	}
 
 	.badge-success {

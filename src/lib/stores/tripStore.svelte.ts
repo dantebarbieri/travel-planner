@@ -9,15 +9,20 @@ import type {
 	DailyItem,
 	NewDailyItem,
 	ColorScheme,
+	KindColors,
 	Location
 } from '$lib/types/travel';
-import { storageService } from '$lib/services/storageService';
+import type { TripSettings, CustomColorScheme } from '$lib/types/settings';
+import { createOverride } from '$lib/types/settings';
+import { storageService, type ExportedTrip } from '$lib/services/storageService';
 import { generateTripId, generateCityId, generateDayId, generateItemId } from '$lib/utils/ids';
 import { 
 	getDefaultColorScheme, 
 	assignStayColorsWithInferred,
 	computeStaySegments,
-	buildStayColorsFromSegments
+	buildStayColorsFromSegments,
+	defaultKindColors,
+	defaultPaletteColors
 } from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
 
@@ -131,19 +136,39 @@ function deleteTrip(id: string): void {
 	saveTrips();
 }
 
-function importTrip(trip: Trip): Trip {
+function importTrip(exportedTrip: ExportedTrip): { trip: Trip; embeddedColorScheme?: CustomColorScheme } {
+	// Extract embedded color scheme before importing
+	const { embeddedColorScheme, ...tripData } = exportedTrip;
+	
 	// Generate new ID to avoid conflicts
 	const importedTrip: Trip = {
-		...trip,
+		...tripData,
 		id: generateTripId(),
-		name: trip.name + ' (Imported)',
+		name: tripData.name + ' (Imported)',
 		createdAt: new Date().toISOString(),
 		updatedAt: new Date().toISOString()
 	};
+	
+	// If there's an embedded color scheme, generate a new ID for it
+	// to avoid conflicts with existing schemes
+	let schemeToAdd: CustomColorScheme | undefined;
+	if (embeddedColorScheme) {
+		const newSchemeId = generateTripId(); // Use same ID generator for uniqueness
+		schemeToAdd = {
+			...embeddedColorScheme,
+			id: newSchemeId,
+			name: embeddedColorScheme.name + ' (Imported)'
+		};
+		// Update the trip's colorScheme to reference the new scheme ID
+		importedTrip.colorScheme = {
+			...importedTrip.colorScheme,
+			customSchemeId: newSchemeId
+		};
+	}
 
 	state.trips = [...state.trips, importedTrip];
 	saveTrips();
-	return importedTrip;
+	return { trip: importedTrip, embeddedColorScheme: schemeToAdd };
 }
 
 function setCurrentTrip(id: string | null): void {
@@ -696,6 +721,92 @@ function toggleColorMode(tripId: string): void {
 	saveTrips();
 }
 
+function setTripColorMode(tripId: string, mode: 'by-kind' | 'by-stay'): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newScheme: ColorScheme = {
+			...t.colorScheme,
+			mode
+		};
+		if (mode === 'by-stay') {
+			// Compute stay segments and build color map
+			const segments = computeStaySegments(t);
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
+		}
+		return {
+			...t,
+			colorScheme: newScheme,
+			settings: { ...t.settings, colorModeOverridden: true },
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function clearTripColorMode(tripId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newSettings = { ...t.settings };
+		delete newSettings.colorModeOverridden;
+		return {
+			...t,
+			settings: newSettings,
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function setTripColorScheme(tripId: string, scheme: { id: string; name: string; kindColors: KindColors; paletteColors: string[] }): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newScheme: ColorScheme = {
+			...t.colorScheme,
+			kindColors: { ...scheme.kindColors },
+			paletteColors: [...scheme.paletteColors],
+			customSchemeId: scheme.id
+		};
+		// Recompute stay colors with new palette
+		if (t.colorScheme.mode === 'by-stay') {
+			const segments = computeStaySegments({ ...t, colorScheme: newScheme });
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
+		}
+		return {
+			...t,
+			colorScheme: newScheme,
+			settings: { ...t.settings, colorSchemeOverridden: true },
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function clearTripColorScheme(tripId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newScheme: ColorScheme = {
+			...t.colorScheme,
+			kindColors: { ...defaultKindColors },
+			paletteColors: [...defaultPaletteColors]
+		};
+		delete newScheme.customSchemeId;
+		// Recompute stay colors with default palette
+		if (t.colorScheme.mode === 'by-stay') {
+			const segments = computeStaySegments({ ...t, colorScheme: newScheme });
+			newScheme.stayColors = buildStayColorsFromSegments(segments);
+		}
+		const newSettings = { ...t.settings };
+		delete newSettings.colorSchemeOverridden;
+		return {
+			...t,
+			colorScheme: newScheme,
+			settings: newSettings,
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 // ============ Itinerary Generation ============
 
 function regenerateItinerary(trip: Trip): Trip {
@@ -760,6 +871,50 @@ function getCityIdsForDate(trip: Trip, date: string): string[] {
 	}
 
 	return citiesFromRange;
+}
+
+// ============ Trip Settings ============
+
+function updateTripSettings(tripId: string, settings: Partial<TripSettings>): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			settings: { ...t.settings, ...settings },
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function setTripSettingOverride<K extends keyof TripSettings>(
+	tripId: string,
+	key: K,
+	value: NonNullable<TripSettings[K]> extends { value: infer T } ? T : TripSettings[K]
+): void {
+	// For boolean flags like colorModeOverridden, set directly
+	if (key === 'colorModeOverridden') {
+		updateTripSettings(tripId, { [key]: value } as Partial<TripSettings>);
+	} else {
+		// For MaybeOverridden fields, wrap in createOverride
+		updateTripSettings(tripId, {
+			[key]: createOverride(value)
+		} as Partial<TripSettings>);
+	}
+}
+
+function clearTripSettingOverride(tripId: string, key: keyof TripSettings): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		const newSettings = { ...t.settings };
+		delete newSettings[key];
+		return {
+			...t,
+			settings: newSettings,
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
 }
 
 // ============ Export Store ============
@@ -830,5 +985,14 @@ export const tripStore = {
 
 	// Color Scheme
 	updateColorScheme,
-	toggleColorMode
+	toggleColorMode,
+	setTripColorMode,
+	clearTripColorMode,
+	setTripColorScheme,
+	clearTripColorScheme,
+
+	// Trip Settings
+	updateTripSettings,
+	setTripSettingOverride,
+	clearTripSettingOverride
 };

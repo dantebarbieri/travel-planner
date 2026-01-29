@@ -4,6 +4,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		activity: Activity;
@@ -12,6 +13,9 @@
 	}
 
 	let { activity, isEditing = false, onclick }: Props = $props();
+
+	// Get resolved map app from settings
+	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
 	const categoryLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -46,7 +50,7 @@
 	});
 
 	function openInMaps() {
-		window.open(getMapsUrl(activity.location), '_blank');
+		window.open(getMapsUrl(activity.location, mapApp), '_blank');
 	}
 
 	function openWebsite() {
