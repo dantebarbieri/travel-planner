@@ -6,7 +6,9 @@ import type { WeatherConditionType } from '$lib/types/travel';
  *
  * WMO Codes:
  * 0: Clear sky
- * 1, 2, 3: Mainly clear, partly cloudy, overcast
+ * 1: Mainly clear
+ * 2: Partly cloudy
+ * 3: Overcast
  * 45, 48: Fog and depositing rime fog
  * 51, 53, 55: Drizzle (light, moderate, dense)
  * 56, 57: Freezing drizzle
@@ -20,17 +22,20 @@ import type { WeatherConditionType } from '$lib/types/travel';
  * 96, 99: Thunderstorm with hail
  */
 export function mapWmoCodeToCondition(code: number): WeatherConditionType {
-	if (code === 0) return 'sunny';
-	if (code >= 1 && code <= 3) return 'partly_cloudy';
+	if (code === 0) return 'clear';
+	if (code === 1) return 'mostly_clear';
+	if (code === 2) return 'partly_cloudy';
+	if (code === 3) return 'overcast';
 	if (code >= 45 && code <= 48) return 'fog';
-	if (code >= 51 && code <= 67) return 'rain';
+	if (code >= 51 && code <= 57) return 'drizzle';
+	if (code >= 61 && code <= 67) return 'rain';
 	if (code >= 71 && code <= 77) return 'snow';
 	if (code >= 80 && code <= 82) return 'rain';
 	if (code >= 85 && code <= 86) return 'snow';
 	if (code >= 95 && code <= 99) return 'storm';
 
-	// Default to cloudy for any unknown codes
-	return 'cloudy';
+	// Default to overcast for any unknown codes
+	return 'overcast';
 }
 
 /**
@@ -39,13 +44,15 @@ export function mapWmoCodeToCondition(code: number): WeatherConditionType {
  */
 export function conditionToSeverity(condition: WeatherConditionType): number {
 	const severityMap: Record<WeatherConditionType, number> = {
-		sunny: 0,
-		partly_cloudy: 1,
-		cloudy: 2,
-		fog: 3,
-		rain: 4,
-		snow: 5,
-		storm: 6
+		clear: 0,
+		mostly_clear: 1,
+		partly_cloudy: 2,
+		overcast: 3,
+		fog: 4,
+		drizzle: 5,
+		rain: 6,
+		snow: 7,
+		storm: 8
 	};
 	return severityMap[condition];
 }
@@ -55,10 +62,12 @@ export function conditionToSeverity(condition: WeatherConditionType): number {
  */
 export function severityToCondition(severity: number): WeatherConditionType {
 	const conditions: WeatherConditionType[] = [
-		'sunny',
+		'clear',
+		'mostly_clear',
 		'partly_cloudy',
-		'cloudy',
+		'overcast',
 		'fog',
+		'drizzle',
 		'rain',
 		'snow',
 		'storm'
