@@ -4,9 +4,18 @@ import { openMeteoAdapter } from './openMeteoAdapter';
 import { weatherCache } from './cacheAdapter';
 import { predictionService } from './predictionService';
 
-// Run cache cleanup on module load (browser only)
+// Run cache cleanup on module load (browser only) and periodically during session
 if (typeof window !== 'undefined') {
+	// Initial cleanup on load
 	weatherCache.cleanup();
+
+	// Periodic cleanup to remove entries that expire during the session.
+	// This is safe even with multiple tabs since each tab independently
+	// maintains the same cache; redundant cleanups are acceptable.
+	const CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+	setInterval(() => {
+		weatherCache.cleanup();
+	}, CACHE_CLEANUP_INTERVAL_MS);
 }
 
 /**
@@ -20,9 +29,29 @@ if (typeof window !== 'undefined') {
  * similar limitations.
  */
 function classifyDate(date: string): DateCategory {
+	// Validate date format (YYYY-MM-DD)
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+		console.warn(`Invalid date format: ${date}. Expected YYYY-MM-DD format.`);
+		// Return 'future' as safe fallback for invalid dates
+		return 'future';
+	}
+
 	const [year, month, day] = date.split('-').map(Number);
+	
+	// Validate date components are in valid ranges
+	if (month < 1 || month > 12 || day < 1 || day > 31) {
+		console.warn(`Invalid date components: ${date}`);
+		return 'future';
+	}
+
 	const targetDate = new Date(year, month - 1, day);
 	targetDate.setHours(0, 0, 0, 0);
+	
+	// Check if date is valid (e.g., not Feb 30)
+	if (targetDate.getFullYear() !== year || targetDate.getMonth() !== month - 1 || targetDate.getDate() !== day) {
+		console.warn(`Invalid date: ${date} (does not exist in calendar)`);
+		return 'future';
+	}
 
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);

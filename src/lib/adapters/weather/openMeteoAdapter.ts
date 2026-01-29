@@ -1,17 +1,20 @@
 import type { Location, WeatherCondition } from '$lib/types/travel';
 import type { OpenMeteoForecastResponse, OpenMeteoHistoricalResponse } from './types';
 import { mapWmoCodeToCondition } from './weatherCodeMap';
+import { CACHE_CONFIG } from './types';
 
 const FORECAST_API_URL = 'https://api.open-meteo.com/v1/forecast';
 const HISTORICAL_API_URL = 'https://archive-api.open-meteo.com/v1/archive';
 
 /**
- * Simple rate limiter to prevent API abuse.
- * Tracks request timestamps and enforces a minimum delay between requests.
+ * Queue-based rate limiter to prevent API abuse.
+ * Ensures requests are serialized and properly spaced even under concurrent load.
  */
 class RateLimiter {
 	private lastRequestTime = 0;
 	private readonly minDelayMs: number;
+	private requestQueue: Array<() => void> = [];
+	private isProcessing = false;
 
 	constructor(minDelayMs = 100) {
 		if (minDelayMs <= 0) {
@@ -21,15 +24,36 @@ class RateLimiter {
 	}
 
 	async waitForSlot(): Promise<void> {
-		const now = Date.now();
-		const timeSinceLastRequest = now - this.lastRequestTime;
+		return new Promise((resolve) => {
+			this.requestQueue.push(resolve);
+			this.processQueue();
+		});
+	}
 
-		if (timeSinceLastRequest < this.minDelayMs) {
-			const delay = this.minDelayMs - timeSinceLastRequest;
-			await new Promise((resolve) => setTimeout(resolve, delay));
+	private async processQueue(): Promise<void> {
+		if (this.isProcessing || this.requestQueue.length === 0) {
+			return;
 		}
 
-		this.lastRequestTime = Date.now();
+		this.isProcessing = true;
+
+		while (this.requestQueue.length > 0) {
+			const now = Date.now();
+			const timeSinceLastRequest = now - this.lastRequestTime;
+
+			if (timeSinceLastRequest < this.minDelayMs) {
+				const delay = this.minDelayMs - timeSinceLastRequest;
+				await new Promise((resolve) => setTimeout(resolve, delay));
+			}
+
+			this.lastRequestTime = Date.now();
+			const resolve = this.requestQueue.shift();
+			if (resolve) {
+				resolve();
+			}
+		}
+
+		this.isProcessing = false;
 	}
 }
 
@@ -78,19 +102,16 @@ function transformForecastResponse(
 	const conditions: WeatherCondition[] = [];
 
 	for (let i = 0; i < daily.time.length; i++) {
-		// Skip entries with null or undefined temperature data
-		if (
-			daily.temperature_2m_max[i] === null ||
-			daily.temperature_2m_max[i] === undefined ||
-			daily.temperature_2m_min[i] === null ||
-			daily.temperature_2m_min[i] === undefined ||
-			!Number.isFinite(daily.temperature_2m_max[i]) ||
-			!Number.isFinite(daily.temperature_2m_min[i])
-		) {
+		// Skip entries with invalid temperature data
+		if (!Number.isFinite(daily.temperature_2m_max[i]) || !Number.isFinite(daily.temperature_2m_min[i])) {
 			continue;
 		}
 		// Skip entries where both temps are exactly 0°F (likely null data placeholder)
 		if (daily.temperature_2m_max[i] === 0 && daily.temperature_2m_min[i] === 0) {
+			continue;
+		}
+		// Skip entries with invalid weathercode
+		if (!Number.isFinite(daily.weathercode[i])) {
 			continue;
 		}
 
@@ -126,6 +147,19 @@ function transformHistoricalResponse(
 	const conditions: WeatherCondition[] = [];
 
 	for (let i = 0; i < daily.time.length; i++) {
+		// Skip entries with invalid temperature data
+		if (!Number.isFinite(daily.temperature_2m_max[i]) || !Number.isFinite(daily.temperature_2m_min[i])) {
+			continue;
+		}
+		// Skip entries where both temps are exactly 0°F (likely null data placeholder)
+		if (daily.temperature_2m_max[i] === 0 && daily.temperature_2m_min[i] === 0) {
+			continue;
+		}
+		// Skip entries with invalid weathercode
+		if (!Number.isFinite(daily.weathercode[i])) {
+			continue;
+		}
+
 		// Convert precipitation_sum (mm) to approximate percentage
 		// Use thresholds: 0-1mm=10%, 1-5mm=30%, 5-10mm=50%, 10-20mm=70%, 20+mm=90%
 		const precipMm = daily.precipitation_sum[i];
@@ -184,7 +218,7 @@ export async function fetchForecast(location: Location): Promise<WeatherConditio
 			'sunset'
 		].join(','),
 		timezone: 'auto',
-		forecast_days: '16',
+		forecast_days: CACHE_CONFIG.FORECAST_MAX_DAYS.toString(),
 		temperature_unit: 'fahrenheit'
 	});
 

@@ -52,7 +52,7 @@
 	// Conditions that show precipitation regardless of threshold
 	const precipConditions = ['drizzle', 'rain', 'snow', 'storm'];
 	const showPrecip = $derived(
-		weather.precipitation &&
+		weather.precipitation != null &&
 			(weather.precipitation > 20 || precipConditions.includes(weather.condition))
 	);
 </script>

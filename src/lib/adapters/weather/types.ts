@@ -20,6 +20,18 @@ export const CACHE_CONFIG = {
 	CACHE_PREFIX: 'weather'
 } as const;
 
+// Validate blend weights at module load
+if (
+	CACHE_CONFIG.HISTORICAL_WEIGHT < 0 ||
+	CACHE_CONFIG.HISTORICAL_WEIGHT > 1 ||
+	CACHE_CONFIG.FORECAST_WEIGHT < 0 ||
+	CACHE_CONFIG.FORECAST_WEIGHT > 1
+) {
+	console.error(
+		`Invalid blend weights in CACHE_CONFIG: HISTORICAL_WEIGHT=${CACHE_CONFIG.HISTORICAL_WEIGHT}, FORECAST_WEIGHT=${CACHE_CONFIG.FORECAST_WEIGHT}. Weights must be between 0 and 1.`
+	);
+}
+
 export type CacheType = 'forecast' | 'historical' | 'prediction';
 
 export interface CacheEntry {
