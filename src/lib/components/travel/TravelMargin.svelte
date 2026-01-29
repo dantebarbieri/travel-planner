@@ -148,10 +148,10 @@
 				<span class="distance">Loading...</span>
 			{:else}
 				<span class="duration">
-					{formatDuration(routeData.duration)}
 					{#if routeData.isEstimate}
 						<span class="estimate-indicator" title="Estimated (API unavailable)">~</span>
 					{/if}
+					{formatDuration(routeData.duration)}
 				</span>
 				<span class="distance">{formatDistance(routeData.distance, distanceUnit)}</span>
 			{/if}

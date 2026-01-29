@@ -53,9 +53,7 @@ export function hexToOklch(hex: string): string {
 			if (oklchColor) {
 				const l = oklchColor.l?.toFixed(2) ?? '0.5';
 				const c = oklchColor.c?.toFixed(2) ?? '0.15';
-				// For achromatic colors (grays), hue is undefined
-				// In oklch, we explicitly use 0 for achromatic colors
-				const h = oklchColor.h !== undefined ? oklchColor.h.toFixed(0) : '0';
+				const h = oklchColor.h?.toFixed(0) ?? '0';
 				return `oklch(${l} ${c} ${h})`;
 			}
 		}
