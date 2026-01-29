@@ -229,7 +229,7 @@
 		border-width: 2px;
 	}
 
-	/* Past day - dimmed */
+	
 	.itinerary-day.is-past {
 		opacity: 0.6;
 	}

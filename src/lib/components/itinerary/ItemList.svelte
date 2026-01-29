@@ -292,8 +292,8 @@
 		{@const isDragging = draggedIndex === index}
 		{@const isDragOver = dragOverIndex === index}
 		{@const isSameLocation = prevLocation && currentLocation && 
-			prevLocation.geo.latitude === currentLocation.geo.latitude && 
-			prevLocation.geo.longitude === currentLocation.geo.longitude}
+			Math.abs(prevLocation.geo.latitude - currentLocation.geo.latitude) < 0.0001 && 
+			Math.abs(prevLocation.geo.longitude - currentLocation.geo.longitude) < 0.0001}
 
 		{#if index > 0 && prevLocation && currentLocation && !isSameLocation}
 			<TravelMargin

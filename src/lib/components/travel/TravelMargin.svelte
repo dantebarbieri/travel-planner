@@ -75,29 +75,17 @@
 			});
 	});
 
-	// Preload other mode routes when selector is shown
-	$effect(() => {
-		if (showSelector) {
-			// Preload routes for all modes in background
-			for (const mode of modes) {
-				if (mode !== selectedMode) {
-					getRoute(fromLocation, toLocation, mode);
-				}
-			}
-		}
-	});
-
 	// Cached routes for mode selector display
 	let modeRoutes = $state<Map<TravelMode, TravelEstimate>>(new Map());
 	let modeRoutesLoading = $state(true);
 
-	// Load mode routes when selector is shown
+	// Load mode routes when selector is shown (consolidates preloading and display)
 	$effect(() => {
 		if (showSelector) {
 			modeRoutesLoading = true;
 			modeRoutes = new Map();
 
-			// Load all routes in parallel
+			// Load all routes in parallel (this both caches and populates modeRoutes)
 			Promise.all(
 				modes.map(async (mode) => {
 					const route = await getRoute(fromLocation, toLocation, mode);
@@ -160,10 +148,10 @@
 				<span class="distance">Loading...</span>
 			{:else}
 				<span class="duration">
-					{formatDuration(routeData.duration)}
 					{#if routeData.isEstimate}
 						<span class="estimate-indicator" title="Estimated (API unavailable)">~</span>
 					{/if}
+					{formatDuration(routeData.duration)}
 				</span>
 				<span class="distance">{formatDistance(routeData.distance, distanceUnit)}</span>
 			{/if}

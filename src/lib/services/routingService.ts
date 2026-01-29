@@ -111,7 +111,20 @@ async function fetchOSRMRoute(
 	}
 
 	const coordinates = `${from.geo.longitude},${from.geo.latitude};${to.geo.longitude},${to.geo.latitude}`;
-	const url = `${serverUrl}/route/v1/driving/${coordinates}?overview=false`;
+	// OSRM API format: {serverUrl}/route/v1/{profile}/{coordinates}
+	// The routing.openstreetmap.de servers use dedicated server URLs (routed-car, routed-foot, routed-bike)
+	// but still require the profile in the path. The profile names for these servers are:
+	// - car for routed-car
+	// - foot for routed-foot  
+	// - bike for routed-bike
+	const profileMap: Record<TravelMode, string> = {
+		driving: 'car',
+		walking: 'foot',
+		bicycling: 'bike',
+		transit: '' // Not used
+	};
+	const profile = profileMap[mode];
+	const url = `${serverUrl}/route/v1/${profile}/${coordinates}?overview=false`;
 
 	const response = await fetch(url, {
 		headers: {

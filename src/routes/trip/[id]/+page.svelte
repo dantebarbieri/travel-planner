@@ -621,13 +621,16 @@
 	// Compute stay segments for by-stay coloring (using resolved scheme)
 	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments({ ...trip, colorScheme: resolvedColorScheme }) : []);
 
+	// Resolve trip settings (includes trip-specific overrides)
+	const resolvedSettings = $derived(trip ? settingsStore.resolveSettingsForTrip(trip) : null);
+
 	// Compute per-day unit resolutions based on each day's country
 	const dayUnitResolutions = $derived<Map<string, DayUnitResolution>>(
-		trip
+		trip && resolvedSettings
 			? resolveAllDayUnits(
 					trip,
-					settingsStore.userSettings.temperatureUnit,
-					settingsStore.userSettings.distanceUnit
+					resolvedSettings.temperatureUnit,
+					resolvedSettings.distanceUnit
 				)
 			: new Map()
 	);
