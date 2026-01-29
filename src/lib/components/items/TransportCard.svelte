@@ -140,37 +140,79 @@
 	</div>
 
 	<div class="card-content">
-		<div class="route">
-			<div class="route-point">
-				<span class="route-name">{leg.origin.name}</span>
-				{#if leg.departureTime}
-					<span class="route-time">
-						{formatTime(leg.departureTime)}
-						{#if departureTzAbbr}
-							<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
+		{#if isDeparture || isArrival}
+			<!-- Focused view: emphasize the relevant airport -->
+			<div class="focused-route">
+				{#if isDeparture}
+					<div class="primary-point">
+						<span class="primary-label">From</span>
+						<span class="primary-name">{leg.origin.name}</span>
+						{#if leg.departureTime}
+							<span class="primary-time">
+								{formatTime(leg.departureTime)}
+								{#if departureTzAbbr}
+									<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
+								{/if}
+							</span>
 						{/if}
-					</span>
+					</div>
+					<div class="secondary-point">
+						<span class="secondary-label">To</span>
+						<span class="secondary-name">{leg.destination.name}</span>
+					</div>
+				{:else}
+					<div class="primary-point">
+						<span class="primary-label">To</span>
+						<span class="primary-name">{leg.destination.name}</span>
+						{#if leg.arrivalTime}
+							<span class="primary-time">
+								{formatTime(leg.arrivalTime)}
+								{#if arrivalTzAbbr}
+									<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
+								{/if}
+							</span>
+						{/if}
+					</div>
+					<div class="secondary-point">
+						<span class="secondary-label">From</span>
+						<span class="secondary-name">{leg.origin.name}</span>
+					</div>
 				{/if}
 			</div>
-			<div class="route-line">
-				<span class="route-duration">
-					{#if realDuration}
-						{formatDuration(realDuration)}
+		{:else}
+			<!-- Full route view (non-flight or unknown state) -->
+			<div class="route">
+				<div class="route-point">
+					<span class="route-name">{leg.origin.name}</span>
+					{#if leg.departureTime}
+						<span class="route-time">
+							{formatTime(leg.departureTime)}
+							{#if departureTzAbbr}
+								<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
+							{/if}
+						</span>
 					{/if}
-				</span>
-			</div>
-			<div class="route-point">
-				<span class="route-name">{leg.destination.name}</span>
-				{#if leg.arrivalTime}
-					<span class="route-time">
-						{formatTime(leg.arrivalTime)}
-						{#if arrivalTzAbbr}
-							<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
+				</div>
+				<div class="route-line">
+					<span class="route-duration">
+						{#if realDuration}
+							{formatDuration(realDuration)}
 						{/if}
 					</span>
-				{/if}
+				</div>
+				<div class="route-point">
+					<span class="route-name">{leg.destination.name}</span>
+					{#if leg.arrivalTime}
+						<span class="route-time">
+							{formatTime(leg.arrivalTime)}
+							{#if arrivalTzAbbr}
+								<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
+							{/if}
+						</span>
+					{/if}
+				</div>
 			</div>
-		</div>
+		{/if}
 
 		<div class="card-details">
 			<div class="meta-row">
@@ -193,7 +235,14 @@
 					{#if leg.gate}
 						<span>Gate {leg.gate}</span>
 					{/if}
-					{#if leg.seatInfo}
+					{#if leg.seats && leg.seats.length > 0}
+						<span class="seats-info">
+							{#each leg.seats as seat, i}
+								{#if i > 0}, {/if}
+								{seat.row}{seat.seat}{#if seat.position} ({seat.position}){/if}{#if seat.passenger} - {seat.passenger}{/if}
+							{/each}
+						</span>
+					{:else if leg.seatInfo}
 						<span>Seat {leg.seatInfo}</span>
 					{/if}
 				</div>
@@ -202,6 +251,12 @@
 			{#if leg.bookingReference}
 				<div class="booking-ref">
 					Confirmation: <strong>{leg.bookingReference}</strong>
+				</div>
+			{/if}
+
+			{#if leg.notes}
+				<div class="notes">
+					{leg.notes}
 				</div>
 			{/if}
 
@@ -373,6 +428,19 @@
 		color: var(--text-secondary);
 	}
 
+	.notes {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		font-style: italic;
+		padding: var(--space-2);
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
+	}
+
+	.seats-info {
+		font-weight: 500;
+	}
+
 	.directions-link {
 		display: inline-block;
 		background: none;
@@ -386,5 +454,62 @@
 		&:hover {
 			color: var(--color-primary-dark);
 		}
+	}
+
+	/* Focused route view (departure/arrival) */
+	.focused-route {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.primary-point {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.primary-label {
+		font-size: 0.625rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-tertiary);
+	}
+
+	.primary-name {
+		font-weight: 600;
+		font-size: 1rem;
+		color: var(--text-primary);
+	}
+
+	.primary-time {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-primary);
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.secondary-point {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding-top: var(--space-1);
+		border-top: 1px dashed var(--border-color);
+	}
+
+	.secondary-label {
+		font-size: 0.625rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-tertiary);
+	}
+
+	.secondary-name {
+		font-size: 0.8125rem;
+		color: var(--text-secondary);
 	}
 </style>

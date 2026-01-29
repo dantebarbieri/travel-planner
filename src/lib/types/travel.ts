@@ -206,6 +206,15 @@ export type TransportMode =
 
 export type TravelMode = 'driving' | 'walking' | 'transit' | 'bicycling';
 
+export type SeatPosition = 'window' | 'middle' | 'aisle';
+
+export interface PassengerSeat {
+	row: string;
+	seat: string;
+	position?: SeatPosition;
+	passenger?: string;
+}
+
 export interface TransportLeg {
 	id: TransportLegId;
 	mode: TransportMode;
@@ -224,6 +233,7 @@ export interface TransportLeg {
 	price?: number;
 	currency?: string;
 	seatInfo?: string;
+	seats?: PassengerSeat[];
 	terminal?: string;
 	gate?: string;
 	notes?: string;

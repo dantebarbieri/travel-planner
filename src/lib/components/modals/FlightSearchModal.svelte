@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TransportLeg, Airline, FlightSearchResult, Location } from '$lib/types/travel';
+	import type { TransportLeg, Airline, FlightSearchResult, Location, PassengerSeat, SeatPosition } from '$lib/types/travel';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -49,6 +49,34 @@
 	let editedDestinationSearch = $state('');
 	let selectedEditedOrigin = $state<AirportSearchResult | null>(null);
 	let selectedEditedDestination = $state<AirportSearchResult | null>(null);
+
+	// Additional flight details
+	let confirmationNumber = $state('');
+	let notes = $state('');
+	// Seat info - support multiple passengers
+	let seats = $state<{ row: string; seat: string; position: SeatPosition | ''; passenger: string }[]>([
+		{ row: '', seat: '', position: '', passenger: '' }
+	]);
+
+	function addSeat() {
+		seats = [...seats, { row: '', seat: '', position: '', passenger: '' }];
+	}
+
+	function removeSeat(index: number) {
+		seats = seats.filter((_, i) => i !== index);
+	}
+
+	// Convert seats state to PassengerSeat[] for the leg
+	function getSeatsForLeg(): PassengerSeat[] | undefined {
+		const validSeats = seats.filter(s => s.row.trim() || s.seat.trim());
+		if (validSeats.length === 0) return undefined;
+		return validSeats.map(s => ({
+			row: s.row.trim(),
+			seat: s.seat.trim(),
+			position: s.position || undefined,
+			passenger: s.passenger.trim() || undefined
+		}));
+	}
 
 	async function searchAirlines(query: string): Promise<Airline[]> {
 		return flightAdapter.searchAirlines(query);
@@ -122,6 +150,7 @@
 	function addFlight() {
 		const airlineCode = selectedAirline?.code || '';
 		const airlineName = selectedAirline?.name || airlineSearchValue;
+		const flightSeats = getSeatsForLeg();
 
 		if (searchResult && !isEditingRoute) {
 			// Use search result data with user-provided times if needed
@@ -138,7 +167,10 @@
 				arrivalTime: searchResult.arrivalTime || foundRouteArrivalTime || undefined,
 				duration: searchResult.duration,
 				price: searchResult.price,
-				currency: searchResult.currency
+				currency: searchResult.currency,
+				bookingReference: confirmationNumber.trim() || undefined,
+				seats: flightSeats,
+				notes: notes.trim() || undefined
 			};
 			onAddFlight(leg);
 		} else if (showCustomForm) {
@@ -159,7 +191,10 @@
 				departureDate: departureDate,
 				departureTime: customDepartureTime || undefined,
 				arrivalDate: customArrivalDate || departureDate,
-				arrivalTime: customArrivalTime || undefined
+				arrivalTime: customArrivalTime || undefined,
+				bookingReference: confirmationNumber.trim() || undefined,
+				seats: flightSeats,
+				notes: notes.trim() || undefined
 			};
 			onAddFlight(leg);
 		}
@@ -191,6 +226,9 @@
 			editedDestinationSearch = '';
 			selectedEditedOrigin = null;
 			selectedEditedDestination = null;
+			confirmationNumber = '';
+			notes = '';
+			seats = [{ row: '', seat: '', position: '', passenger: '' }];
 		} else {
 			departureDate = defaultDate;
 		}
@@ -417,6 +455,79 @@
 						<label class="label" for="custom-arrival-date">Arrival Date</label>
 						<input type="date" id="custom-arrival-date" class="input" bind:value={customArrivalDate} min={departureDate} />
 					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Additional flight details (shown when adding) -->
+		{#if searchResult || showCustomForm}
+			<div class="additional-details">
+				<div class="section-header">
+					<Icon name="info" size={14} />
+					<span>Additional Details (Optional)</span>
+				</div>
+				
+				<Input 
+					label="Confirmation Number" 
+					placeholder="e.g., ABC123" 
+					bind:value={confirmationNumber} 
+				/>
+
+				<div class="seats-section">
+					<span class="label">Seat Assignments</span>
+					{#each seats as seat, i}
+						<div class="seat-row">
+							<input 
+								type="text" 
+								class="input seat-input" 
+								placeholder="Row" 
+								bind:value={seat.row}
+								maxlength="3"
+								aria-label="Seat row"
+							/>
+							<input 
+								type="text" 
+								class="input seat-input" 
+								placeholder="Seat" 
+								bind:value={seat.seat}
+								maxlength="2"
+								aria-label="Seat letter"
+							/>
+							<select class="input position-select" bind:value={seat.position} aria-label="Seat position">
+								<option value="">Position</option>
+								<option value="window">Window</option>
+								<option value="middle">Middle</option>
+								<option value="aisle">Aisle</option>
+							</select>
+							<input 
+								type="text" 
+								class="input passenger-input" 
+								placeholder="Passenger name" 
+								bind:value={seat.passenger}
+								aria-label="Passenger name"
+							/>
+							{#if seats.length > 1}
+								<button type="button" class="remove-seat-btn" onclick={() => removeSeat(i)} title="Remove seat">
+									<Icon name="delete" size={14} />
+								</button>
+							{/if}
+						</div>
+					{/each}
+					<button type="button" class="add-seat-btn" onclick={addSeat}>
+						<Icon name="add" size={14} />
+						Add another seat
+					</button>
+				</div>
+
+				<div class="notes-field">
+					<label class="label" for="flight-notes">Notes</label>
+					<textarea 
+						id="flight-notes" 
+						class="input textarea" 
+						placeholder="Any additional notes about this flight..."
+						bind:value={notes}
+						rows="2"
+					></textarea>
 				</div>
 			</div>
 		{/if}
@@ -667,6 +778,99 @@
 
 	.airport-field {
 		min-width: 200px;
+	}
+
+	.additional-details {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-md);
+	}
+
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-secondary);
+	}
+
+	.seats-section {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.seat-row {
+		display: flex;
+		gap: var(--space-2);
+		align-items: center;
+	}
+
+	.seat-input {
+		width: 60px;
+		text-align: center;
+	}
+
+	.position-select {
+		width: 100px;
+	}
+
+	.passenger-input {
+		flex: 1;
+		min-width: 120px;
+	}
+
+	.remove-seat-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		background: none;
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-sm);
+		color: var(--color-danger);
+		cursor: pointer;
+		
+		&:hover {
+			background: color-mix(in oklch, var(--color-danger), transparent 90%);
+		}
+	}
+
+	.add-seat-btn {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		background: none;
+		border: 1px dashed var(--border-color);
+		border-radius: var(--radius-sm);
+		padding: var(--space-2);
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+		
+		&:hover {
+			background: var(--surface-primary);
+			border-color: var(--color-primary);
+			color: var(--color-primary);
+		}
+	}
+
+	.notes-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.textarea {
+		resize: vertical;
+		min-height: 60px;
+		font-family: inherit;
 	}
 
 	.form-actions {
