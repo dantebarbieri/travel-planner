@@ -229,17 +229,9 @@
 		border-width: 2px;
 	}
 
-	/* Past day - visually de-emphasized by reducing background opacity, not text */
-	.itinerary-day.is-past {
-		/* Reduce background and border opacity while keeping text readable */
-		background: color-mix(in oklch, var(--surface-primary), transparent 40%);
-		border-color: color-mix(in oklch, var(--border-color), transparent 40%);
-	}
 	
-	.itinerary-day.is-past.has-day-color {
-		/* For days with custom background colors, also reduce their opacity */
-		background: color-mix(in oklch, color-mix(in oklch, var(--day-bg-color), var(--surface-primary) 85%), transparent 40%);
-		border-color: color-mix(in oklch, color-mix(in oklch, var(--day-bg-color), var(--border-color) 70%), transparent 40%);
+	.itinerary-day.is-past {
+		opacity: 0.6;
 	}
 
 	/* Today indicator - accent bar at top */
