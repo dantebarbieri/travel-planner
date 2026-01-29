@@ -23,7 +23,7 @@ import type { WeatherConditionType } from '$lib/types/travel';
  */
 export function mapWmoCodeToCondition(code: number): WeatherConditionType {
 	// Validate input
-	if (code === null || code === undefined || !Number.isFinite(code)) {
+	if (!Number.isFinite(code)) {
 		console.warn(`Invalid WMO weather code: ${code}. Defaulting to 'overcast'.`);
 		return 'overcast';
 	}

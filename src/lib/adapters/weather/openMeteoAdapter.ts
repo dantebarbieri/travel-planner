@@ -102,27 +102,16 @@ function transformForecastResponse(
 	const conditions: WeatherCondition[] = [];
 
 	for (let i = 0; i < daily.time.length; i++) {
-		// Skip entries with null or undefined temperature data
-		if (
-			daily.temperature_2m_max[i] === null ||
-			daily.temperature_2m_max[i] === undefined ||
-			daily.temperature_2m_min[i] === null ||
-			daily.temperature_2m_min[i] === undefined ||
-			!Number.isFinite(daily.temperature_2m_max[i]) ||
-			!Number.isFinite(daily.temperature_2m_min[i])
-		) {
+		// Skip entries with invalid temperature data
+		if (!Number.isFinite(daily.temperature_2m_max[i]) || !Number.isFinite(daily.temperature_2m_min[i])) {
 			continue;
 		}
 		// Skip entries where both temps are exactly 0°F (likely null data placeholder)
 		if (daily.temperature_2m_max[i] === 0 && daily.temperature_2m_min[i] === 0) {
 			continue;
 		}
-		// Skip entries with invalid or missing weathercode
-		if (
-			daily.weathercode[i] === null ||
-			daily.weathercode[i] === undefined ||
-			!Number.isFinite(daily.weathercode[i])
-		) {
+		// Skip entries with invalid weathercode
+		if (!Number.isFinite(daily.weathercode[i])) {
 			continue;
 		}
 
@@ -158,27 +147,16 @@ function transformHistoricalResponse(
 	const conditions: WeatherCondition[] = [];
 
 	for (let i = 0; i < daily.time.length; i++) {
-		// Skip entries with null or undefined temperature data
-		if (
-			daily.temperature_2m_max[i] === null ||
-			daily.temperature_2m_max[i] === undefined ||
-			daily.temperature_2m_min[i] === null ||
-			daily.temperature_2m_min[i] === undefined ||
-			!Number.isFinite(daily.temperature_2m_max[i]) ||
-			!Number.isFinite(daily.temperature_2m_min[i])
-		) {
+		// Skip entries with invalid temperature data
+		if (!Number.isFinite(daily.temperature_2m_max[i]) || !Number.isFinite(daily.temperature_2m_min[i])) {
 			continue;
 		}
 		// Skip entries where both temps are exactly 0°F (likely null data placeholder)
 		if (daily.temperature_2m_max[i] === 0 && daily.temperature_2m_min[i] === 0) {
 			continue;
 		}
-		// Skip entries with invalid or missing weathercode
-		if (
-			daily.weathercode[i] === null ||
-			daily.weathercode[i] === undefined ||
-			!Number.isFinite(daily.weathercode[i])
-		) {
+		// Skip entries with invalid weathercode
+		if (!Number.isFinite(daily.weathercode[i])) {
 			continue;
 		}
 

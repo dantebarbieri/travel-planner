@@ -38,8 +38,8 @@ function classifyDate(date: string): DateCategory {
 
 	const [year, month, day] = date.split('-').map(Number);
 	
-	// Additional validation for date components
-	if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
+	// Validate date components are in valid ranges
+	if (month < 1 || month > 12 || day < 1 || day > 31) {
 		console.warn(`Invalid date components: ${date}`);
 		return 'future';
 	}
