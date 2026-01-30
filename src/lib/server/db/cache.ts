@@ -34,6 +34,7 @@ interface CacheEntry {
 }
 
 let db: Database.Database | null = null;
+let dbInitialized = false;
 
 /**
  * Check if we're in build mode (no-op for cache operations).
@@ -46,6 +47,11 @@ function isBuildTime(): boolean {
  * Initialize the database connection and create tables if needed.
  * Safe to call multiple times - will reuse existing connection.
  * Returns null during build time to enable no-op pattern.
+ * 
+ * NOTE: This function runs synchronously at first request after server start.
+ * The directory creation is sync but only runs once. For production deployments,
+ * ensure the data directory exists at container/server startup time to avoid
+ * any brief stall on first request. The Dockerfile handles this automatically.
  */
 function getDb(): Database.Database | null {
 	if (db) return db;
@@ -57,11 +63,13 @@ function getDb(): Database.Database | null {
 
 	const dbPath = env.DATABASE_PATH || './data/cache.db';
 	
-	// Ensure directory exists
+	// Ensure directory exists (sync, but only runs once at startup)
+	// For production: pre-create this directory at container/deploy time
 	const dir = path.dirname(dbPath);
-	if (!fs.existsSync(dir)) {
+	if (!dbInitialized && !fs.existsSync(dir)) {
 		fs.mkdirSync(dir, { recursive: true });
 	}
+	dbInitialized = true;
 
 	db = new Database(dbPath);
 	
