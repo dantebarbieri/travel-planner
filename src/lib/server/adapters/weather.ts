@@ -155,6 +155,25 @@ interface OpenMeteoHistoricalResponse {
 type DateCategory = 'past' | 'forecast' | 'future';
 
 /**
+ * Validate a timezone string defensively.
+ * Returns the timezone if valid, undefined otherwise.
+ */
+function validateTimezone(timezone: string | undefined): string | undefined {
+	if (!timezone || typeof timezone !== 'string') {
+		return undefined;
+	}
+	
+	try {
+		// Test if the timezone is valid by attempting to use it
+		Intl.DateTimeFormat('en-CA', { timeZone: timezone });
+		return timezone;
+	} catch {
+		console.warn(`[Weather] Invalid timezone '${timezone}' rejected during validation`);
+		return undefined;
+	}
+}
+
+/**
  * Get today's date in a specific timezone.
  * @param timezone - IANA timezone name (e.g., 'Australia/Sydney', 'America/New_York')
  * @returns Date string in YYYY-MM-DD format
@@ -162,30 +181,25 @@ type DateCategory = 'past' | 'forecast' | 'future';
 function getTodayInTimezone(timezone?: string): string {
 	const now = new Date();
 	
-	if (!timezone) {
-		// No timezone provided - use UTC as a safe default
+	// Validate timezone defensively - don't trust that upstream validation was performed
+	const validatedTimezone = validateTimezone(timezone);
+	
+	if (!validatedTimezone) {
+		// No valid timezone provided - use UTC as a safe default
 		// UTC is preferred over server local time because:
 		// 1. Server location is arbitrary and may be far from user's destination
 		// 2. UTC is predictable and timezone-neutral
 		return now.toISOString().split('T')[0];
 	}
 	
-	try {
-		// Format date in the target timezone
-		const formatter = new Intl.DateTimeFormat('en-CA', {
-			timeZone: timezone,
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit'
-		});
-		return formatter.format(now); // Returns YYYY-MM-DD in en-CA locale
-	} catch {
-		// Invalid timezone - use UTC as a safe fallback
-		// This should rarely happen if the API validates timezones,
-		// but UTC is safer than server local time for edge cases
-		console.warn(`[Weather] Invalid timezone '${timezone}', falling back to UTC. This may cause incorrect date classification.`);
-		return now.toISOString().split('T')[0];
-	}
+	// Format date in the target timezone (already validated above)
+	const formatter = new Intl.DateTimeFormat('en-CA', {
+		timeZone: validatedTimezone,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	});
+	return formatter.format(now); // Returns YYYY-MM-DD in en-CA locale
 }
 
 /**
