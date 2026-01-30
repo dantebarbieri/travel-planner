@@ -19,7 +19,7 @@ A travel itinerary planning application built with **SvelteKit 5** and **Svelte 
 - **Styling**: Modern CSS (container queries, oklch colors, nesting)
 - **Server**: Node.js with adapter-node
 - **Caching**: SQLite (server) + in-memory (client)
-- **APIs**: Open-Meteo (weather), OSRM (routing), adsbdb (flights)
+- **APIs**: Open-Meteo (weather), OSRM (routing), AeroDataBox via RapidAPI (flights)
 
 ## Development
 
@@ -133,7 +133,7 @@ Browser                           Server (SvelteKit)
                                  │ External APIs       │
                                  │ - Open-Meteo        │
                                  │ - OSRM              │
-                                 │ - adsbdb            │
+                                 │ - AeroDataBox       │
                                  └─────────────────────┘
 ```
 

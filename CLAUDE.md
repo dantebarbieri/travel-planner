@@ -36,7 +36,7 @@ Browser                           Server (SvelteKit)
                                  │ External APIs       │
                                  │ - Open-Meteo        │
                                  │ - OSRM (routing)    │
-                                 │ - adsbdb (flights)  │
+                                 │ - AeroDataBox       │
                                  └─────────────────────┘
 ```
 
