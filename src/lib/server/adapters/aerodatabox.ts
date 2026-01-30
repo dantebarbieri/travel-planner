@@ -290,9 +290,9 @@ function extractFlightNumber(fullNumber: string, airlineCode: string | undefined
 		const codePattern = new RegExp(`^${escapedCode}\\s*`, 'i');
 		return fullNumber.replace(codePattern, '');
 	}
-	// Fallback: strip alphanumeric airline code (1-3 chars) followed by optional space
-	// Handles: "UA100", "5J 123", "9C1234", etc.
-	return fullNumber.replace(/^[A-Z0-9]{1,3}\s*/i, '');
+	// Fallback: strip alphabetic airline code (1-3 chars) followed by optional space
+	// Note: Only match letters for airline codes to preserve numeric prefixes like "5J" in "5J123"
+	return fullNumber.replace(/^[A-Z]{1,3}\s*/i, '');
 }
 
 /**
