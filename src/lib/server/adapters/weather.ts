@@ -104,7 +104,10 @@ function getTodayInTimezone(timezone?: string): string {
 	const now = new Date();
 	
 	if (!timezone) {
-		// Use server local time
+		// No timezone provided - use UTC as a safe default
+		// UTC is preferred over server local time because:
+		// 1. Server location is arbitrary and may be far from user's destination
+		// 2. UTC is predictable and timezone-neutral
 		return now.toISOString().split('T')[0];
 	}
 	
@@ -118,8 +121,10 @@ function getTodayInTimezone(timezone?: string): string {
 		});
 		return formatter.format(now); // Returns YYYY-MM-DD in en-CA locale
 	} catch {
-		// Invalid timezone, fall back to server local time
-		console.warn(`Invalid timezone: ${timezone}, using server local time`);
+		// Invalid timezone - use UTC as a safe fallback
+		// This should rarely happen if the API validates timezones,
+		// but UTC is safer than server local time for edge cases
+		console.warn(`[Weather] Invalid timezone '${timezone}', falling back to UTC. This may cause incorrect date classification.`);
 		return now.toISOString().split('T')[0];
 	}
 }

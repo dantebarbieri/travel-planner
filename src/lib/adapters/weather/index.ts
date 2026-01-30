@@ -44,8 +44,10 @@ function getTodayInTimezone(timezone?: string): string {
 		});
 		return formatter.format(now); // Returns YYYY-MM-DD in en-CA locale
 	} catch {
-		// Invalid timezone, fall back to browser local time
-		console.warn(`Invalid timezone: ${timezone}, using browser local time`);
+		// Invalid timezone - fall back to browser local time
+		// Browser local time is a reasonable fallback for client-side code
+		// since the user is likely planning from their local context
+		console.warn(`[Weather] Invalid timezone '${timezone}', using browser local time`);
 		const year = now.getFullYear();
 		const month = String(now.getMonth() + 1).padStart(2, '0');
 		const day = String(now.getDate()).padStart(2, '0');
