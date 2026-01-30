@@ -17,7 +17,66 @@ const HISTORICAL_API_URL = 'https://archive-api.open-meteo.com/v1/archive';
 const FORECAST_MAX_DAYS = 16;
 const HISTORICAL_YEARS_FOR_PREDICTION = 3;
 
-// WMO weather code mapping
+// =============================================================================
+// Error Types
+// =============================================================================
+
+export type WeatherErrorCode = 
+	| 'RATE_LIMITED'
+	| 'API_ERROR'
+	| 'NETWORK_ERROR'
+	| 'INVALID_RESPONSE'
+	| 'NO_DATA';
+
+/**
+ * Custom error class for weather-related errors.
+ * Provides structured error information for client handling.
+ */
+export class WeatherError extends Error {
+	constructor(
+		public readonly code: WeatherErrorCode,
+		message: string,
+		public readonly statusCode?: number,
+		public readonly category?: string
+	) {
+		super(message);
+		this.name = 'WeatherError';
+	}
+}
+
+/**
+ * Wrap an error into a WeatherError with appropriate classification.
+ */
+function classifyError(error: unknown, category: string): WeatherError {
+	if (error instanceof WeatherError) {
+		return error;
+	}
+	
+	if (error instanceof HttpError) {
+		if (error.status === 429) {
+			return new WeatherError('RATE_LIMITED', 'Weather API rate limit exceeded', 429, category);
+		}
+		if (error.status >= 500) {
+			return new WeatherError('API_ERROR', `Weather API server error: ${error.status}`, error.status, category);
+		}
+		return new WeatherError('API_ERROR', `Weather API error: ${error.status}`, error.status, category);
+	}
+	
+	if (error instanceof TypeError && error.message.includes('fetch')) {
+		return new WeatherError('NETWORK_ERROR', 'Failed to connect to weather API', undefined, category);
+	}
+	
+	if (error instanceof SyntaxError) {
+		return new WeatherError('INVALID_RESPONSE', 'Invalid response from weather API', undefined, category);
+	}
+	
+	const message = error instanceof Error ? error.message : 'Unknown weather error';
+	return new WeatherError('API_ERROR', message, undefined, category);
+}
+
+// =============================================================================
+// WMO Weather Code Mapping
+// =============================================================================
 const WMO_CODE_MAP: Record<number, WeatherConditionType> = {
 	0: 'clear',
 	1: 'clear',
@@ -373,7 +432,9 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 							cache.setMany(historicalToCache, 'WEATHER_HISTORICAL');
 						}
 					} catch (histError) {
-						console.error(`Failed to fetch historical fallback for ${missingForecastDates.join(', ')}:`, histError);
+						const weatherError = classifyError(histError, 'historical-fallback');
+						console.error(`[Weather] Historical fallback failed for ${missingForecastDates.join(', ')}: ${weatherError.code} - ${weatherError.message}`);
+						// Don't re-throw - we can continue with partial forecast data
 					}
 				}
 			} else if (category === 'past') {
@@ -396,11 +457,20 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 				cache.setMany(toCache, cacheType);
 			}
 		} catch (error) {
-			console.error(`Failed to fetch ${category} weather:`, error);
-			// Re-throw rate limit errors so the client can handle them
-			if (error instanceof HttpError && error.status === 429) {
-				throw error;
+			const weatherError = classifyError(error, category);
+			
+			// Log with appropriate detail based on error type
+			if (weatherError.code === 'RATE_LIMITED') {
+				console.warn(`[Weather] Rate limited while fetching ${category} data for ${uncachedDates.length} dates`);
+				throw weatherError;
+			} else if (weatherError.code === 'NETWORK_ERROR') {
+				console.error(`[Weather] Network error fetching ${category} data:`, weatherError.message);
+			} else if (weatherError.code === 'API_ERROR') {
+				console.error(`[Weather] API error (${weatherError.statusCode}) fetching ${category} data for dates ${uncachedDates.join(', ')}:`, weatherError.message);
+			} else {
+				console.error(`[Weather] Error fetching ${category} data:`, weatherError.message, error);
 			}
+			// Continue processing other categories - partial results are better than none
 		}
 	}
 
@@ -420,6 +490,7 @@ async function getHistoricalPredictions(location: Location, dates: string[]): Pr
 	for (const date of dates) {
 		const [, month, day] = date.split('-');
 		const historicalConditions: WeatherCondition[] = [];
+		let lastError: WeatherError | null = null;
 
 		// Fetch same day from past years
 		for (let i = 1; i <= HISTORICAL_YEARS_FOR_PREDICTION; i++) {
@@ -431,9 +502,20 @@ async function getHistoricalPredictions(location: Location, dates: string[]): Pr
 				if (conditions.length > 0) {
 					historicalConditions.push(conditions[0]);
 				}
-			} catch {
-				// Skip years where data is unavailable
+			} catch (error) {
+				// Track the error but continue trying other years
+				lastError = classifyError(error, 'prediction');
+				// Rate limit errors should stop immediately
+				if (lastError.code === 'RATE_LIMITED') {
+					console.warn(`[Weather] Rate limited while fetching prediction data for ${date}`);
+					break;
+				}
 			}
+		}
+
+		// Log if we couldn't get any historical data for predictions
+		if (historicalConditions.length === 0 && lastError) {
+			console.warn(`[Weather] No historical data available for prediction on ${date}: ${lastError.code}`);
 		}
 
 		if (historicalConditions.length > 0) {
