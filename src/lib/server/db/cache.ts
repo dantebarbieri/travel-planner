@@ -34,7 +34,16 @@ interface CacheEntry {
 }
 
 let db: Database.Database | null = null;
-let dbInitialized = false;
+
+/**
+ * Ensure the database directory exists (runs once).
+ */
+function ensureDbDirectory(dbPath: string): void {
+	const dir = path.dirname(dbPath);
+	if (!fs.existsSync(dir)) {
+		fs.mkdirSync(dir, { recursive: true });
+	}
+}
 
 /**
  * Check if we're in build mode (no-op for cache operations).
@@ -64,34 +73,36 @@ function getDb(): Database.Database | null {
 	const dbPath = env.DATABASE_PATH || './data/cache.db';
 	
 	// Ensure directory exists (sync, but only runs once at startup)
-	// For production: pre-create this directory at container/deploy time
-	const dir = path.dirname(dbPath);
-	if (!dbInitialized && !fs.existsSync(dir)) {
-		fs.mkdirSync(dir, { recursive: true });
-	}
-	dbInitialized = true;
-
-	db = new Database(dbPath);
-	
-	// Enable WAL mode for better concurrent access
-	db.pragma('journal_mode = WAL');
-	
-	// Create cache table if it doesn't exist
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS cache (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL,
-			type TEXT NOT NULL,
-			expires_at INTEGER NOT NULL,
-			created_at INTEGER NOT NULL
-		);
+	// Use a synchronous lock pattern: check db again after directory creation
+	// to handle concurrent calls during startup
+	if (!db) {
+		ensureDbDirectory(dbPath);
 		
-		CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache(expires_at);
-		CREATE INDEX IF NOT EXISTS idx_cache_type ON cache(type);
-	`);
+		// Double-check after directory creation in case another call initialized db
+		if (db) return db;
+		
+		db = new Database(dbPath);
+		
+		// Enable WAL mode for better concurrent access
+		db.pragma('journal_mode = WAL');
+		
+		// Create cache table if it doesn't exist
+		db.exec(`
+			CREATE TABLE IF NOT EXISTS cache (
+				key TEXT PRIMARY KEY,
+				value TEXT NOT NULL,
+				type TEXT NOT NULL,
+				expires_at INTEGER NOT NULL,
+				created_at INTEGER NOT NULL
+			);
+			
+			CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache(expires_at);
+			CREATE INDEX IF NOT EXISTS idx_cache_type ON cache(type);
+		`);
 
-	// Run cleanup on startup
-	cleanupExpired();
+		// Run cleanup on startup
+		cleanupExpired();
+	}
 
 	return db;
 }
