@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import type { Location, TravelMode, TravelEstimate } from '$lib/types/travel';
 	import type { DisableableTransportMode } from '$lib/types/settings';
 	import { formatDuration, formatDistance } from '$lib/utils/dates';
@@ -54,6 +55,9 @@
 
 	// Load route data when locations or mode change
 	$effect(() => {
+		// Only fetch in browser to avoid SSR warning
+		if (!browser) return;
+		
 		// Capture dependencies
 		const from = fromLocation;
 		const to = toLocation;
@@ -81,6 +85,9 @@
 
 	// Load mode routes when selector is shown (consolidates preloading and display)
 	$effect(() => {
+		// Only fetch in browser to avoid SSR warning
+		if (!browser) return;
+		
 		if (showSelector) {
 			modeRoutesLoading = true;
 			modeRoutes = new Map();

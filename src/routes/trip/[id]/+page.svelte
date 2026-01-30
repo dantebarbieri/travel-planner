@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
@@ -120,6 +121,8 @@
 	let previousCityIds = $state<Record<string, string[]>>({});
 
 	$effect(() => {
+		// Only fetch in browser to avoid SSR warning
+		if (!browser) return;
 		if (!trip) return;
 
 		// Check each day to see if its cities changed
