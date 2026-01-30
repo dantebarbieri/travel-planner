@@ -1,10 +1,12 @@
 /**
  * Client-side weather API service.
- * Calls the server's /api/weather endpoint with client-side caching.
+ * Calls the server's /api/weather endpoint with client-side caching
+ * and retry logic for rate limit errors.
  */
 
 import type { Location, WeatherCondition } from '$lib/types/travel';
 import { clientCache } from './clientCache';
+import { retryWithBackoff, HttpError, parseRetryAfter } from '$lib/utils/retry';
 
 /**
  * Generate a cache key for weather data.
@@ -16,16 +18,30 @@ function weatherCacheKey(lat: number, lon: number, dates: string[]): string {
 }
 
 /**
- * Determine appropriate cache type based on dates.
+ * Determine appropriate cache type based on dates and timezone.
  */
-function getCacheType(dates: string[]): 'WEATHER_FORECAST' | 'WEATHER_HISTORICAL' {
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+function getCacheType(dates: string[], timezone?: string): 'WEATHER_FORECAST' | 'WEATHER_HISTORICAL' {
+	// Get today in the destination timezone
+	let todayStr: string;
+	if (timezone) {
+		try {
+			const formatter = new Intl.DateTimeFormat('en-CA', {
+				timeZone: timezone,
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit'
+			});
+			todayStr = formatter.format(new Date());
+		} catch {
+			todayStr = new Date().toISOString().split('T')[0];
+		}
+	} else {
+		todayStr = new Date().toISOString().split('T')[0];
+	}
 	
-	// If any date is in the past, use shorter cache
+	// If any date is in the past, use historical cache
 	for (const date of dates) {
-		const d = new Date(date);
-		if (d < today) {
+		if (date < todayStr) {
 			return 'WEATHER_HISTORICAL';
 		}
 	}
@@ -34,7 +50,7 @@ function getCacheType(dates: string[]): 'WEATHER_FORECAST' | 'WEATHER_HISTORICAL
 }
 
 /**
- * Fetch weather data from the server API.
+ * Fetch weather data from the server API with retry logic.
  */
 async function fetchWeatherFromServer(
 	location: Location,
@@ -53,21 +69,38 @@ async function fetchWeatherFromServer(
 		params.set('timezone', location.timezone);
 	}
 
-	const response = await fetch(`/api/weather?${params}`);
+	const url = `/api/weather?${params}`;
 
-	if (!response.ok) {
-		if (response.status === 429) {
-			throw new Error('Rate limit exceeded. Please try again later.');
+	return retryWithBackoff(
+		async () => {
+			const response = await fetch(url);
+
+			if (!response.ok) {
+				if (response.status === 429) {
+					const retryAfterHeader = response.headers.get('Retry-After');
+					const retryAfterMs = parseRetryAfter(retryAfterHeader) ?? undefined;
+					throw new HttpError(429, 'Rate limit exceeded', retryAfterMs);
+				}
+				throw new HttpError(response.status, `Weather API error: ${response.status}`);
+			}
+
+			return response.json();
+		},
+		{
+			maxAttempts: 4,
+			initialDelayMs: 1000,
+			maxDelayMs: 8000,
+			onRetry: (attempt, delayMs) => {
+				console.log(`[WeatherAPI] Retry ${attempt} for ${location.address.city}, waiting ${delayMs}ms...`);
+			}
 		}
-		throw new Error(`Weather API error: ${response.status}`);
-	}
-
-	return response.json();
+	);
 }
 
 /**
  * Get weather conditions for a location and dates.
  * Uses client-side caching to reduce server calls.
+ * Includes retry logic for rate limit errors.
  */
 export async function getWeather(
 	location: Location,
@@ -76,7 +109,7 @@ export async function getWeather(
 	if (dates.length === 0) return [];
 
 	const cacheKey = weatherCacheKey(location.geo.latitude, location.geo.longitude, dates);
-	const cacheType = getCacheType(dates);
+	const cacheType = getCacheType(dates, location.timezone);
 
 	return clientCache.dedupeRequest(
 		cacheKey,

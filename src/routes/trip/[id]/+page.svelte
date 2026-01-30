@@ -94,10 +94,11 @@
 					country: city.country,
 					formatted: `${city.name}, ${city.country}`
 				},
-				geo: city.location
+				geo: city.location,
+				timezone: city.timezone // Pass timezone for correct date classification
 			};
 			try {
-				// Use smart weather fetch via server API (with client caching)
+				// Use smart weather fetch via server API (with client caching and retry)
 				const forecasts = await weatherApi.getWeather(location, [day.date]);
 				if (forecasts.length > 0 && forecasts[0]) {
 					conditions.push(forecasts[0]);

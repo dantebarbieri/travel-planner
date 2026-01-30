@@ -7,6 +7,7 @@
 
 import type { Location, WeatherCondition, WeatherConditionType } from '$lib/types/travel';
 import { cache, weatherCacheKey, type CacheType } from '$lib/server/db/cache';
+import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 
 // API endpoints
 const FORECAST_API_URL = 'https://api.open-meteo.com/v1/forecast';
@@ -94,17 +95,55 @@ interface OpenMeteoHistoricalResponse {
 
 type DateCategory = 'past' | 'forecast' | 'future';
 
-function classifyDate(date: string): DateCategory {
+/**
+ * Get today's date in a specific timezone.
+ * @param timezone - IANA timezone name (e.g., 'Australia/Sydney', 'America/New_York')
+ * @returns Date string in YYYY-MM-DD format
+ */
+function getTodayInTimezone(timezone?: string): string {
+	const now = new Date();
+	
+	if (!timezone) {
+		// Use server local time
+		return now.toISOString().split('T')[0];
+	}
+	
+	try {
+		// Format date in the target timezone
+		const formatter = new Intl.DateTimeFormat('en-CA', {
+			timeZone: timezone,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit'
+		});
+		return formatter.format(now); // Returns YYYY-MM-DD in en-CA locale
+	} catch {
+		// Invalid timezone, fall back to server local time
+		console.warn(`Invalid timezone: ${timezone}, using server local time`);
+		return now.toISOString().split('T')[0];
+	}
+}
+
+/**
+ * Classify a date into categories for routing to appropriate data source.
+ * Uses the destination timezone to determine what "today" is.
+ * 
+ * @param date - Date string in YYYY-MM-DD format
+ * @param timezone - Optional IANA timezone name for the destination
+ */
+function classifyDate(date: string, timezone?: string): DateCategory {
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
 		return 'future';
 	}
 
+	const todayStr = getTodayInTimezone(timezone);
+	const [todayYear, todayMonth, todayDay] = todayStr.split('-').map(Number);
+	const today = new Date(todayYear, todayMonth - 1, todayDay);
+	today.setHours(0, 0, 0, 0);
+
 	const [year, month, day] = date.split('-').map(Number);
 	const targetDate = new Date(year, month - 1, day);
 	targetDate.setHours(0, 0, 0, 0);
-
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
 
 	const diffDays = Math.floor((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -113,10 +152,10 @@ function classifyDate(date: string): DateCategory {
 	return 'future';
 }
 
-function groupDatesByCategory(dates: string[]): Record<DateCategory, string[]> {
+function groupDatesByCategory(dates: string[], timezone?: string): Record<DateCategory, string[]> {
 	const groups: Record<DateCategory, string[]> = { past: [], forecast: [], future: [] };
 	for (const date of dates) {
-		groups[classifyDate(date)].push(date);
+		groups[classifyDate(date, timezone)].push(date);
 	}
 	for (const category of Object.keys(groups) as DateCategory[]) {
 		groups[category].sort();
@@ -141,9 +180,16 @@ async function fetchForecast(location: Location): Promise<WeatherCondition[]> {
 		temperature_unit: 'fahrenheit'
 	});
 
-	const response = await fetch(`${FORECAST_API_URL}?${params}`);
+	const url = `${FORECAST_API_URL}?${params}`;
+	const response = await fetchWithRetry(url, undefined, {
+		maxAttempts: 4,
+		onRetry: (attempt, delayMs) => {
+			console.log(`[Weather] Forecast retry ${attempt}, waiting ${delayMs}ms...`);
+		}
+	});
+	
 	if (!response.ok) {
-		throw new Error(`Open-Meteo forecast API error: ${response.status}`);
+		throw new HttpError(response.status, `Open-Meteo forecast API error: ${response.status}`);
 	}
 
 	const data: OpenMeteoForecastResponse = await response.json();
@@ -190,9 +236,16 @@ async function fetchHistorical(location: Location, startDate: string, endDate: s
 		temperature_unit: 'fahrenheit'
 	});
 
-	const response = await fetch(`${HISTORICAL_API_URL}?${params}`);
+	const url = `${HISTORICAL_API_URL}?${params}`;
+	const response = await fetchWithRetry(url, undefined, {
+		maxAttempts: 4,
+		onRetry: (attempt, delayMs) => {
+			console.log(`[Weather] Historical retry ${attempt}, waiting ${delayMs}ms...`);
+		}
+	});
+	
 	if (!response.ok) {
-		throw new Error(`Open-Meteo historical API error: ${response.status}`);
+		throw new HttpError(response.status, `Open-Meteo historical API error: ${response.status}`);
 	}
 
 	const data: OpenMeteoHistoricalResponse = await response.json();
@@ -241,13 +294,18 @@ function getCacheKeyTypeForCategory(category: DateCategory): 'forecast' | 'histo
 /**
  * Get weather conditions for a location and dates.
  * Handles caching, date classification, and appropriate data source routing.
+ * 
+ * Uses the location's timezone to correctly classify dates as past/forecast/future.
+ * This fixes the edge case where "today" at the destination is different from
+ * "today" on the server due to timezone differences.
  */
 export async function getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]> {
 	if (dates.length === 0) return [];
 
 	const lat = location.geo.latitude;
 	const lon = location.geo.longitude;
-	const groups = groupDatesByCategory(dates);
+	const timezone = location.timezone;
+	const groups = groupDatesByCategory(dates, timezone);
 	const resultsMap = new Map<string, WeatherCondition>();
 
 	// Process each category
@@ -283,6 +341,36 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 
 			if (category === 'forecast') {
 				fetched = await fetchForecast(location);
+				
+				// Check for dates that were classified as "forecast" but Open-Meteo didn't return
+				// This can happen when "today" at the destination is "yesterday" locally
+				// For these dates, we need to fall back to historical data
+				const fetchedDates = new Set(fetched.map(c => c.date));
+				const missingForecastDates = uncachedDates.filter(d => !fetchedDates.has(d));
+				
+				if (missingForecastDates.length > 0) {
+					console.log(`[Weather] Dates ${missingForecastDates.join(', ')} not in forecast, fetching from historical API`);
+					try {
+						const startDate = missingForecastDates[0];
+						const endDate = missingForecastDates[missingForecastDates.length - 1];
+						const historicalData = await fetchHistorical(location, startDate, endDate);
+						
+						// Cache historical data with forecast TTL since it's recent
+						const historicalToCache: Array<{ key: string; value: WeatherCondition }> = [];
+						for (const condition of historicalData) {
+							if (missingForecastDates.includes(condition.date)) {
+								const key = weatherCacheKey(lat, lon, condition.date, 'historical');
+								historicalToCache.push({ key, value: condition });
+								resultsMap.set(condition.date, condition);
+							}
+						}
+						if (historicalToCache.length > 0) {
+							cache.setMany(historicalToCache, 'WEATHER_HISTORICAL');
+						}
+					} catch (histError) {
+						console.error(`Failed to fetch historical fallback for ${missingForecastDates.join(', ')}:`, histError);
+					}
+				}
 			} else if (category === 'past') {
 				const startDate = uncachedDates[0];
 				const endDate = uncachedDates[uncachedDates.length - 1];
@@ -304,6 +392,10 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 			}
 		} catch (error) {
 			console.error(`Failed to fetch ${category} weather:`, error);
+			// Re-throw rate limit errors so the client can handle them
+			if (error instanceof HttpError && error.status === 429) {
+				throw error;
+			}
 		}
 	}
 

@@ -19,16 +19,48 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Classify a date into categories for routing to appropriate data source.
- *
- * NOTE: Uses the local system time to determine if a date is in the past,
- * forecast range, or future. This may not be accurate for trips in different
- * timezones. For example, if a user in New York plans a trip to Tokyo,
- * the date classification might be off by a day relative to the trip's timezone.
- * This is an acceptable trade-off for simplicity, as weather forecasts have
- * similar limitations.
+ * Get today's date in a specific timezone.
+ * @param timezone - IANA timezone name (e.g., 'Australia/Sydney', 'America/New_York')
+ * @returns Date string in YYYY-MM-DD format
  */
-function classifyDate(date: string): DateCategory {
+function getTodayInTimezone(timezone?: string): string {
+	const now = new Date();
+	
+	if (!timezone) {
+		// Use browser local time
+		const year = now.getFullYear();
+		const month = String(now.getMonth() + 1).padStart(2, '0');
+		const day = String(now.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
+	}
+	
+	try {
+		// Format date in the target timezone
+		const formatter = new Intl.DateTimeFormat('en-CA', {
+			timeZone: timezone,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit'
+		});
+		return formatter.format(now); // Returns YYYY-MM-DD in en-CA locale
+	} catch {
+		// Invalid timezone, fall back to browser local time
+		console.warn(`Invalid timezone: ${timezone}, using browser local time`);
+		const year = now.getFullYear();
+		const month = String(now.getMonth() + 1).padStart(2, '0');
+		const day = String(now.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
+	}
+}
+
+/**
+ * Classify a date into categories for routing to appropriate data source.
+ * Uses the destination timezone to determine what "today" is.
+ *
+ * @param date - Date string in YYYY-MM-DD format
+ * @param timezone - Optional IANA timezone name for the destination
+ */
+function classifyDate(date: string, timezone?: string): DateCategory {
 	// Validate date format (YYYY-MM-DD)
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
 		console.warn(`Invalid date format: ${date}. Expected YYYY-MM-DD format.`);
@@ -53,7 +85,10 @@ function classifyDate(date: string): DateCategory {
 		return 'future';
 	}
 
-	const today = new Date();
+	// Get today in the destination timezone
+	const todayStr = getTodayInTimezone(timezone);
+	const [todayYear, todayMonth, todayDay] = todayStr.split('-').map(Number);
+	const today = new Date(todayYear, todayMonth - 1, todayDay);
 	today.setHours(0, 0, 0, 0);
 
 	const diffDays = Math.floor((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -66,7 +101,7 @@ function classifyDate(date: string): DateCategory {
 /**
  * Group dates by their category for efficient batched fetching.
  */
-function groupDatesByCategory(dates: string[]): Record<DateCategory, string[]> {
+function groupDatesByCategory(dates: string[], timezone?: string): Record<DateCategory, string[]> {
 	const groups: Record<DateCategory, string[]> = {
 		past: [],
 		forecast: [],
@@ -74,7 +109,7 @@ function groupDatesByCategory(dates: string[]): Record<DateCategory, string[]> {
 	};
 
 	for (const date of dates) {
-		const category = classifyDate(date);
+		const category = classifyDate(date, timezone);
 		groups[category].push(date);
 	}
 
@@ -316,6 +351,8 @@ async function fetchFutureDatesSequentially(
  * - Past dates → Historical API
  * - Today to +16 days → Forecast API
  * - Beyond +16 days → Prediction service (blended forecast + historical)
+ * 
+ * Uses the location's timezone to correctly classify dates.
  */
 export const weatherAdapter: WeatherAdapter = {
 	/**
@@ -323,7 +360,7 @@ export const weatherAdapter: WeatherAdapter = {
 	 * Note: For dates beyond forecast range, returns empty array.
 	 */
 	async getForecast(location: Location, dates: string[]): Promise<WeatherCondition[]> {
-		const forecastDates = dates.filter((d) => classifyDate(d) === 'forecast');
+		const forecastDates = dates.filter((d) => classifyDate(d, location.timezone) === 'forecast');
 		return fetchForecastDates(location, forecastDates);
 	},
 
@@ -331,7 +368,7 @@ export const weatherAdapter: WeatherAdapter = {
 	 * Get historical data for past dates.
 	 */
 	async getHistorical(location: Location, dates: string[]): Promise<WeatherCondition[]> {
-		const pastDates = dates.filter((d) => classifyDate(d) === 'past');
+		const pastDates = dates.filter((d) => classifyDate(d, location.timezone) === 'past');
 		return fetchPastDates(location, pastDates);
 	},
 
@@ -343,9 +380,11 @@ export const weatherAdapter: WeatherAdapter = {
 	 *
 	 * Handles gaps in forecast data by using predictions for missing dates.
 	 * Uses the last valid forecast as the seed for predictions.
+	 * Uses the location's timezone to correctly classify dates.
 	 */
 	async getWeather(location: Location, dates: string[]): Promise<WeatherCondition[]> {
-		const groups = groupDatesByCategory(dates);
+		const timezone = location.timezone;
+		const groups = groupDatesByCategory(dates, timezone);
 		const resultsMap = new Map<string, WeatherCondition>();
 
 		// Fetch past dates (historical)
