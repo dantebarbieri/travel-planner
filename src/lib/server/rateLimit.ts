@@ -43,6 +43,9 @@ function getWindowMs(): number {
 /**
  * Check if a request should be rate limited.
  * Returns true if the request is allowed, false if it should be blocked.
+ * 
+ * Uses atomic check-and-increment to prevent race conditions where
+ * concurrent requests could exceed the rate limit.
  */
 export function checkRateLimit(ip: string, endpoint: EndpointType = 'default'): boolean {
 	const key = `${ip}:${endpoint}`;
@@ -58,13 +61,13 @@ export function checkRateLimit(ip: string, endpoint: EndpointType = 'default'): 
 		return true;
 	}
 
-	if (entry.count >= maxRequests) {
-		// Rate limit exceeded
+	// Atomic check-and-increment: increment first, then check if over limit
+	const newCount = ++entry.count;
+	if (newCount > maxRequests) {
+		// Rate limit exceeded (don't decrement - count reflects actual attempts)
 		return false;
 	}
 
-	// Increment count
-	entry.count++;
 	return true;
 }
 
