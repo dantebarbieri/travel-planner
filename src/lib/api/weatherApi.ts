@@ -14,7 +14,8 @@ import { retryWithBackoff, HttpError, parseRetryAfter } from '$lib/utils/retry';
 function weatherCacheKey(lat: number, lon: number, dates: string[]): string {
 	const roundedLat = Math.round(lat * 100) / 100;
 	const roundedLon = Math.round(lon * 100) / 100;
-	return `weather:${roundedLat}:${roundedLon}:${dates.sort().join(',')}`;
+	const sortedDates = [...dates].sort();
+	return `weather:${roundedLat}:${roundedLon}:${sortedDates.length}:${sortedDates.join(',')}`;
 }
 
 /**
