@@ -5,6 +5,7 @@
  * - Memory-only (cleared on page refresh)
  * - TTL-based expiration
  * - Reduces calls to server API during navigation
+ * - Uses lazy cleanup (on access) to avoid perpetual intervals
  */
 
 interface CacheEntry<T> {
@@ -23,9 +24,30 @@ export const CLIENT_CACHE_TTL = {
 
 export type ClientCacheType = keyof typeof CLIENT_CACHE_TTL;
 
+// Cleanup threshold: run cleanup when cache exceeds this many entries
+const CLEANUP_THRESHOLD = 100;
+// Minimum time between cleanups (milliseconds)
+const CLEANUP_INTERVAL = 60 * 1000;
+
 class ClientCache {
 	private cache = new Map<string, CacheEntry<unknown>>();
 	private pendingRequests = new Map<string, Promise<unknown>>();
+	private lastCleanup = 0;
+
+	/**
+	 * Run cleanup if needed (lazy cleanup strategy).
+	 * Triggers when cache is large enough and enough time has passed.
+	 */
+	private maybeCleanup(): void {
+		const now = Date.now();
+		if (
+			this.cache.size > CLEANUP_THRESHOLD &&
+			now - this.lastCleanup > CLEANUP_INTERVAL
+		) {
+			this.cleanup();
+			this.lastCleanup = now;
+		}
+	}
 
 	/**
 	 * Get a cached value by key.
@@ -52,6 +74,7 @@ class ClientCache {
 			value,
 			expiresAt: Date.now() + ttl
 		});
+		this.maybeCleanup();
 	}
 
 	/**
@@ -62,6 +85,7 @@ class ClientCache {
 			value,
 			expiresAt: Date.now() + ttlMs
 		});
+		this.maybeCleanup();
 	}
 
 	/**
@@ -153,10 +177,3 @@ class ClientCache {
 
 // Singleton instance
 export const clientCache = new ClientCache();
-
-// Cleanup expired entries periodically (every 2 minutes)
-if (typeof window !== 'undefined') {
-	setInterval(() => {
-		clientCache.cleanup();
-	}, 2 * 60 * 1000);
-}
