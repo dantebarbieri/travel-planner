@@ -16,6 +16,8 @@ export interface RetryOptions {
 	isRetryable?: (error: unknown) => boolean;
 	/** Callback when a retry is about to happen */
 	onRetry?: (attempt: number, delayMs: number, error: unknown) => void;
+	/** Enable debug logging to console (default: false in production) */
+	debug?: boolean;
 }
 
 export interface RetryResult<T> {
@@ -187,6 +189,8 @@ export async function fetchWithRetry(
 	init?: RequestInit,
 	retryOptions: RetryOptions = {}
 ): Promise<Response> {
+	const { debug = false, onRetry, ...restOptions } = retryOptions;
+	
 	return retryWithBackoff(
 		async () => {
 			const response = await fetch(url, init);
@@ -200,10 +204,13 @@ export async function fetchWithRetry(
 			return response;
 		},
 		{
-			onRetry: (attempt, delayMs) => {
-				console.log(`[Retry] Attempt ${attempt} failed for ${url}, retrying in ${delayMs}ms...`);
-			},
-			...retryOptions
+			...restOptions,
+			onRetry: onRetry ?? (debug 
+				? (attempt, delayMs) => {
+					console.log(`[Retry] Attempt ${attempt} failed for ${url}, retrying in ${delayMs}ms...`);
+				}
+				: undefined
+			)
 		}
 	);
 }
