@@ -223,6 +223,11 @@ export async function getFlightByNumber(
 	flightNumber: string,
 	date: string
 ): Promise<FlightSearchResult | null> {
+	if (!isConfigured()) {
+		console.warn('AeroDataBox API key not configured');
+		return null;
+	}
+	
 	const normalizedFlight = flightNumber.toUpperCase().replace(/\s+/g, '');
 	const cacheKey = flightStatusCacheKey(normalizedFlight, date);
 	
@@ -328,6 +333,11 @@ export async function getAllFlightsByNumber(
 	flightNumber: string,
 	date: string
 ): Promise<FlightSearchResult[]> {
+	if (!isConfigured()) {
+		console.warn('AeroDataBox API key not configured');
+		return [];
+	}
+	
 	const normalizedFlight = flightNumber.toUpperCase().replace(/\s+/g, '');
 	
 	try {
@@ -359,6 +369,11 @@ export async function getAllFlightsByNumber(
  * Get airport information by IATA or ICAO code.
  */
 export async function getAirport(code: string): Promise<AeroDataBoxAirportFull | null> {
+	if (!isConfigured()) {
+		console.warn('AeroDataBox API key not configured');
+		return null;
+	}
+	
 	const normalizedCode = code.toUpperCase().trim();
 	const cacheKey = airportCacheKey(normalizedCode);
 	
