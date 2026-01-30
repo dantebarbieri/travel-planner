@@ -11,6 +11,7 @@ import {
 	aerodataboxAdapter, 
 	isConfigured as isAeroDataBoxConfigured,
 	getFlightByNumber,
+	getAllFlightsByNumber,
 	searchAirlines as searchAirlinesAeroDataBox
 } from '$lib/server/adapters/aerodatabox';
 
@@ -49,6 +50,25 @@ export async function searchFlight(
 	return getFlightByNumber(fullFlightNumber, date);
 }
 
+/**
+ * Search for ALL flights matching a flight number and date.
+ * Returns all matching flights (e.g., same flight number operating multiple legs).
+ */
+export async function searchAllFlights(
+	airlineCode: string,
+	flightNumber: string,
+	date: string
+): Promise<FlightSearchResult[]> {
+	if (!hasKeyedApi()) {
+		console.warn('AeroDataBox API key not configured. Flight search unavailable.');
+		return [];
+	}
+
+	const fullFlightNumber = `${airlineCode}${flightNumber}`.replace(/\s+/g, '');
+	
+	return getAllFlightsByNumber(fullFlightNumber, date);
+}
+
 // =============================================================================
 // Airline Search
 // =============================================================================
@@ -67,6 +87,7 @@ export async function searchAirlines(query: string): Promise<Airline[]> {
 
 export const flightAdapter = {
 	searchFlight,
+	searchAllFlights,
 	searchAirlines,
 	hasKeyedApi
 };

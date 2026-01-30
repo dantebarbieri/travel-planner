@@ -53,7 +53,7 @@ function getItemDetails(
 
 // ============ HTML Generation for PDF ============
 
-function generateTripHTML(trip: Trip): string {
+function generateTripHTML(trip: Trip, use24h: boolean = false): string {
 	const allStays = trip.cities.flatMap((c) => c.stays);
 
 	let html = `
@@ -137,7 +137,7 @@ function generateTripHTML(trip: Trip): string {
 				);
 				html += `
 		<div class="item item-${item.kind}">
-			${time ? `<div class="item-time">${formatTime(time)}</div>` : ''}
+			${time ? `<div class="item-time">${formatTime(time, use24h)}</div>` : ''}
 			<div class="item-name">${escapeHtml(name)}</div>
 			${details.map((d) => `<div class="item-detail">${escapeHtml(d)}</div>`).join('\n			')}
 		</div>
@@ -163,11 +163,11 @@ function escapeHtml(text: string): string {
 
 // ============ PDF Export ============
 
-export async function exportToPDF(trip: Trip): Promise<void> {
+export async function exportToPDF(trip: Trip, use24h: boolean = false): Promise<void> {
 	// Dynamic import html2pdf to avoid SSR issues
 	const html2pdf = (await import('html2pdf.js')).default;
 
-	const html = generateTripHTML(trip);
+	const html = generateTripHTML(trip, use24h);
 
 	// Create a temporary container
 	const container = document.createElement('div');
@@ -193,7 +193,7 @@ export async function exportToPDF(trip: Trip): Promise<void> {
 
 // ============ DOCX Export ============
 
-export async function exportToDOCX(trip: Trip): Promise<void> {
+export async function exportToDOCX(trip: Trip, use24h: boolean = false): Promise<void> {
 	const allStays = trip.cities.flatMap((c) => c.stays);
 
 	const children: (Paragraph | Table)[] = [];
@@ -300,7 +300,7 @@ export async function exportToDOCX(trip: Trip): Promise<void> {
 									new Paragraph({
 										children: [
 											new TextRun({
-												text: time ? formatTime(time) : '',
+												text: time ? formatTime(time, use24h) : '',
 												size: 20,
 												color: '888888'
 											})
@@ -377,8 +377,8 @@ export async function exportToDOCX(trip: Trip): Promise<void> {
 
 // ============ Print-friendly HTML ============
 
-export function openPrintView(trip: Trip): void {
-	const html = generateTripHTML(trip);
+export function openPrintView(trip: Trip, use24h: boolean = false): void {
+	const html = generateTripHTML(trip, use24h);
 	const printWindow = window.open('', '_blank');
 	if (printWindow) {
 		printWindow.document.write(html);

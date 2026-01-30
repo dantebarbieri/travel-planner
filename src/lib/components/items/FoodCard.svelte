@@ -18,6 +18,9 @@
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
+	// Get time format preference (12h vs 24h)
+	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
+
 	const mealLabel = $derived.by(() => {
 		const labels: Record<MealType, string> = {
 			breakfast: 'Breakfast',
@@ -53,7 +56,7 @@
 
 	const timeDisplay = $derived.by(() => {
 		if (!venue.scheduledTime) return null;
-		return formatTime(venue.scheduledTime);
+		return formatTime(venue.scheduledTime, use24h);
 	});
 
 	function openInMaps() {

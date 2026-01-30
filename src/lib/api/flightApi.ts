@@ -23,6 +23,7 @@ function airlineCacheKey(query: string): string {
 export interface FlightSearchResponse {
 	found: boolean;
 	flight?: FlightSearchResult;
+	flights?: FlightSearchResult[];
 	message?: string;
 }
 
@@ -72,6 +73,39 @@ export async function searchFlight(
 	return data.flight;
 }
 
+/**
+ * Search for ALL flights matching an airline code and flight number.
+ * Returns all matching flights (e.g., same flight number operating multiple legs).
+ */
+export async function searchAllFlights(
+	airlineCode: string,
+	flightNumber: string,
+	date: string
+): Promise<FlightSearchResult[]> {
+	const params = new URLSearchParams({
+		airline: airlineCode,
+		flight: flightNumber,
+		date,
+		all: 'true'
+	});
+
+	const response = await fetch(`/api/flights/search?${params}`);
+
+	if (!response.ok) {
+		if (response.status === 429) {
+			throw new Error('Rate limit exceeded. Please try again later.');
+		}
+		if (response.status === 404) {
+			return [];
+		}
+		throw new Error(`Flight search error: ${response.status}`);
+	}
+
+	const data: FlightSearchResponse = await response.json();
+
+	return data.flights || [];
+}
+
 export interface AirlineSearchResponse {
 	airlines: Airline[];
 }
@@ -114,6 +148,7 @@ export function clearFlightCache(): void {
 // Export as a flight API object
 export const flightApi = {
 	searchFlight,
+	searchAllFlights,
 	searchAirlines,
 	clearCache: clearFlightCache
 };

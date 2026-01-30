@@ -542,6 +542,7 @@ export interface FlightSearchResult {
 export interface FlightAdapter {
 	searchAirlines(query: string): Promise<Airline[]>;
 	getFlightDetails(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult | null>;
+	getAllFlightDetails?(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult[]>;
 }
 
 // ============ Train/Bus Search Adapter ============

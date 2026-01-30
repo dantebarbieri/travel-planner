@@ -146,6 +146,7 @@
 	async function exportAs(format: 'json' | 'pdf' | 'docx' | 'print') {
 		if (!trip) return;
 		isExporting = true;
+		const use24h = settingsStore.userSettings.timeFormat === '24h';
 		try {
 			switch (format) {
 				case 'json':
@@ -153,13 +154,13 @@
 					storageService.downloadJson(trip, settingsStore.userSettings.customColorSchemes);
 					break;
 				case 'pdf':
-					await documentService.exportToPDF(trip);
+					await documentService.exportToPDF(trip, use24h);
 					break;
 				case 'docx':
-					await documentService.exportToDOCX(trip);
+					await documentService.exportToDOCX(trip, use24h);
 					break;
 				case 'print':
-					documentService.openPrintView(trip);
+					documentService.openPrintView(trip, use24h);
 					break;
 			}
 			showExportModal = false;

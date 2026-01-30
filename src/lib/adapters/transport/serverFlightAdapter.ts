@@ -14,6 +14,7 @@ import type { Airline, FlightSearchResult, FlightAdapter } from '$lib/types/trav
 // In-memory cache for client-side (reduces server calls)
 const airlineCache = new Map<string, { data: Airline[]; timestamp: number }>();
 const flightCache = new Map<string, { data: FlightSearchResult | null; timestamp: number }>();
+const allFlightsCache = new Map<string, { data: FlightSearchResult[]; timestamp: number }>();
 
 // Cache TTL: 5 minutes for client-side (server has longer cache)
 const CLIENT_CACHE_TTL = 5 * 60 * 1000;
@@ -122,6 +123,56 @@ export const serverFlightAdapter: FlightAdapter = {
 			console.error('Flight search error:', error);
 			return null;
 		}
+	},
+
+	/**
+	 * Get ALL flight details by airline code, flight number, and date.
+	 * Returns all matching flights (e.g., same flight number operating multiple legs).
+	 * Calls GET /api/flights/search?airline=...&flight=...&date=...&all=true
+	 */
+	async getAllFlightDetails(
+		airlineCode: string,
+		flightNumber: string,
+		date: string
+	): Promise<FlightSearchResult[]> {
+		const cacheKey = `${airlineCode}${flightNumber}:${date}:all`.toUpperCase();
+
+		// Check client-side cache
+		const cached = allFlightsCache.get(cacheKey);
+		if (cached && isCacheValid(cached.timestamp)) {
+			return cached.data;
+		}
+
+		try {
+			const params = new URLSearchParams({
+				airline: airlineCode,
+				flight: flightNumber,
+				date: date,
+				all: 'true'
+			});
+
+			const response = await fetch(`/api/flights/search?${params}`);
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					allFlightsCache.set(cacheKey, { data: [], timestamp: Date.now() });
+					return [];
+				}
+				console.error('Flight search failed:', response.status);
+				return [];
+			}
+
+			const data = await response.json();
+			const results: FlightSearchResult[] = data.flights || [];
+
+			// Cache the result
+			allFlightsCache.set(cacheKey, { data: results, timestamp: Date.now() });
+
+			return results;
+		} catch (error) {
+			console.error('Flight search error:', error);
+			return [];
+		}
 	}
 };
 
@@ -132,4 +183,5 @@ export const serverFlightAdapter: FlightAdapter = {
 export function clearFlightCache(): void {
 	airlineCache.clear();
 	flightCache.clear();
+	allFlightsCache.clear();
 }

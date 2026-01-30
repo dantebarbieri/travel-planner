@@ -251,17 +251,41 @@ export async function getFlightByNumber(
 			return null;
 		}
 		
-		// Take the first flight result (usually there's only one for a specific date)
-		const flight = flights[0];
+		// Parse all flights
+		const results = parseFlightsToResults(flights, date);
 		
-		// Extract scheduled times from nested structure
+		if (results.length === 0) {
+			return null;
+		}
+		
+		// Cache the first result
+		const daysAhead = Math.ceil(
+			(new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+		);
+		const cacheType = daysAhead <= 7 ? 'FLIGHT_STATUS' : 'FLIGHT_ROUTE';
+		cache.set(cacheKey, results[0], cacheType);
+		
+		// Return the first result for backwards compatibility
+		return results[0];
+	} catch (error) {
+		console.error('AeroDataBox flight search error:', error);
+		return null;
+	}
+}
+
+/**
+ * Helper to parse API flights to our result format
+ */
+function parseFlightsToResults(flights: AeroDataBoxFlight[], date: string): FlightSearchResult[] {
+	return flights.map(flight => {
 		const depTime = parseLocalTime(flight.departure.scheduledTime?.local);
 		const arrTime = parseLocalTime(flight.arrival.scheduledTime?.local);
 		
-		const result: FlightSearchResult = {
+		return {
 			airline: flight.airline?.name || '',
 			airlineCode: flight.airline?.iata || flight.airline?.icao || '',
-			flightNumber: flight.number,
+			// flight.number from API is like "UA 100", extract just the number part
+			flightNumber: flight.number.replace(/^[A-Z]{2,3}\s*/i, ''),
 			origin: airportToLocation(flight.departure.airport),
 			destination: airportToLocation(flight.arrival.airport),
 			departureDate: depTime.date || date,
@@ -274,19 +298,43 @@ export async function getFlightByNumber(
 			),
 			aircraft: flight.aircraft?.model
 		};
+	});
+}
+
+/**
+ * Get ALL flight details by flight number and date (returns all matching flights).
+ * 
+ * @param flightNumber - IATA flight number (e.g., "AA100", "UA123")
+ * @param date - Departure date in YYYY-MM-DD format
+ */
+export async function getAllFlightsByNumber(
+	flightNumber: string,
+	date: string
+): Promise<FlightSearchResult[]> {
+	const normalizedFlight = flightNumber.toUpperCase().replace(/\s+/g, '');
+	
+	try {
+		const url = `${API_BASE}/flights/number/${normalizedFlight}/${date}`;
+		const response = await fetch(url, { headers: getHeaders() });
 		
-		// Cache the result
-		// Use FLIGHT_STATUS for near-term flights, FLIGHT_ROUTE for far-future
-		const daysAhead = Math.ceil(
-			(new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-		);
-		const cacheType = daysAhead <= 7 ? 'FLIGHT_STATUS' : 'FLIGHT_ROUTE';
-		cache.set(cacheKey, result, cacheType);
+		if (!response.ok) {
+			if (response.status === 404) {
+				return [];
+			}
+			console.error(`AeroDataBox API error: ${response.status} ${response.statusText}`);
+			return [];
+		}
 		
-		return result;
+		const flights: AeroDataBoxFlight[] = await response.json();
+		
+		if (!Array.isArray(flights) || flights.length === 0) {
+			return [];
+		}
+		
+		return parseFlightsToResults(flights, date);
 	} catch (error) {
 		console.error('AeroDataBox flight search error:', error);
-		return null;
+		return [];
 	}
 }
 

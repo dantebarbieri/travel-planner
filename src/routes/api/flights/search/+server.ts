@@ -1,10 +1,11 @@
 /**
  * Flight search API endpoint.
  * GET /api/flights/search?airline=...&flight=...&date=...
+ * GET /api/flights/search?airline=...&flight=...&date=...&all=true (returns all matching flights)
  */
 
 import { json, error } from '@sveltejs/kit';
-import { searchFlight } from '$lib/server/adapters/flights';
+import { searchFlight, searchAllFlights } from '$lib/server/adapters/flights';
 import { rateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
 
@@ -26,6 +27,7 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	const airlineCode = url.searchParams.get('airline');
 	const flightNumber = url.searchParams.get('flight');
 	const date = url.searchParams.get('date');
+	const all = url.searchParams.get('all') === 'true';
 
 	// Validate required parameters
 	if (!airlineCode) {
@@ -41,6 +43,19 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	}
 
 	try {
+		// If all=true, return all matching flights
+		if (all) {
+			const results = await searchAllFlights(airlineCode, flightNumber, date);
+			
+			return json(
+				{ found: results.length > 0, flights: results },
+				{
+					headers: rateLimit.getHeaders(ip, 'flights')
+				}
+			);
+		}
+		
+		// Default: return first matching flight
 		const result = await searchFlight(airlineCode, flightNumber, date);
 
 		if (!result) {
