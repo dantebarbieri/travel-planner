@@ -131,7 +131,9 @@ export function cleanupRateLimitStore(): number {
 }
 
 // Cleanup every 5 minutes
-setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
+// Use unref() to allow Node.js process to exit gracefully without waiting for this timer
+const cleanupInterval = setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
+cleanupInterval.unref();
 
 /**
  * Reset rate limit for a specific IP (useful for testing).
