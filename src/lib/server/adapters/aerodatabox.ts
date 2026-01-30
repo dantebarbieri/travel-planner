@@ -274,18 +274,35 @@ export async function getFlightByNumber(
 }
 
 /**
+ * Extract numeric flight number from full flight number string.
+ * Uses airline code from API response when available for accurate extraction.
+ * Handles various formats: "UA 100", "5J123", "UA100", etc.
+ */
+function extractFlightNumber(fullNumber: string, airlineCode: string | undefined): string {
+	if (airlineCode) {
+		// Use the known airline code to strip it from the flight number
+		const escapedCode = airlineCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		const codePattern = new RegExp(`^${escapedCode}\\s*`, 'i');
+		return fullNumber.replace(codePattern, '');
+	}
+	// Fallback: strip alphanumeric airline code (1-3 chars) followed by optional space
+	// Handles: "UA100", "5J 123", "9C1234", etc.
+	return fullNumber.replace(/^[A-Z0-9]{1,3}\s*/i, '');
+}
+
+/**
  * Helper to parse API flights to our result format
  */
 function parseFlightsToResults(flights: AeroDataBoxFlight[], date: string): FlightSearchResult[] {
 	return flights.map(flight => {
 		const depTime = parseLocalTime(flight.departure.scheduledTime?.local);
 		const arrTime = parseLocalTime(flight.arrival.scheduledTime?.local);
+		const airlineCode = flight.airline?.iata || flight.airline?.icao || '';
 		
 		return {
 			airline: flight.airline?.name || '',
-			airlineCode: flight.airline?.iata || flight.airline?.icao || '',
-			// flight.number from API is like "UA 100", extract just the number part
-			flightNumber: flight.number.replace(/^[A-Z]{2,3}\s*/i, ''),
+			airlineCode,
+			flightNumber: extractFlightNumber(flight.number, airlineCode || undefined),
 			origin: airportToLocation(flight.departure.airport),
 			destination: airportToLocation(flight.arrival.airport),
 			departureDate: depTime.date || date,
