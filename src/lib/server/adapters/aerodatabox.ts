@@ -423,6 +423,27 @@ export async function getAirportLocation(code: string): Promise<Location | null>
 	};
 }
 
+// =============================================================================
+// Lazy-loaded Airline Data
+// Major airlines for autocomplete (AeroDataBox doesn't have airline search)
+// Data is loaded only when searchAirlines is first called
+// =============================================================================
+
+let airlinesData: Airline[] | null = null;
+
+/**
+ * Lazily load airlines data from JSON file.
+ * Only loads once and caches in memory.
+ */
+async function getAirlinesData(): Promise<Airline[]> {
+	if (airlinesData) return airlinesData;
+	
+	// Dynamic import to avoid loading at module initialization
+	const data = await import('../data/airlines.json');
+	airlinesData = data.default as Airline[];
+	return airlinesData;
+}
+
 /**
  * Search airlines by name or code.
  * Note: AeroDataBox doesn't have a dedicated airline search endpoint,
@@ -440,9 +461,10 @@ export async function searchAirlines(query: string): Promise<Airline[]> {
 		return cached;
 	}
 	
-	// Since AeroDataBox doesn't have a dedicated airline search,
-	// we use a comprehensive static list of major airlines
-	const results = MAJOR_AIRLINES.filter(
+	// Load airlines data lazily
+	const airlines = await getAirlinesData();
+	
+	const results = airlines.filter(
 		a => a.name.toLowerCase().includes(normalizedQuery) ||
 		     a.code.toLowerCase().includes(normalizedQuery) ||
 		     (a.icaoCode && a.icaoCode.toLowerCase().includes(normalizedQuery))
@@ -453,108 +475,6 @@ export async function searchAirlines(query: string): Promise<Airline[]> {
 	
 	return results;
 }
-
-// =============================================================================
-// Static Airline Data
-// Major airlines for autocomplete (AeroDataBox doesn't have airline search)
-// =============================================================================
-
-const MAJOR_AIRLINES: Airline[] = [
-	// US Carriers
-	{ name: 'American Airlines', code: 'AA', icaoCode: 'AAL', country: 'United States' },
-	{ name: 'Delta Air Lines', code: 'DL', icaoCode: 'DAL', country: 'United States' },
-	{ name: 'United Airlines', code: 'UA', icaoCode: 'UAL', country: 'United States' },
-	{ name: 'Southwest Airlines', code: 'WN', icaoCode: 'SWA', country: 'United States' },
-	{ name: 'JetBlue Airways', code: 'B6', icaoCode: 'JBU', country: 'United States' },
-	{ name: 'Alaska Airlines', code: 'AS', icaoCode: 'ASA', country: 'United States' },
-	{ name: 'Spirit Airlines', code: 'NK', icaoCode: 'NKS', country: 'United States' },
-	{ name: 'Frontier Airlines', code: 'F9', icaoCode: 'FFT', country: 'United States' },
-	{ name: 'Hawaiian Airlines', code: 'HA', icaoCode: 'HAL', country: 'United States' },
-	{ name: 'Allegiant Air', code: 'G4', icaoCode: 'AAY', country: 'United States' },
-	
-	// European Carriers
-	{ name: 'British Airways', code: 'BA', icaoCode: 'BAW', country: 'United Kingdom' },
-	{ name: 'Lufthansa', code: 'LH', icaoCode: 'DLH', country: 'Germany' },
-	{ name: 'Air France', code: 'AF', icaoCode: 'AFR', country: 'France' },
-	{ name: 'KLM Royal Dutch Airlines', code: 'KL', icaoCode: 'KLM', country: 'Netherlands' },
-	{ name: 'Iberia', code: 'IB', icaoCode: 'IBE', country: 'Spain' },
-	{ name: 'Swiss International Air Lines', code: 'LX', icaoCode: 'SWR', country: 'Switzerland' },
-	{ name: 'Austrian Airlines', code: 'OS', icaoCode: 'AUA', country: 'Austria' },
-	{ name: 'Brussels Airlines', code: 'SN', icaoCode: 'BEL', country: 'Belgium' },
-	{ name: 'SAS Scandinavian Airlines', code: 'SK', icaoCode: 'SAS', country: 'Sweden' },
-	{ name: 'Finnair', code: 'AY', icaoCode: 'FIN', country: 'Finland' },
-	{ name: 'TAP Air Portugal', code: 'TP', icaoCode: 'TAP', country: 'Portugal' },
-	{ name: 'Aer Lingus', code: 'EI', icaoCode: 'EIN', country: 'Ireland' },
-	{ name: 'Norwegian Air Shuttle', code: 'DY', icaoCode: 'NAX', country: 'Norway' },
-	{ name: 'Vueling Airlines', code: 'VY', icaoCode: 'VLG', country: 'Spain' },
-	{ name: 'easyJet', code: 'U2', icaoCode: 'EZY', country: 'United Kingdom' },
-	{ name: 'Ryanair', code: 'FR', icaoCode: 'RYR', country: 'Ireland' },
-	{ name: 'Wizz Air', code: 'W6', icaoCode: 'WZZ', country: 'Hungary' },
-	{ name: 'LOT Polish Airlines', code: 'LO', icaoCode: 'LOT', country: 'Poland' },
-	{ name: 'Turkish Airlines', code: 'TK', icaoCode: 'THY', country: 'Turkey' },
-	{ name: 'ITA Airways', code: 'AZ', icaoCode: 'ITY', country: 'Italy' },
-	{ name: 'Icelandair', code: 'FI', icaoCode: 'ICE', country: 'Iceland' },
-	
-	// Middle East & Africa
-	{ name: 'Emirates', code: 'EK', icaoCode: 'UAE', country: 'United Arab Emirates' },
-	{ name: 'Qatar Airways', code: 'QR', icaoCode: 'QTR', country: 'Qatar' },
-	{ name: 'Etihad Airways', code: 'EY', icaoCode: 'ETD', country: 'United Arab Emirates' },
-	{ name: 'El Al Israel Airlines', code: 'LY', icaoCode: 'ELY', country: 'Israel' },
-	{ name: 'Royal Jordanian', code: 'RJ', icaoCode: 'RJA', country: 'Jordan' },
-	{ name: 'Saudia', code: 'SV', icaoCode: 'SVA', country: 'Saudi Arabia' },
-	{ name: 'South African Airways', code: 'SA', icaoCode: 'SAA', country: 'South Africa' },
-	{ name: 'Ethiopian Airlines', code: 'ET', icaoCode: 'ETH', country: 'Ethiopia' },
-	{ name: 'EgyptAir', code: 'MS', icaoCode: 'MSR', country: 'Egypt' },
-	{ name: 'Royal Air Maroc', code: 'AT', icaoCode: 'RAM', country: 'Morocco' },
-	
-	// Asia Pacific
-	{ name: 'Singapore Airlines', code: 'SQ', icaoCode: 'SIA', country: 'Singapore' },
-	{ name: 'Cathay Pacific', code: 'CX', icaoCode: 'CPA', country: 'Hong Kong' },
-	{ name: 'Japan Airlines', code: 'JL', icaoCode: 'JAL', country: 'Japan' },
-	{ name: 'All Nippon Airways', code: 'NH', icaoCode: 'ANA', country: 'Japan' },
-	{ name: 'Korean Air', code: 'KE', icaoCode: 'KAL', country: 'South Korea' },
-	{ name: 'Asiana Airlines', code: 'OZ', icaoCode: 'AAR', country: 'South Korea' },
-	{ name: 'Thai Airways', code: 'TG', icaoCode: 'THA', country: 'Thailand' },
-	{ name: 'Vietnam Airlines', code: 'VN', icaoCode: 'HVN', country: 'Vietnam' },
-	{ name: 'Philippine Airlines', code: 'PR', icaoCode: 'PAL', country: 'Philippines' },
-	{ name: 'Malaysia Airlines', code: 'MH', icaoCode: 'MAS', country: 'Malaysia' },
-	{ name: 'Garuda Indonesia', code: 'GA', icaoCode: 'GIA', country: 'Indonesia' },
-	{ name: 'Air India', code: 'AI', icaoCode: 'AIC', country: 'India' },
-	{ name: 'Air China', code: 'CA', icaoCode: 'CCA', country: 'China' },
-	{ name: 'China Eastern Airlines', code: 'MU', icaoCode: 'CES', country: 'China' },
-	{ name: 'China Southern Airlines', code: 'CZ', icaoCode: 'CSN', country: 'China' },
-	{ name: 'Hainan Airlines', code: 'HU', icaoCode: 'CHH', country: 'China' },
-	{ name: 'EVA Air', code: 'BR', icaoCode: 'EVA', country: 'Taiwan' },
-	{ name: 'China Airlines', code: 'CI', icaoCode: 'CAL', country: 'Taiwan' },
-	
-	// Oceania
-	{ name: 'Qantas', code: 'QF', icaoCode: 'QFA', country: 'Australia' },
-	{ name: 'Virgin Australia', code: 'VA', icaoCode: 'VOZ', country: 'Australia' },
-	{ name: 'Jetstar Airways', code: 'JQ', icaoCode: 'JST', country: 'Australia' },
-	{ name: 'Air New Zealand', code: 'NZ', icaoCode: 'ANZ', country: 'New Zealand' },
-	{ name: 'Fiji Airways', code: 'FJ', icaoCode: 'FJI', country: 'Fiji' },
-	
-	// Americas (non-US)
-	{ name: 'Air Canada', code: 'AC', icaoCode: 'ACA', country: 'Canada' },
-	{ name: 'WestJet', code: 'WS', icaoCode: 'WJA', country: 'Canada' },
-	{ name: 'Aeromexico', code: 'AM', icaoCode: 'AMX', country: 'Mexico' },
-	{ name: 'Volaris', code: 'Y4', icaoCode: 'VOI', country: 'Mexico' },
-	{ name: 'LATAM Airlines', code: 'LA', icaoCode: 'LAN', country: 'Chile' },
-	{ name: 'Avianca', code: 'AV', icaoCode: 'AVA', country: 'Colombia' },
-	{ name: 'Copa Airlines', code: 'CM', icaoCode: 'CMP', country: 'Panama' },
-	{ name: 'Gol Transportes Aéreos', code: 'G3', icaoCode: 'GLO', country: 'Brazil' },
-	{ name: 'Azul Brazilian Airlines', code: 'AD', icaoCode: 'AZU', country: 'Brazil' },
-	
-	// Low-cost carriers (additional)
-	{ name: 'AirAsia', code: 'AK', icaoCode: 'AXM', country: 'Malaysia' },
-	{ name: 'Scoot', code: 'TR', icaoCode: 'TGW', country: 'Singapore' },
-	{ name: 'Cebu Pacific', code: '5J', icaoCode: 'CEB', country: 'Philippines' },
-	{ name: 'IndiGo', code: '6E', icaoCode: 'IGO', country: 'India' },
-	{ name: 'Peach Aviation', code: 'MM', icaoCode: 'APJ', country: 'Japan' },
-	{ name: 'Spring Airlines', code: '9C', icaoCode: 'CQH', country: 'China' },
-	{ name: 'Eurowings', code: 'EW', icaoCode: 'EWG', country: 'Germany' },
-	{ name: 'Transavia', code: 'HV', icaoCode: 'TRA', country: 'Netherlands' },
-];
 
 // =============================================================================
 // Exports
