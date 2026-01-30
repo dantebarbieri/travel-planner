@@ -36,15 +36,23 @@ interface CacheEntry {
 let db: Database.Database | null = null;
 
 /**
+ * Check if we're in build mode (no-op for cache operations).
+ */
+function isBuildTime(): boolean {
+	return building;
+}
+
+/**
  * Initialize the database connection and create tables if needed.
  * Safe to call multiple times - will reuse existing connection.
+ * Returns null during build time to enable no-op pattern.
  */
-function getDb(): Database.Database {
+function getDb(): Database.Database | null {
 	if (db) return db;
 
-	// Don't initialize DB during build
-	if (building) {
-		throw new Error('Cannot access database during build');
+	// Return null during build - cache operations become no-ops
+	if (isBuildTime()) {
+		return null;
 	}
 
 	const dbPath = env.DATABASE_PATH || './data/cache.db';
@@ -82,10 +90,12 @@ function getDb(): Database.Database {
 
 /**
  * Get a cached value by key.
- * Returns null if not found or expired.
+ * Returns null if not found, expired, or during build.
  */
 export function get<T>(key: string): T | null {
 	const db = getDb();
+	if (!db) return null; // No-op during build
+	
 	const now = Date.now();
 
 	const stmt = db.prepare<[string, number], CacheEntry>(
@@ -112,6 +122,8 @@ export function getMany<T>(keys: string[]): Map<string, T> {
 	if (keys.length === 0) return new Map();
 
 	const db = getDb();
+	if (!db) return new Map(); // No-op during build
+	
 	const now = Date.now();
 	const results = new Map<string, T>();
 
@@ -135,9 +147,12 @@ export function getMany<T>(keys: string[]): Map<string, T> {
 
 /**
  * Set a cached value with TTL.
+ * No-op during build.
  */
 export function set<T>(key: string, value: T, type: CacheType): void {
 	const db = getDb();
+	if (!db) return; // No-op during build
+	
 	const now = Date.now();
 	const ttl = CACHE_TTL[type];
 	const expiresAt = now + ttl;
@@ -152,11 +167,14 @@ export function set<T>(key: string, value: T, type: CacheType): void {
 
 /**
  * Set multiple cached values at once.
+ * No-op during build.
  */
 export function setMany<T>(entries: Array<{ key: string; value: T }>, type: CacheType): void {
 	if (entries.length === 0) return;
 
 	const db = getDb();
+	if (!db) return; // No-op during build
+	
 	const now = Date.now();
 	const ttl = CACHE_TTL[type];
 	const expiresAt = now + ttl;
@@ -177,17 +195,22 @@ export function setMany<T>(entries: Array<{ key: string; value: T }>, type: Cach
 
 /**
  * Delete a cached entry.
+ * No-op during build.
  */
 export function del(key: string): void {
 	const db = getDb();
+	if (!db) return; // No-op during build
 	db.prepare('DELETE FROM cache WHERE key = ?').run(key);
 }
 
 /**
  * Check if a key exists and is not expired.
+ * Returns false during build.
  */
 export function has(key: string): boolean {
 	const db = getDb();
+	if (!db) return false; // No-op during build
+	
 	const now = Date.now();
 	const stmt = db.prepare<[string, number], { count: number }>(
 		'SELECT COUNT(*) as count FROM cache WHERE key = ? AND expires_at > ?'
@@ -198,9 +221,12 @@ export function has(key: string): boolean {
 
 /**
  * Remove all expired entries.
+ * Returns 0 during build.
  */
 export function cleanupExpired(): number {
 	const db = getDb();
+	if (!db) return 0; // No-op during build
+	
 	const now = Date.now();
 	const result = db.prepare('DELETE FROM cache WHERE expires_at <= ?').run(now);
 	return result.changes;
@@ -208,9 +234,12 @@ export function cleanupExpired(): number {
 
 /**
  * Get cache statistics.
+ * Returns empty stats during build.
  */
 export function getStats(): { total: number; byType: Record<string, number> } {
 	const db = getDb();
+	if (!db) return { total: 0, byType: {} }; // No-op during build
+	
 	const now = Date.now();
 
 	const totalStmt = db.prepare<[number], { count: number }>(
@@ -232,17 +261,21 @@ export function getStats(): { total: number; byType: Record<string, number> } {
 
 /**
  * Clear all cache entries.
+ * No-op during build.
  */
 export function clear(): void {
 	const db = getDb();
+	if (!db) return; // No-op during build
 	db.prepare('DELETE FROM cache').run();
 }
 
 /**
  * Clear cache entries by type.
+ * No-op during build.
  */
 export function clearByType(type: CacheType): void {
 	const db = getDb();
+	if (!db) return; // No-op during build
 	db.prepare('DELETE FROM cache WHERE type = ?').run(type);
 }
 
