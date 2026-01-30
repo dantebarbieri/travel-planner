@@ -59,9 +59,9 @@ ENV PORT=3000
 ENV HOST=0.0.0.0
 ENV DATABASE_PATH=/app/data/cache.db
 
-# Health check
+# Health check using Node.js (no additional dependencies needed)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+    CMD node -e "fetch('http://localhost:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 # Start the application
 CMD ["node", "build"]
