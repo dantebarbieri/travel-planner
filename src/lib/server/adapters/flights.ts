@@ -8,7 +8,6 @@
 
 import type { Airline, FlightSearchResult } from '$lib/types/travel';
 import { 
-	aerodataboxAdapter, 
 	isConfigured as isAeroDataBoxConfigured,
 	getFlightByNumber,
 	getAllFlightsByNumber,
