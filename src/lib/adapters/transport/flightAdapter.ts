@@ -1,12 +1,16 @@
 /**
  * Flight adapter exports
- * Uses adsbdb.com for real flight route lookups
+ * Uses server API (backed by AeroDataBox) for real flight lookups
  */
 
 import type { FlightAdapter, FlightSearchResult, Airline, Location } from '$lib/types/travel';
 
-// Export adsbdb adapter as the main flight adapter
-export { adsbdbFlightAdapter as flightAdapter } from './adsbdbAdapter';
+// Export server adapter as the main flight adapter
+// This calls our server endpoints which use AeroDataBox API
+export { serverFlightAdapter as flightAdapter } from './serverFlightAdapter';
+
+// Re-export cache clearing utility
+export { clearFlightCache } from './serverFlightAdapter';
 
 // ============ Fake Flight Adapter (for offline development and testing) ============
 

@@ -16,8 +16,10 @@ export const CACHE_TTL = {
 	WEATHER_FORECAST: 60 * 60 * 1000,          // 1 hour
 	WEATHER_HISTORICAL: 24 * 60 * 60 * 1000,   // 24 hours
 	WEATHER_PREDICTION: 6 * 60 * 60 * 1000,    // 6 hours
-	FLIGHT_ROUTE: 60 * 60 * 1000,              // 1 hour
-	AIRLINE_SEARCH: 24 * 60 * 60 * 1000,       // 24 hours
+	FLIGHT_ROUTE: 6 * 60 * 60 * 1000,          // 6 hours (schedules can change)
+	FLIGHT_STATUS: 60 * 60 * 1000,             // 1 hour (for day-of status)
+	AIRLINE_SEARCH: 30 * 24 * 60 * 60 * 1000,  // 30 days (rarely changes)
+	AIRPORT_DATA: 30 * 24 * 60 * 60 * 1000,    // 30 days (rarely changes)
 	ROUTING: 7 * 24 * 60 * 60 * 1000           // 7 days
 } as const;
 
@@ -262,10 +264,24 @@ export function flightCacheKey(callsign: string): string {
 }
 
 /**
+ * Generate a cache key for flight status (flight number + date).
+ */
+export function flightStatusCacheKey(flightNumber: string, date: string): string {
+	return `flight:status:${flightNumber.toUpperCase()}:${date}`;
+}
+
+/**
  * Generate a cache key for airline searches.
  */
 export function airlineCacheKey(query: string): string {
 	return `airline:search:${query.toUpperCase()}`;
+}
+
+/**
+ * Generate a cache key for airport data.
+ */
+export function airportCacheKey(code: string): string {
+	return `airport:${code.toUpperCase()}`;
 }
 
 /**
@@ -292,7 +308,9 @@ export const cache = {
 	// Key generators
 	weatherCacheKey,
 	flightCacheKey,
+	flightStatusCacheKey,
 	airlineCacheKey,
+	airportCacheKey,
 	routingCacheKey,
 	// TTL constants
 	TTL: CACHE_TTL
