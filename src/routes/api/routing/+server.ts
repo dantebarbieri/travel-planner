@@ -11,9 +11,9 @@ import type { Location } from '$lib/types/travel';
 
 const VALID_MODES: TravelMode[] = ['driving', 'walking', 'bicycling', 'transit'];
 
-export const GET: RequestHandler = async ({ url, getClientAddress }) => {
+export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
 	// Rate limiting
-	const ip = getClientAddress();
+	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'routing')) {
 		const headers = rateLimit.getHeaders(ip, 'routing');
 		return new Response(JSON.stringify({ error: 'Too many requests' }), {

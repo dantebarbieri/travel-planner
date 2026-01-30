@@ -151,11 +151,46 @@ export function resetRateLimit(ip: string, endpoint?: EndpointType): void {
 	}
 }
 
+/**
+ * Extract client IP from request, handling reverse proxy scenarios.
+ * 
+ * When behind a reverse proxy (nginx, cloudflare, etc.), the real client IP
+ * is typically in X-Forwarded-For or X-Real-IP headers. This function checks
+ * these headers first, falling back to getClientAddress().
+ * 
+ * IMPORTANT: Only trust these headers if you're behind a trusted proxy.
+ * Set TRUST_PROXY=true in your environment when running behind a reverse proxy.
+ * 
+ * @param request - The incoming request object
+ * @param getClientAddress - SvelteKit's getClientAddress function
+ */
+export function getClientIp(request: Request, getClientAddress: () => string): string {
+	const trustProxy = env.TRUST_PROXY === 'true';
+	
+	if (trustProxy) {
+		// X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
+		// The first one is the original client IP
+		const forwardedFor = request.headers.get('x-forwarded-for');
+		if (forwardedFor) {
+			const firstIp = forwardedFor.split(',')[0].trim();
+			if (firstIp) return firstIp;
+		}
+		
+		// X-Real-IP is typically set by nginx
+		const realIp = request.headers.get('x-real-ip');
+		if (realIp) return realIp.trim();
+	}
+	
+	// Fall back to SvelteKit's getClientAddress
+	return getClientAddress();
+}
+
 // Export as a rate limiter object
 export const rateLimit = {
 	check: checkRateLimit,
 	getInfo: getRateLimitInfo,
 	getHeaders: getRateLimitHeaders,
 	cleanup: cleanupRateLimitStore,
-	reset: resetRateLimit
+	reset: resetRateLimit,
+	getClientIp
 };

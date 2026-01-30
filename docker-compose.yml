@@ -21,6 +21,9 @@ services:
       - RATE_LIMIT_MAX_WEATHER=${RATE_LIMIT_MAX_WEATHER:-100}
       - RATE_LIMIT_MAX_FLIGHTS=${RATE_LIMIT_MAX_FLIGHTS:-50}
       - RATE_LIMIT_MAX_ROUTING=${RATE_LIMIT_MAX_ROUTING:-200}
+      # Set to 'true' when behind a reverse proxy (nginx, cloudflare, etc.)
+      # to trust X-Forwarded-For/X-Real-IP headers for rate limiting
+      - TRUST_PROXY=${TRUST_PROXY:-false}
       # API keys (from .env file or host environment)
       - AERODATABOX_API_KEY=${AERODATABOX_API_KEY:-}
       - AERODATABOX_HOST=${AERODATABOX_HOST:-aerodatabox.p.rapidapi.com}

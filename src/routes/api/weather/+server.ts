@@ -10,9 +10,9 @@ import { isValidTimezone } from '$lib/utils/dates';
 import type { RequestHandler } from './$types';
 import type { Location } from '$lib/types/travel';
 
-export const GET: RequestHandler = async ({ url, getClientAddress }) => {
+export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
 	// Rate limiting
-	const ip = getClientAddress();
+	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'weather')) {
 		const headers = rateLimit.getHeaders(ip, 'weather');
 		return new Response(JSON.stringify({ error: 'Too many requests' }), {
