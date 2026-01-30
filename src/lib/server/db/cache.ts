@@ -281,9 +281,17 @@ export function clearByType(type: CacheType): void {
 
 /**
  * Generate a cache key for weather data.
+ * 
+ * Coordinates are rounded to 2 decimal places (~1.1km precision at equator).
+ * This is intentional for weather data because:
+ * - Weather conditions are consistent within ~1km areas
+ * - Reduces cache fragmentation for nearby locations (hotels, restaurants in same city)
+ * - Weather APIs like Open-Meteo use similar grid resolutions
+ * 
+ * For higher precision needs (e.g., routing), use routingCacheKey instead.
  */
 export function weatherCacheKey(lat: number, lon: number, date: string, type: 'forecast' | 'historical' | 'prediction'): string {
-	// Round coords to 2 decimal places for cache efficiency
+	// 2 decimal places = ~1.1km precision at equator, ~0.7km at 50° latitude
 	const roundedLat = Math.round(lat * 100) / 100;
 	const roundedLon = Math.round(lon * 100) / 100;
 	return `weather:${type}:${roundedLat}:${roundedLon}:${date}`;
