@@ -25,6 +25,9 @@
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
+	// Get time format preference (12h vs 24h)
+	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
+
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
 			flight: 'flight',
@@ -149,7 +152,7 @@
 						<span class="primary-name">{leg.origin.name}</span>
 						{#if leg.departureTime}
 							<span class="primary-time">
-								{formatTime(leg.departureTime)}
+								{formatTime(leg.departureTime, use24h)}
 								{#if departureTzAbbr}
 									<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
 								{/if}
@@ -166,7 +169,7 @@
 						<span class="primary-name">{leg.destination.name}</span>
 						{#if leg.arrivalTime}
 							<span class="primary-time">
-								{formatTime(leg.arrivalTime)}
+								{formatTime(leg.arrivalTime, use24h)}
 								{#if arrivalTzAbbr}
 									<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
 								{/if}
@@ -186,7 +189,7 @@
 					<span class="route-name">{leg.origin.name}</span>
 					{#if leg.departureTime}
 						<span class="route-time">
-							{formatTime(leg.departureTime)}
+							{formatTime(leg.departureTime, use24h)}
 							{#if departureTzAbbr}
 								<span class="timezone" title={departureTzOffset || ''}>{departureTzAbbr}</span>
 							{/if}
@@ -204,7 +207,7 @@
 					<span class="route-name">{leg.destination.name}</span>
 					{#if leg.arrivalTime}
 						<span class="route-time">
-							{formatTime(leg.arrivalTime)}
+							{formatTime(leg.arrivalTime, use24h)}
 							{#if arrivalTzAbbr}
 								<span class="timezone" title={arrivalTzOffset || ''} class:different={timezonesAreDifferent}>{arrivalTzAbbr}</span>
 							{/if}

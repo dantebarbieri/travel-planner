@@ -17,6 +17,9 @@
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
 
+	// Get time format preference (12h vs 24h)
+	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
+
 	const categoryLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
 			sightseeing: 'Sightseeing',
@@ -42,9 +45,9 @@
 
 	const timeDisplay = $derived.by(() => {
 		if (!activity.startTime) return null;
-		const start = formatTime(activity.startTime);
+		const start = formatTime(activity.startTime, use24h);
 		if (activity.endTime) {
-			return `${start} - ${formatTime(activity.endTime)}`;
+			return `${start} - ${formatTime(activity.endTime, use24h)}`;
 		}
 		return start;
 	});

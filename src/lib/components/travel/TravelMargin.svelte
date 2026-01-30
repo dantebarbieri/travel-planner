@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import type { Location, TravelMode, TravelEstimate } from '$lib/types/travel';
 	import type { DisableableTransportMode } from '$lib/types/settings';
 	import { formatDuration, formatDistance } from '$lib/utils/dates';
 	import { getDirectionsUrl } from '$lib/services/mapService';
-	import { getRoute } from '$lib/services/routingService';
+	import { routingApi } from '$lib/api/routingApi';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -54,6 +55,9 @@
 
 	// Load route data when locations or mode change
 	$effect(() => {
+		// Only fetch in browser to avoid SSR warning
+		if (!browser) return;
+		
 		// Capture dependencies
 		const from = fromLocation;
 		const to = toLocation;
@@ -63,7 +67,7 @@
 		isLoading = true;
 		routeData = null;
 
-		getRoute(from, to, mode)
+		routingApi.getRoute(from, to, mode)
 			.then((result) => {
 				// Only update if mode hasn't changed
 				if (mode === selectedMode) {
@@ -81,6 +85,9 @@
 
 	// Load mode routes when selector is shown (consolidates preloading and display)
 	$effect(() => {
+		// Only fetch in browser to avoid SSR warning
+		if (!browser) return;
+		
 		if (showSelector) {
 			modeRoutesLoading = true;
 			modeRoutes = new Map();
@@ -88,7 +95,7 @@
 			// Load all routes in parallel (this both caches and populates modeRoutes)
 			Promise.all(
 				modes.map(async (mode) => {
-					const route = await getRoute(fromLocation, toLocation, mode);
+					const route = await routingApi.getRoute(fromLocation, toLocation, mode);
 					modeRoutes.set(mode, route);
 					// Trigger reactivity
 					modeRoutes = new Map(modeRoutes);

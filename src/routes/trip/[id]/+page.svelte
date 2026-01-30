@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
-	import { weatherAdapter } from '$lib/adapters/weather';
+	import { weatherApi } from '$lib/api/weatherApi';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
 	import { resolveAllDayUnits, type DayUnitResolution } from '$lib/utils/units';
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
@@ -94,11 +95,12 @@
 					country: city.country,
 					formatted: `${city.name}, ${city.country}`
 				},
-				geo: city.location
+				geo: city.location,
+				timezone: city.timezone // Pass timezone for correct date classification
 			};
 			try {
-				// Use smart weather fetch (forecast vs historical based on date)
-				const forecasts = await weatherAdapter.getWeather(location, [day.date]);
+				// Use smart weather fetch via server API (with client caching and retry)
+				const forecasts = await weatherApi.getWeather(location, [day.date]);
 				if (forecasts.length > 0 && forecasts[0]) {
 					conditions.push(forecasts[0]);
 				}
@@ -119,6 +121,8 @@
 	let previousCityIds = $state<Record<string, string[]>>({});
 
 	$effect(() => {
+		// Only fetch in browser to avoid SSR warning
+		if (!browser) return;
 		if (!trip) return;
 
 		// Check each day to see if its cities changed
@@ -145,6 +149,7 @@
 	async function exportAs(format: 'json' | 'pdf' | 'docx' | 'print') {
 		if (!trip) return;
 		isExporting = true;
+		const use24h = settingsStore.userSettings.timeFormat === '24h';
 		try {
 			switch (format) {
 				case 'json':
@@ -152,13 +157,13 @@
 					storageService.downloadJson(trip, settingsStore.userSettings.customColorSchemes);
 					break;
 				case 'pdf':
-					await documentService.exportToPDF(trip);
+					await documentService.exportToPDF(trip, use24h);
 					break;
 				case 'docx':
-					await documentService.exportToDOCX(trip);
+					await documentService.exportToDOCX(trip, use24h);
 					break;
 				case 'print':
-					documentService.openPrintView(trip);
+					documentService.openPrintView(trip, use24h);
 					break;
 			}
 			showExportModal = false;

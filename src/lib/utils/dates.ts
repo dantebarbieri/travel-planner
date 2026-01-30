@@ -124,6 +124,24 @@ export function isFuture(isoDate: string): boolean {
 }
 
 /**
+ * Validate an IANA timezone string.
+ * Returns true if the timezone is valid, false otherwise.
+ */
+export function isValidTimezone(timezone: string): boolean {
+	if (!timezone || typeof timezone !== 'string') {
+		return false;
+	}
+	
+	try {
+		// Intl.DateTimeFormat throws RangeError for invalid timezones
+		Intl.DateTimeFormat('en-US', { timeZone: timezone });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Get timezone abbreviation for a given IANA timezone (e.g., "America/New_York" -> "EST" or "EDT")
  * Uses a specific date to account for daylight saving time
  */

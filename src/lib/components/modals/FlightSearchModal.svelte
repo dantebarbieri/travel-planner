@@ -6,10 +6,11 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
-	import { flightAdapter } from '$lib/adapters/transport/flightAdapter';
+	import { flightApi } from '$lib/api/flightApi';
 	import { searchAirports, type AirportSearchResult } from '$lib/adapters/airports/airportAdapter';
 	import { generateTransportId } from '$lib/utils/ids';
-	import { formatDuration } from '$lib/utils/dates';
+	import { formatDuration, formatTime } from '$lib/utils/dates';
+	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		isOpen: boolean;
@@ -20,13 +21,20 @@
 
 	let { isOpen, onclose, onAddFlight, defaultDate = '' }: Props = $props();
 
+	// Get time format preference (12h vs 24h)
+	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
+
 	let airlineSearchValue = $state('');
 	let selectedAirline = $state<Airline | null>(null);
 	let flightNumber = $state('');
 	let departureDate = $state('');
 	let isSearching = $state(false);
-	let searchResult = $state<FlightSearchResult | null>(null);
+	let searchResults = $state<FlightSearchResult[]>([]);
+	let selectedFlightIndex = $state(0);
 	let searchError = $state('');
+	
+	// Derived: currently selected flight from search results
+	const searchResult = $derived(searchResults.length > 0 ? searchResults[selectedFlightIndex] : null);
 
 	// Custom entry fields (when flight not found)
 	let showCustomForm = $state(false);
@@ -79,7 +87,7 @@
 	}
 
 	async function searchAirlines(query: string): Promise<Airline[]> {
-		return flightAdapter.searchAirlines(query);
+		return flightApi.searchAirlines(query);
 	}
 
 	async function searchAirportsAsync(query: string): Promise<AirportSearchResult[]> {
@@ -91,18 +99,20 @@
 		if (!selectedAirline || !flightNumber || !departureDate) return;
 		isSearching = true;
 		searchError = '';
-		searchResult = null;
+		searchResults = [];
+		selectedFlightIndex = 0;
 		isEditingRoute = false;
 		try {
-			const result = await flightAdapter.getFlightDetails(
+			const results = await flightApi.searchAllFlights(
 				selectedAirline.code,
 				flightNumber,
 				departureDate
 			);
-			if (result) {
-				searchResult = result;
+			if (results.length > 0) {
+				searchResults = results;
 				showCustomForm = false;
-				// Initialize time inputs for found route
+				// Initialize time inputs for found route (use first result)
+				const result = results[0];
 				foundRouteDepartureTime = result.departureTime || '';
 				foundRouteArrivalTime = result.arrivalTime || '';
 				foundRouteArrivalDate = result.arrivalDate || departureDate;
@@ -143,7 +153,7 @@
 		customDepartureTime = foundRouteDepartureTime;
 		customArrivalTime = foundRouteArrivalTime;
 		customArrivalDate = foundRouteArrivalDate;
-		searchResult = null;
+		searchResults = [];
 		isEditingRoute = false;
 	}
 
@@ -208,7 +218,8 @@
 			selectedAirline = null;
 			flightNumber = '';
 			departureDate = defaultDate;
-			searchResult = null;
+			searchResults = [];
+			selectedFlightIndex = 0;
 			searchError = '';
 			showCustomForm = false;
 			customDepartureTime = '';
@@ -292,6 +303,38 @@
 
 		{#if searchResult && !isEditingRoute}
 			<div class="flight-result">
+				{#if searchResults.length > 1}
+					<div class="flight-selector">
+						<p class="flight-selector-label">Multiple flights found - select your route:</p>
+						<div class="flight-options">
+							{#each searchResults as flight, index}
+								<button
+									type="button"
+									class="flight-option"
+									class:selected={selectedFlightIndex === index}
+									onclick={() => {
+										selectedFlightIndex = index;
+										foundRouteDepartureTime = flight.departureTime || '';
+										foundRouteArrivalTime = flight.arrivalTime || '';
+										foundRouteArrivalDate = flight.arrivalDate || departureDate;
+										editedOriginSearch = flight.origin.name;
+										editedDestinationSearch = flight.destination.name;
+									}}
+								>
+									<span class="flight-option-route">
+										{flight.origin.name.match(/\(([A-Z]{3})\)/)?.[1] || flight.origin.name}
+										→
+										{flight.destination.name.match(/\(([A-Z]{3})\)/)?.[1] || flight.destination.name}
+									</span>
+									{#if flight.departureTime}
+										<span class="flight-option-time">{formatTime(flight.departureTime, use24h)}</span>
+									{/if}
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
 				<div class="result-header">
 					<Icon name="flight" size={20} />
 					<span class="result-airline">{searchResult.airline}</span>
@@ -301,7 +344,7 @@
 					<div class="route-point">
 						<span class="route-name">{searchResult.origin.name}</span>
 						{#if searchResult.departureTime}
-							<span class="route-time">{searchResult.departureTime}</span>
+							<span class="route-time">{formatTime(searchResult.departureTime, use24h)}</span>
 						{/if}
 					</div>
 					<div class="route-line">
@@ -314,7 +357,7 @@
 					<div class="route-point">
 						<span class="route-name">{searchResult.destination.name}</span>
 						{#if searchResult.arrivalTime}
-							<span class="route-time">{searchResult.arrivalTime}</span>
+							<span class="route-time">{formatTime(searchResult.arrivalTime, use24h)}</span>
 							{#if searchResult.arrivalDate && searchResult.arrivalDate !== searchResult.departureDate}
 								<span class="route-next-day">+1</span>
 							{/if}
@@ -322,13 +365,13 @@
 					</div>
 				</div>
 
-				<div class="verify-warning">
-					<Icon name="warning" size={14} />
-					<span>Please verify this route is correct. Airlines may reuse flight numbers for different routes.</span>
-					<button type="button" class="edit-route-link" onclick={startEditingRoute}>
-						Wrong route? Edit
-					</button>
-				</div>
+				{#if searchResults.length === 1}
+					<div class="edit-route-hint">
+						<button type="button" class="edit-route-link" onclick={startEditingRoute}>
+							Need to edit the route?
+						</button>
+					</div>
+				{/if}
 
 				{#if searchResult.price}
 					<div class="result-price">
@@ -680,18 +723,6 @@
 		color: var(--text-primary);
 	}
 
-	.verify-warning {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		background: color-mix(in oklch, var(--color-warning), transparent 92%);
-		border-radius: var(--radius-sm);
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-	}
-
 	.edit-route-link {
 		background: none;
 		border: none;
@@ -705,6 +736,66 @@
 		&:hover {
 			color: var(--color-primary-dark);
 		}
+	}
+
+	.flight-selector {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
+		padding-bottom: var(--space-3);
+		border-bottom: 1px dashed var(--border-color);
+	}
+
+	.flight-selector-label {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--text-primary);
+		margin: 0;
+	}
+
+	.flight-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.flight-option {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		background: var(--surface-secondary);
+		border: 2px solid var(--border-color);
+		border-radius: var(--radius-sm);
+		font-size: 0.875rem;
+		color: var(--text-primary);
+		cursor: pointer;
+		transition: all 0.15s ease;
+
+		&:hover {
+			border-color: var(--color-primary);
+		}
+
+		&.selected {
+			border-color: var(--color-success);
+			background: color-mix(in oklch, var(--color-success), transparent 92%);
+		}
+	}
+
+	.flight-option-route {
+		font-weight: 500;
+		color: var(--text-primary);
+	}
+
+	.flight-option-time {
+		color: var(--text-secondary);
+		font-size: 0.75rem;
+	}
+
+	.edit-route-hint {
+		text-align: center;
+		font-size: 0.75rem;
 	}
 
 	.route-edit-form {

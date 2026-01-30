@@ -2,6 +2,7 @@ import type { Location, WeatherCondition } from '$lib/types/travel';
 import type { OpenMeteoForecastResponse, OpenMeteoHistoricalResponse } from './types';
 import { mapWmoCodeToCondition } from './weatherCodeMap';
 import { CACHE_CONFIG } from './types';
+import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 
 const FORECAST_API_URL = 'https://api.open-meteo.com/v1/forecast';
 const HISTORICAL_API_URL = 'https://archive-api.open-meteo.com/v1/archive';
@@ -196,6 +197,7 @@ function transformHistoricalResponse(
 /**
  * Fetch forecast data from Open-Meteo API.
  * Returns weather for today + up to 16 days ahead.
+ * Uses retry with exponential backoff for rate limit errors.
  */
 export async function fetchForecast(location: Location): Promise<WeatherCondition[]> {
 	await rateLimiter.waitForSlot();
@@ -222,10 +224,16 @@ export async function fetchForecast(location: Location): Promise<WeatherConditio
 		temperature_unit: 'fahrenheit'
 	});
 
-	const response = await fetch(`${FORECAST_API_URL}?${params}`);
+	const url = `${FORECAST_API_URL}?${params}`;
+	const response = await fetchWithRetry(url, undefined, {
+		maxAttempts: 4,
+		onRetry: (attempt, delayMs) => {
+			console.log(`[OpenMeteo] Forecast retry ${attempt} for ${lat},${lon}, waiting ${delayMs}ms...`);
+		}
+	});
 
 	if (!response.ok) {
-		throw new Error(`Open-Meteo forecast API error: ${response.status} ${response.statusText}`);
+		throw new HttpError(response.status, `Open-Meteo forecast API error: ${response.status} ${response.statusText}`);
 	}
 
 	const data: OpenMeteoForecastResponse = await response.json();
@@ -234,6 +242,7 @@ export async function fetchForecast(location: Location): Promise<WeatherConditio
 
 /**
  * Fetch historical data from Open-Meteo Archive API.
+ * Uses retry with exponential backoff for rate limit errors.
  * @param startDate - Start date in YYYY-MM-DD format
  * @param endDate - End date in YYYY-MM-DD format
  */
@@ -264,10 +273,16 @@ export async function fetchHistorical(
 		temperature_unit: 'fahrenheit'
 	});
 
-	const response = await fetch(`${HISTORICAL_API_URL}?${params}`);
+	const url = `${HISTORICAL_API_URL}?${params}`;
+	const response = await fetchWithRetry(url, undefined, {
+		maxAttempts: 4,
+		onRetry: (attempt, delayMs) => {
+			console.log(`[OpenMeteo] Historical retry ${attempt} for ${lat},${lon}, waiting ${delayMs}ms...`);
+		}
+	});
 
 	if (!response.ok) {
-		throw new Error(`Open-Meteo historical API error: ${response.status} ${response.statusText}`);
+		throw new HttpError(response.status, `Open-Meteo historical API error: ${response.status} ${response.statusText}`);
 	}
 
 	const data: OpenMeteoHistoricalResponse = await response.json();
