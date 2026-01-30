@@ -1,0 +1,61 @@
+# =============================================================================
+# Travel Planner - Docker Ignore
+# Excludes files not needed in the Docker build context
+# =============================================================================
+
+# Dependencies (will be installed fresh in container)
+node_modules
+
+# Build output (will be rebuilt in container)
+.svelte-kit
+build
+.output
+.vercel
+.netlify
+.wrangler
+
+# Development files
+.env
+.env.local
+.env.development
+.env.*.local
+!.env.example
+
+# IDE/Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation and meta
+README.md
+CLAUDE.md
+*.md
+!package*.json
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__
+
+# Data (SQLite will be created in container)
+data/
+
+# Claude/Copilot
+.claude
+.copilot
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript build info
+*.tsbuildinfo

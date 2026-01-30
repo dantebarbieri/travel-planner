@@ -9,12 +9,18 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"docker:build": "docker build -t travel-planner .",
+		"docker:run": "docker run -p 3000:3000 --env-file .env -v travel-planner-data:/app/data travel-planner",
+		"docker:up": "docker compose up -d",
+		"docker:down": "docker compose down",
+		"docker:logs": "docker compose logs -f"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.49.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/culori": "^4.0.1",
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
@@ -22,6 +28,8 @@
 		"vite": "^7.2.6"
 	},
 	"dependencies": {
+		"@sveltejs/adapter-node": "^5.5.2",
+		"better-sqlite3": "^12.6.2",
 		"culori": "^4.0.2",
 		"docx": "^9.5.1",
 		"html2pdf.js": "^0.14.0"

@@ -11,8 +11,51 @@ A travel itinerary planning application built with **SvelteKit 5** and **Svelte 
 - **Framework**: SvelteKit 5 with TypeScript
 - **State Management**: Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`)
 - **Styling**: Modern CSS with variables, nesting, container queries, `:has()`, `color-mix()`
-- **Persistence**: localStorage with debounced auto-save
+- **Persistence**: localStorage (trip data), SQLite (server cache)
+- **Server**: Node.js with adapter-node, deployable via Docker
 - **Export**: PDF (html2pdf.js), DOCX (docx library), JSON
+
+## Server Architecture
+
+External API calls (weather, flights, routing) go through server endpoints:
+
+```
+Browser                           Server (SvelteKit)
+┌─────────────────┐              ┌─────────────────────┐
+│ $lib/api/*      │──fetch──────►│ /api/weather        │
+│ (client cache)  │              │ /api/flights/*      │
+│                 │              │ /api/routing        │
+├─────────────────┤              ├─────────────────────┤
+│ localStorage    │              │ $lib/server/        │
+│ (trip data)     │              │ - SQLite cache      │
+└─────────────────┘              │ - Rate limiting     │
+                                 │ - API adapters      │
+                                 └──────────┬──────────┘
+                                            │
+                                 ┌──────────▼──────────┐
+                                 │ External APIs       │
+                                 │ - Open-Meteo        │
+                                 │ - OSRM (routing)    │
+                                 │ - adsbdb (flights)  │
+                                 └─────────────────────┘
+```
+
+### Key Server Directories
+
+- `$lib/server/` - Server-only code (SvelteKit enforces this)
+- `$lib/server/db/cache.ts` - SQLite cache with TTL
+- `$lib/server/rateLimit.ts` - IP-based rate limiting
+- `$lib/server/adapters/` - Server-side API adapters
+- `$lib/api/` - Client-side API wrappers with in-memory caching
+
+### API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/weather` | Weather data (forecast, historical, predictions) |
+| `GET /api/flights/search` | Flight route lookup |
+| `GET /api/flights/airlines` | Airline search |
+| `GET /api/routing` | Travel time/distance calculation |
 
 ## Project Structure
 

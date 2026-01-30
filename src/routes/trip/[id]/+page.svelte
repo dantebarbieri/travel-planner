@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
-	import { weatherAdapter } from '$lib/adapters/weather';
+	import { weatherApi } from '$lib/api/weatherApi';
 	import { formatDate, daysBetween, getDatesInRange } from '$lib/utils/dates';
 	import { resolveAllDayUnits, type DayUnitResolution } from '$lib/utils/units';
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
@@ -97,8 +97,8 @@
 				geo: city.location
 			};
 			try {
-				// Use smart weather fetch (forecast vs historical based on date)
-				const forecasts = await weatherAdapter.getWeather(location, [day.date]);
+				// Use smart weather fetch via server API (with client caching)
+				const forecasts = await weatherApi.getWeather(location, [day.date]);
 				if (forecasts.length > 0 && forecasts[0]) {
 					conditions.push(forecasts[0]);
 				}

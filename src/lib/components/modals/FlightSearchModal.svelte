@@ -6,7 +6,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
-	import { flightAdapter } from '$lib/adapters/transport/flightAdapter';
+	import { flightApi } from '$lib/api/flightApi';
 	import { searchAirports, type AirportSearchResult } from '$lib/adapters/airports/airportAdapter';
 	import { generateTransportId } from '$lib/utils/ids';
 	import { formatDuration } from '$lib/utils/dates';
@@ -79,7 +79,7 @@
 	}
 
 	async function searchAirlines(query: string): Promise<Airline[]> {
-		return flightAdapter.searchAirlines(query);
+		return flightApi.searchAirlines(query);
 	}
 
 	async function searchAirportsAsync(query: string): Promise<AirportSearchResult[]> {
@@ -94,7 +94,7 @@
 		searchResult = null;
 		isEditingRoute = false;
 		try {
-			const result = await flightAdapter.getFlightDetails(
+			const result = await flightApi.searchFlight(
 				selectedAirline.code,
 				flightNumber,
 				departureDate

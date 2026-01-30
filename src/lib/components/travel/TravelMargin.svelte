@@ -3,7 +3,7 @@
 	import type { DisableableTransportMode } from '$lib/types/settings';
 	import { formatDuration, formatDistance } from '$lib/utils/dates';
 	import { getDirectionsUrl } from '$lib/services/mapService';
-	import { getRoute } from '$lib/services/routingService';
+	import { routingApi } from '$lib/api/routingApi';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -63,7 +63,7 @@
 		isLoading = true;
 		routeData = null;
 
-		getRoute(from, to, mode)
+		routingApi.getRoute(from, to, mode)
 			.then((result) => {
 				// Only update if mode hasn't changed
 				if (mode === selectedMode) {
@@ -88,7 +88,7 @@
 			// Load all routes in parallel (this both caches and populates modeRoutes)
 			Promise.all(
 				modes.map(async (mode) => {
-					const route = await getRoute(fromLocation, toLocation, mode);
+					const route = await routingApi.getRoute(fromLocation, toLocation, mode);
 					modeRoutes.set(mode, route);
 					// Trigger reactivity
 					modeRoutes = new Map(modeRoutes);
