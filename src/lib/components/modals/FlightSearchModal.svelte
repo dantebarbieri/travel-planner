@@ -769,6 +769,7 @@
 		border: 2px solid var(--border-color);
 		border-radius: var(--radius-sm);
 		font-size: 0.875rem;
+		color: var(--text-primary);
 		cursor: pointer;
 		transition: all 0.15s ease;
 
@@ -784,6 +785,7 @@
 
 	.flight-option-route {
 		font-weight: 500;
+		color: var(--text-primary);
 	}
 
 	.flight-option-time {
