@@ -589,10 +589,6 @@ export async function getForecast(location: Location): Promise<WeatherCondition[
 	const lon = location.geo.longitude;
 	
 	// Check cache for recent forecast
-	const today = new Date().toISOString().split('T')[0];
-	const cacheKey = weatherCacheKey(lat, lon, today, 'forecast');
-	
-	// Try to get from cache
 	const cached = cache.get<WeatherCondition[]>(`forecast:${roundCoord(lat)}:${roundCoord(lon)}`);
 	if (cached) return cached;
 
