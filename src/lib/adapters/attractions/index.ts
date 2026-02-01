@@ -1,9 +1,8 @@
 /**
  * Attractions Adapter
  *
- * Note: This file is named "fakeAdapter.ts" for historical reasons.
- * It now uses the real Foursquare API exclusively and returns empty results
- * if the API is unavailable.
+ * Uses the Foursquare Places API for attraction search.
+ * Returns empty results if the API is unavailable.
  */
 
 import type { AttractionAdapter, ActivitySearchParams, Activity } from '$lib/types/travel';
@@ -42,5 +41,3 @@ export const attractionAdapter: AttractionAdapter = {
 	}
 };
 
-// Keep the old export name for backward compatibility
-export const fakeAttractionAdapter = attractionAdapter;

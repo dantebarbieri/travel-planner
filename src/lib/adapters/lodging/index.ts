@@ -29,5 +29,3 @@ export const lodgingAdapter: LodgingAdapter = {
 	}
 };
 
-// Keep the old export name for backward compatibility
-export const fakeLodgingAdapter = lodgingAdapter;

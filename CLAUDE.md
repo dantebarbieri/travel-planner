@@ -86,7 +86,7 @@ External APIs require the following environment variables:
 | `TIMEZONEDB_API_KEY` | Timezone (fallback) | No | https://timezonedb.com/ |
 | `AERODATABOX_API_KEY` | Flights | Yes | https://rapidapi.com/aedbx-aedbx/api/aerodatabox |
 
-All APIs have free tiers sufficient for development and moderate usage. Without API keys, adapters fall back to fake data.
+All APIs have free tiers sufficient for development and moderate usage. Without API keys, adapters return empty results.
 
 ## Project Structure
 
@@ -103,15 +103,14 @@ src/
 │   ├── stores/
 │   │   └── tripStore.svelte.ts  # Main trip state (Svelte 5 runes)
 │   ├── adapters/
-│   │   ├── cities/fakeAdapter.ts      # City search (Geoapify API)
-│   │   ├── lodging/fakeAdapter.ts     # Returns empty (users create custom stays)
-│   │   ├── food/fakeAdapter.ts        # Food venues (Foursquare API)
-│   │   ├── attractions/fakeAdapter.ts # Attractions (Foursquare API)
-│   │   ├── weather/fakeAdapter.ts     # Weather forecasts
+│   │   ├── cities/index.ts            # City search (Geoapify API)
+│   │   ├── lodging/index.ts           # Returns empty (users create custom stays)
+│   │   ├── food/index.ts              # Food venues (Foursquare API)
+│   │   ├── attractions/index.ts       # Attractions (Foursquare API)
+│   │   ├── weather/index.ts           # Weather forecasts (Open-Meteo API)
 │   │   └── transport/
 │   │       ├── estimateAdapter.ts     # Haversine-based estimates (isEstimate: true)
-│   │       ├── flightAdapter.ts       # Flight search
-│   │       └── trainBusAdapter.ts     # Train/Bus search
+│   │       └── flightAdapter.ts       # Flight search (AeroDataBox API)
 │   ├── api/
 │   │   ├── clientCache.ts             # Client-side caching utilities
 │   │   ├── flightApi.ts               # Flight API client
@@ -138,8 +137,7 @@ src/
 │   │   │   ├── AddItemModal.svelte
 │   │   │   ├── MoveItemModal.svelte
 │   │   │   ├── TransportKindModal.svelte
-│   │   │   ├── FlightSearchModal.svelte
-│   │   │   └── TrainBusSearchModal.svelte
+│   │   │   └── FlightSearchModal.svelte
 │   │   ├── itinerary/           # Day display components
 │   │   │   ├── ItineraryDay.svelte
 │   │   │   ├── DayHeader.svelte
@@ -406,13 +404,6 @@ interface StaySegment {
 - Currency support (USD, EUR, JPY)
 - Fallback to manual entry if not found
 
-### Train/Bus Search
-
-`TrainBusAdapter` interface with:
-- Station/terminal data for major cities
-- Route search by city and date
-- Support for custom manual entry
-
 ## Common Tasks
 
 ### Adding a New Component
@@ -512,7 +503,7 @@ Verify `Location.timezone` is set correctly for origin/destination. Use IANA tim
 
 3. **Real API Adapters**
 
-   The following real APIs replace fake adapters:
+   The following real APIs are used:
 
    | Function | API | Documentation |
    |----------|-----|---------------|

@@ -1,9 +1,8 @@
 /**
  * Food Venue Adapter
  *
- * Note: This file is named "fakeAdapter.ts" for historical reasons.
- * It now uses the real Foursquare API exclusively and returns empty results
- * if the API is unavailable.
+ * Uses the Foursquare Places API for food venue search.
+ * Returns empty results if the API is unavailable.
  */
 
 import type { FoodAdapter, FoodSearchParams, FoodVenue } from '$lib/types/travel';
@@ -42,5 +41,3 @@ export const foodAdapter: FoodAdapter = {
 	}
 };
 
-// Keep the old export name for backward compatibility
-export const fakeFoodAdapter = foodAdapter;

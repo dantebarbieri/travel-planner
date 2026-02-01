@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg } from '$lib/types/travel';
-	import { fakeAttractionAdapter } from '$lib/adapters/attractions/fakeAdapter';
-	import { fakeFoodAdapter } from '$lib/adapters/food/fakeAdapter';
-	import { fakeLodgingAdapter } from '$lib/adapters/lodging/fakeAdapter';
+	import { attractionAdapter } from '$lib/adapters/attractions';
+	import { foodAdapter } from '$lib/adapters/food';
+	import { lodgingAdapter } from '$lib/adapters/lodging';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -11,7 +11,6 @@
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
 	import TransportKindModal from '$lib/components/modals/TransportKindModal.svelte';
 	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
-	import TrainBusSearchModal from '$lib/components/modals/TrainBusSearchModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
 	import { geocodeAddress, type GeocodingResult } from '$lib/api/geocodingApi';
 
@@ -48,8 +47,6 @@
 	// Transport-specific state
 	let showTransportKindModal = $state(false);
 	let showFlightSearchModal = $state(false);
-	let showTrainBusSearchModal = $state(false);
-	let transportMode = $state<'train' | 'bus'>('train');
 
 	// Derived: whichever item is currently selected based on kind
 	const selectedItem = $derived.by(() => {
@@ -58,16 +55,6 @@
 		if (selectedKind === 'stay') return selectedStay;
 		// Transport doesn't use selectedItem - it uses sub-modals
 		return null;
-	});
-
-	// City location for transport modals
-	const cityLocationForTransport = $derived.by(() => {
-		if (!cityLocation) return undefined;
-		return {
-			name: 'Search Location',
-			address: { street: '', city: '', country: '', formatted: '' },
-			geo: cityLocation
-		} as Location;
 	});
 
 	// For custom entries
@@ -110,7 +97,6 @@
 			geocodeError = null;
 			showTransportKindModal = false;
 			showFlightSearchModal = false;
-			showTrainBusSearchModal = false;
 		} else {
 			// Set default dates when modal opens
 			setDefaultStayDates();
@@ -127,7 +113,7 @@
 				}
 			: undefined;
 
-		return fakeAttractionAdapter.search({
+		return attractionAdapter.search({
 			query,
 			location,
 			limit: 10
@@ -144,7 +130,7 @@
 				}
 			: undefined;
 
-		return fakeFoodAdapter.search({
+		return foodAdapter.search({
 			query,
 			location,
 			limit: 10
@@ -153,7 +139,7 @@
 
 	// Search function for stays
 	async function searchStays(query: string): Promise<Stay[]> {
-		return fakeLodgingAdapter.search({
+		return lodgingAdapter.search({
 			query,
 			checkIn: stayCheckIn || undefined,
 			checkOut: stayCheckOut || undefined,
@@ -320,20 +306,12 @@
 		showTransportKindModal = false;
 		if (kind === 'flight') {
 			showFlightSearchModal = true;
-		} else {
-			transportMode = kind;
-			showTrainBusSearchModal = true;
 		}
+		// Train/bus search removed - users should use manual transport entry
 	}
 
 	function handleAddFlight(leg: TransportLeg) {
 		showFlightSearchModal = false;
-		onAddTransport?.(leg);
-		onclose();
-	}
-
-	function handleAddTrainBus(leg: TransportLeg) {
-		showTrainBusSearchModal = false;
 		onAddTransport?.(leg);
 		onclose();
 	}
@@ -564,15 +542,6 @@
 	isOpen={showFlightSearchModal}
 	onclose={() => (showFlightSearchModal = false)}
 	onAddFlight={handleAddFlight}
-	defaultDate={selectedDate}
-/>
-
-<TrainBusSearchModal
-	isOpen={showTrainBusSearchModal}
-	onclose={() => (showTrainBusSearchModal = false)}
-	onAddTransport={handleAddTrainBus}
-	mode={transportMode}
-	cityLocation={cityLocationForTransport}
 	defaultDate={selectedDate}
 />
 

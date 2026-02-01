@@ -9,7 +9,7 @@
 	import { resolveAllDayUnits, type DayUnitResolution } from '$lib/utils/units';
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
-	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
+	import { cityAdapter, type CitySearchResult } from '$lib/adapters/cities';
 	import { computeStaySegments, dayHasMissingLodging, defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
 	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
@@ -789,7 +789,7 @@
 			<SearchAutocomplete
 				label="City"
 				placeholder="Search for a city..."
-				searchFn={fakeCityAdapter.search}
+				searchFn={cityAdapter.search}
 				renderItem={(city) => ({ name: city.name, subtitle: city.country, icon: 'location' })}
 				getItemId={(city) => city.id}
 				onSelect={(city) => { selectedCity = city; }}

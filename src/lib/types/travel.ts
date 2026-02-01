@@ -545,37 +545,6 @@ export interface FlightAdapter {
 	getAllFlightDetails?(airlineCode: string, flightNumber: string, date: string): Promise<FlightSearchResult[]>;
 }
 
-// ============ Train/Bus Search Adapter ============
-
-export interface TrainBusSearchParams {
-	query?: string;
-	origin?: Location;
-	destination?: Location;
-	departureDate: string;
-	mode: 'train' | 'bus';
-}
-
-export interface TrainBusSearchResult {
-	carrier: string;
-	routeNumber?: string;
-	routeName?: string;
-	origin: Location;
-	destination: Location;
-	departureDate: string;
-	departureTime: string;
-	arrivalDate: string;
-	arrivalTime: string;
-	duration: number;
-	mode: 'train' | 'bus';
-	price?: number;
-	currency?: string;
-}
-
-export interface TrainBusAdapter {
-	searchRoutes(params: TrainBusSearchParams): Promise<TrainBusSearchResult[]>;
-	getCarriers(cityLocation: Location, mode: 'train' | 'bus'): Promise<string[]>;
-}
-
 // ============ Helper Types ============
 
 export interface ResolvedDailyItem {

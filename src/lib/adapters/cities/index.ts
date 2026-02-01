@@ -1,9 +1,8 @@
 /**
  * City Search Adapter
  *
- * Note: This file is named "fakeAdapter.ts" for historical reasons.
- * It now uses the real Geoapify API exclusively and returns empty results
- * if the API is unavailable.
+ * Uses the Geoapify API for city search.
+ * Returns empty results if the API is unavailable.
  */
 
 import type { GeoLocation } from '$lib/types/travel';
@@ -63,5 +62,3 @@ export const cityAdapter: CitySearchAdapter = {
 	}
 };
 
-// Keep the old export name for backward compatibility
-export const fakeCityAdapter = cityAdapter;
