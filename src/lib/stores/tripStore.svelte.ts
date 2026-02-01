@@ -25,6 +25,7 @@ import {
 	defaultPaletteColors
 } from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
+import { calculateHaversineDistance } from '$lib/services/geoService';
 
 interface TripStoreState {
 	trips: Trip[];
@@ -84,6 +85,16 @@ function createTrip(data: {
 	endDate: string;
 	description?: string;
 }): Trip {
+	// Generate initial itinerary days from trip dates
+	const dates = getDatesInRange(data.startDate, data.endDate);
+	const initialItinerary: ItineraryDay[] = dates.map((date, index) => ({
+		id: generateDayId(),
+		date,
+		dayNumber: index + 1,
+		cityIds: [],
+		items: []
+	}));
+
 	const trip: Trip = {
 		id: generateTripId(),
 		name: data.name,
@@ -95,7 +106,7 @@ function createTrip(data: {
 		activities: [],
 		foodVenues: [],
 		transportLegs: [],
-		itinerary: [],
+		itinerary: initialItinerary,
 		colorScheme: getDefaultColorScheme(),
 		createdAt: new Date().toISOString(),
 		updatedAt: new Date().toISOString()
@@ -312,6 +323,91 @@ function removeStay(tripId: string, cityId: string, stayId: string): void {
 		return regenerateItinerary(updatedTrip);
 	});
 	saveTrips();
+}
+
+// ============ City Inference from Stays ============
+
+/**
+ * Infer city data from a stay's geocoded location.
+ * Used when adding a stay without an existing city.
+ */
+function inferCityFromStay(stay: Stay): Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'> {
+	const addr = stay.location.address;
+	return {
+		name: addr.city || addr.state || 'Unknown',
+		country: addr.country || 'Unknown',
+		location: stay.location.geo,
+		timezone: stay.location.timezone || 'UTC',
+		startDate: stay.checkIn,
+		endDate: stay.checkOut
+	};
+}
+
+/**
+ * Find an existing city in the trip that matches the stay's location.
+ * Matches by exact city name + country, or by proximity (within 25km).
+ */
+function findMatchingCity(trip: Trip, stay: Stay): City | null {
+	const stayCity = stay.location.address.city?.toLowerCase().trim();
+	const stayCountry = stay.location.address.country?.toLowerCase().trim();
+
+	for (const city of trip.cities) {
+		// Exact name + country match
+		if (
+			stayCity &&
+			stayCountry &&
+			city.name.toLowerCase() === stayCity &&
+			city.country.toLowerCase() === stayCountry
+		) {
+			return city;
+		}
+		// Proximity match (~25km) for suburbs/neighborhoods
+		const distance = calculateHaversineDistance(stay.location.geo, city.location);
+		if (distance < 25) {
+			return city;
+		}
+	}
+	return null;
+}
+
+/**
+ * Add a stay to a trip, automatically inferring or matching the city.
+ * This is the main entry point for the stay-first workflow.
+ *
+ * If a matching city exists (by name or proximity), the stay is added to it.
+ * Otherwise, a new city is created from the stay's location data.
+ *
+ * Returns the cityId and whether a new city was created.
+ */
+function addStayWithCityInference(tripId: string, stay: Stay): { cityId: string; isNewCity: boolean } {
+	const trip = state.trips.find((t) => t.id === tripId);
+	if (!trip) throw new Error('Trip not found');
+
+	const existingCity = findMatchingCity(trip, stay);
+
+	if (existingCity) {
+		// Add stay to existing city
+		addStay(tripId, existingCity.id, stay);
+
+		// Extend city dates if the stay goes beyond current range
+		const needsDateUpdate =
+			stay.checkIn < existingCity.startDate || stay.checkOut > existingCity.endDate;
+		if (needsDateUpdate) {
+			const newStartDate =
+				stay.checkIn < existingCity.startDate ? stay.checkIn : existingCity.startDate;
+			const newEndDate =
+				stay.checkOut > existingCity.endDate ? stay.checkOut : existingCity.endDate;
+			updateCity(tripId, existingCity.id, { startDate: newStartDate, endDate: newEndDate });
+		}
+
+		return { cityId: existingCity.id, isNewCity: false };
+	} else {
+		// Create new city from stay's location
+		const cityData = inferCityFromStay(stay);
+		const newCity = addCity(tripId, cityData);
+		addStay(tripId, newCity.id, stay);
+		return { cityId: newCity.id, isNewCity: true };
+	}
 }
 
 // ============ Activity Management ============
@@ -952,6 +1048,7 @@ export const tripStore = {
 
 	// Stay
 	addStay,
+	addStayWithCityInference,
 	updateStay,
 	removeStay,
 

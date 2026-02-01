@@ -390,12 +390,6 @@
 	function handleAddStayToDay(stay: Stay) {
 		if (!trip || !addItemDayId) return;
 
-		// Find the city for this day to add the stay to
-		const day = trip.itinerary.find((d) => d.id === addItemDayId);
-		if (!day || day.cityIds.length === 0) return;
-
-		const cityId = day.cityIds[0];
-
 		// Check if stay extends beyond trip end date
 		if (stay.checkOut > trip.endDate) {
 			const confirmed = confirm(
@@ -428,8 +422,9 @@
 			if (!confirmed) return;
 		}
 
-		// Add the stay to the city
-		tripStore.addStay(trip.id, cityId, stay);
+		// Add the stay using city inference - this will create a city if needed
+		// or add to an existing city that matches by name or proximity
+		tripStore.addStayWithCityInference(trip.id, stay);
 
 		// Get all dates for this stay
 		const stayDates = getDatesInRange(stay.checkIn, stay.checkOut);
@@ -715,16 +710,12 @@
 		</header>
 
 		{#if trip.cities.length === 0}
-			<div class="empty-cities">
-				<Icon name="location" size={48} />
-				<h2>No destinations yet</h2>
-				<p>Add your first city to start planning your itinerary</p>
-				<Button onclick={openAddCityModal}>
-					<Icon name="add" size={18} />
-					Add City
-				</Button>
+			<div class="empty-cities-banner">
+				<Icon name="location" size={24} />
+				<span>Click on any day below to add your first accommodation. Cities will be created automatically from your stay's address.</span>
 			</div>
-		{:else}
+		{/if}
+		{#if trip.itinerary.length > 0}
 			{#if isEditing}
 				<div class="cities-manager">
 					<h3>Destinations</h3>
@@ -1040,6 +1031,19 @@
 			color: var(--text-secondary);
 			margin-bottom: var(--space-6);
 		}
+	}
+
+	.empty-cities-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-4) var(--space-5);
+		background: color-mix(in oklch, var(--color-info) 10%, transparent);
+		border: 1px solid color-mix(in oklch, var(--color-info) 30%, transparent);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
+		margin-bottom: var(--space-4);
 	}
 
 	.cities-manager {
