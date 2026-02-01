@@ -13,6 +13,7 @@
 	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
 	import TrainBusSearchModal from '$lib/components/modals/TrainBusSearchModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
+	import { geocodeAddress, type GeocodingResult } from '$lib/api/geocodingApi';
 
 	interface Props {
 		isOpen: boolean;
@@ -75,6 +76,11 @@
 	let customNotes = $state('');
 	let showCustomForm = $state(false);
 
+	// Geocoding state
+	let isGeocoding = $state(false);
+	let geocodeResult = $state<GeocodingResult | null>(null);
+	let geocodeError = $state<string | null>(null);
+
 	// Set default dates when modal opens or when switching to stay kind
 	function setDefaultStayDates() {
 		stayCheckIn = selectedDate || '';
@@ -99,6 +105,9 @@
 			customAddress = '';
 			customNotes = '';
 			showCustomForm = false;
+			isGeocoding = false;
+			geocodeResult = null;
+			geocodeError = null;
 			showTransportKindModal = false;
 			showFlightSearchModal = false;
 			showTrainBusSearchModal = false;
@@ -194,7 +203,8 @@
 	function addCustomItem() {
 		if (!customName.trim()) return;
 
-		const customLocation: Location = {
+		// Use geocoded location if available, otherwise create a fallback
+		const customLocation: Location = geocodeResult?.location ?? {
 			name: customName,
 			address: {
 				street: customAddress,
@@ -249,6 +259,31 @@
 		selectedFoodVenue = null;
 		selectedStay = null;
 		showCustomForm = false;
+	}
+
+	async function handleAddressBlur() {
+		// Clear previous results if address is too short or empty
+		if (!customAddress.trim() || customAddress.length < 5) {
+			geocodeResult = null;
+			geocodeError = null;
+			return;
+		}
+
+		isGeocoding = true;
+		geocodeError = null;
+
+		try {
+			const result = await geocodeAddress(customAddress);
+			geocodeResult = result;
+			if (!result) {
+				geocodeError = 'Address not found. You can still add the stay.';
+			}
+		} catch (error) {
+			geocodeError = error instanceof Error ? error.message : 'Geocoding failed';
+			geocodeResult = null;
+		} finally {
+			isGeocoding = false;
+		}
 	}
 
 	const kindOptions = [
@@ -408,7 +443,21 @@
 			<!-- Custom Entry Form -->
 			<div class="custom-form">
 				<Input label="Name" placeholder="Enter name" bind:value={customName} required />
-				<Input label="Address (optional)" placeholder="Enter address" bind:value={customAddress} />
+				<div class="address-field">
+					<Input
+						label="Address (optional)"
+						placeholder="Enter address"
+						bind:value={customAddress}
+						onblur={handleAddressBlur}
+					/>
+					{#if isGeocoding}
+						<span class="geocoding-status loading">Looking up address...</span>
+					{:else if geocodeResult}
+						<span class="geocoding-status success">✓ {geocodeResult.location.address.formatted}</span>
+					{:else if geocodeError}
+						<span class="geocoding-status error">{geocodeError}</span>
+					{/if}
+				</div>
 
 				{#if selectedKind === 'stay'}
 					<div class="stay-type-selector">
@@ -710,5 +759,28 @@
 			font-size: 0.875rem;
 			color: var(--text-secondary);
 		}
+	}
+
+	.address-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.geocoding-status {
+		font-size: 0.75rem;
+		padding-left: var(--space-1);
+	}
+
+	.geocoding-status.loading {
+		color: var(--text-secondary);
+	}
+
+	.geocoding-status.success {
+		color: var(--color-success);
+	}
+
+	.geocoding-status.error {
+		color: var(--color-warning);
 	}
 </style>

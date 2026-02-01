@@ -11,6 +11,7 @@
 		id?: string;
 		oninput?: (value: string) => void;
 		onchange?: (value: string) => void;
+		onblur?: () => void;
 	}
 
 	let {
@@ -24,7 +25,8 @@
 		name,
 		id,
 		oninput,
-		onchange
+		onchange,
+		onblur
 	}: Props = $props();
 
 	const inputId = $derived(id || name || `input-${Math.random().toString(36).slice(2)}`);
@@ -61,6 +63,7 @@
 		class="input"
 		oninput={handleInput}
 		onchange={handleChange}
+		onblur={onblur}
 	/>
 	{#if error}
 		<span class="error-message">{error}</span>

@@ -13,14 +13,25 @@ import * as path from 'path';
 
 // Cache TTL constants (in milliseconds)
 export const CACHE_TTL = {
+	// Weather
 	WEATHER_FORECAST: 60 * 60 * 1000,          // 1 hour
 	WEATHER_HISTORICAL: 24 * 60 * 60 * 1000,   // 24 hours
 	WEATHER_PREDICTION: 6 * 60 * 60 * 1000,    // 6 hours
+	// Flights
 	FLIGHT_ROUTE: 6 * 60 * 60 * 1000,          // 6 hours (schedules can change)
 	FLIGHT_STATUS: 60 * 60 * 1000,             // 1 hour (for day-of status)
 	AIRLINE_SEARCH: 30 * 24 * 60 * 60 * 1000,  // 30 days (rarely changes)
 	AIRPORT_DATA: 30 * 24 * 60 * 60 * 1000,    // 30 days (rarely changes)
-	ROUTING: 7 * 24 * 60 * 60 * 1000           // 7 days
+	// Routing
+	ROUTING: 7 * 24 * 60 * 60 * 1000,          // 7 days
+	// Geocoding & Cities (Geoapify)
+	CITY_SEARCH: 30 * 24 * 60 * 60 * 1000,     // 30 days (city data rarely changes)
+	GEOCODING: 30 * 24 * 60 * 60 * 1000,       // 30 days (addresses don't move)
+	TIMEZONE: 365 * 24 * 60 * 60 * 1000,       // 1 year (timezone boundaries stable)
+	// Places (Foursquare)
+	PLACES_FOOD: 7 * 24 * 60 * 60 * 1000,      // 7 days (restaurants may change)
+	PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000,  // 14 days (attractions more stable)
+	PLACE_DETAILS: 14 * 24 * 60 * 60 * 1000    // 14 days (individual place details)
 } as const;
 
 export type CacheType = keyof typeof CACHE_TTL;
@@ -353,6 +364,69 @@ export function routingCacheKey(fromLat: number, fromLon: number, toLat: number,
 	return `routing:${mode}:${round(fromLat)},${round(fromLon)}:${round(toLat)},${round(toLon)}`;
 }
 
+/**
+ * Generate a cache key for city search.
+ */
+export function cityCacheKey(query: string, limit: number): string {
+	return `city:${query.toLowerCase().trim()}:${limit}`;
+}
+
+/**
+ * Generate a cache key for geocoding.
+ */
+export function geocodeCacheKey(address: string): string {
+	return `geocode:${address.toLowerCase().trim()}`;
+}
+
+/**
+ * Generate a cache key for reverse geocoding.
+ */
+export function reverseGeocodeCacheKey(lat: number, lon: number): string {
+	// Round to 5 decimal places (~1m precision)
+	const roundedLat = Math.round(lat * 100000) / 100000;
+	const roundedLon = Math.round(lon * 100000) / 100000;
+	return `reverse-geocode:${roundedLat}:${roundedLon}`;
+}
+
+/**
+ * Generate a cache key for timezone lookup.
+ */
+export function timezoneCacheKey(lat: number, lon: number): string {
+	// Round to 2 decimal places (~1km precision - timezone is consistent within this)
+	const roundedLat = Math.round(lat * 100) / 100;
+	const roundedLon = Math.round(lon * 100) / 100;
+	return `timezone:${roundedLat}:${roundedLon}`;
+}
+
+/**
+ * Generate a cache key for food venue search.
+ */
+export function foodPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `places:food:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+/**
+ * Generate a cache key for attraction search.
+ */
+export function attractionPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+/**
+ * Generate a cache key for place details.
+ */
+export function placeDetailsCacheKey(fsqId: string): string {
+	return `places:details:${fsqId}`;
+}
+
 // Export as a cache service object
 export const cache = {
 	get,
@@ -372,6 +446,13 @@ export const cache = {
 	airlineCacheKey,
 	airportCacheKey,
 	routingCacheKey,
+	cityCacheKey,
+	geocodeCacheKey,
+	reverseGeocodeCacheKey,
+	timezoneCacheKey,
+	foodPlacesCacheKey,
+	attractionPlacesCacheKey,
+	placeDetailsCacheKey,
 	// TTL constants
 	TTL: CACHE_TTL
 };

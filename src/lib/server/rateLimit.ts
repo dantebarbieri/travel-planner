@@ -21,7 +21,7 @@ const DEFAULT_WINDOW_MS = 60_000; // 1 minute
 const DEFAULT_MAX_REQUESTS = 100;
 
 // Endpoint-specific limits
-type EndpointType = 'weather' | 'flights' | 'routing' | 'default';
+type EndpointType = 'weather' | 'flights' | 'routing' | 'geocoding' | 'cities' | 'places' | 'default';
 
 function getMaxRequests(endpoint: EndpointType): number {
 	switch (endpoint) {
@@ -31,6 +31,12 @@ function getMaxRequests(endpoint: EndpointType): number {
 			return parseInt(env.RATE_LIMIT_MAX_FLIGHTS || '50', 10);
 		case 'routing':
 			return parseInt(env.RATE_LIMIT_MAX_ROUTING || '200', 10);
+		case 'geocoding':
+			return parseInt(env.RATE_LIMIT_MAX_GEOCODING || '50', 10);  // Conservative for free tier
+		case 'cities':
+			return parseInt(env.RATE_LIMIT_MAX_CITIES || '100', 10);
+		case 'places':
+			return parseInt(env.RATE_LIMIT_MAX_PLACES || '100', 10);    // Foursquare is generous
 		default:
 			return DEFAULT_MAX_REQUESTS;
 	}

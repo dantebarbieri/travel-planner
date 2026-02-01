@@ -1,4 +1,5 @@
 import type { GeoLocation } from '$lib/types/travel';
+import { searchCities as searchCitiesApi, type CitySearchResult as ApiCitySearchResult } from '$lib/api/geocodingApi';
 
 export interface CitySearchResult {
 	id: string;
@@ -9,6 +10,7 @@ export interface CitySearchResult {
 	population?: number;
 }
 
+// Fallback fake cities for when API is unavailable or for demo/testing
 const fakeCities: CitySearchResult[] = [
 	// Europe
 	{ id: 'city-paris', name: 'Paris', country: 'France', location: { latitude: 48.8566, longitude: 2.3522 }, timezone: 'Europe/Paris', population: 2161000 },
@@ -91,10 +93,6 @@ const fakeCities: CitySearchResult[] = [
 	{ id: 'city-istanbul', name: 'Istanbul', country: 'Turkey', location: { latitude: 41.0082, longitude: 28.9784 }, timezone: 'Europe/Istanbul', population: 15462452 }
 ];
 
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function matchesQuery(city: CitySearchResult, query: string): boolean {
 	const lowerQuery = query.toLowerCase();
 	return (
@@ -103,35 +101,95 @@ function matchesQuery(city: CitySearchResult, query: string): boolean {
 	);
 }
 
+/**
+ * Search fake cities data (used as fallback).
+ */
+function searchFakeCities(query: string, limit: number): CitySearchResult[] {
+	if (!query || query.length < 2) {
+		return [];
+	}
+
+	return fakeCities
+		.filter((city) => matchesQuery(city, query))
+		.sort((a, b) => {
+			// Prioritize exact name matches
+			const aStartsWith = a.name.toLowerCase().startsWith(query.toLowerCase());
+			const bStartsWith = b.name.toLowerCase().startsWith(query.toLowerCase());
+			if (aStartsWith && !bStartsWith) return -1;
+			if (!aStartsWith && bStartsWith) return 1;
+			// Then by population
+			return (b.population ?? 0) - (a.population ?? 0);
+		})
+		.slice(0, limit);
+}
+
+/**
+ * Convert API result to adapter result format.
+ */
+function apiResultToAdapterResult(apiResult: ApiCitySearchResult): CitySearchResult {
+	return {
+		id: apiResult.id,
+		name: apiResult.name,
+		country: apiResult.country,
+		location: apiResult.location,
+		timezone: apiResult.timezone,
+		population: apiResult.population
+	};
+}
+
 export interface CitySearchAdapter {
 	search(query: string, limit?: number): Promise<CitySearchResult[]>;
 	getById(id: string): Promise<CitySearchResult | null>;
 }
 
-export const fakeCityAdapter: CitySearchAdapter = {
+/**
+ * City search adapter that uses real Geoapify API with fallback to fake data.
+ *
+ * The adapter first tries the real API. If the API call fails (network error,
+ * rate limit, API key not configured), it falls back to the fake data.
+ */
+export const cityAdapter: CitySearchAdapter = {
 	async search(query: string, limit = 10): Promise<CitySearchResult[]> {
-		await delay(150 + Math.random() * 100);
-
 		if (!query || query.length < 2) {
 			return [];
 		}
 
-		return fakeCities
-			.filter((city) => matchesQuery(city, query))
-			.sort((a, b) => {
-				// Prioritize exact name matches
-				const aStartsWith = a.name.toLowerCase().startsWith(query.toLowerCase());
-				const bStartsWith = b.name.toLowerCase().startsWith(query.toLowerCase());
-				if (aStartsWith && !bStartsWith) return -1;
-				if (!aStartsWith && bStartsWith) return 1;
-				// Then by population
-				return (b.population ?? 0) - (a.population ?? 0);
-			})
-			.slice(0, limit);
+		try {
+			// Try real API first
+			const apiResults = await searchCitiesApi(query, limit);
+
+			if (apiResults.length > 0) {
+				return apiResults.map(apiResultToAdapterResult);
+			}
+
+			// If API returns no results, fall back to fake data
+			// This handles cases where API might not have small cities
+			const fakeResults = searchFakeCities(query, limit);
+			if (fakeResults.length > 0) {
+				console.log(`[CityAdapter] API returned no results for "${query}", using fake data`);
+				return fakeResults;
+			}
+
+			return [];
+		} catch (error) {
+			// Log the error and fall back to fake data
+			console.warn(`[CityAdapter] API error, falling back to fake data:`, error);
+			return searchFakeCities(query, limit);
+		}
 	},
 
 	async getById(id: string): Promise<CitySearchResult | null> {
-		await delay(50);
-		return fakeCities.find((c) => c.id === id) || null;
+		// First check fake cities (for backward compatibility with existing IDs)
+		const fakeCity = fakeCities.find((c) => c.id === id);
+		if (fakeCity) {
+			return fakeCity;
+		}
+
+		// For Geoapify IDs (format: "geoapify:lat:lon"), we could reverse geocode
+		// but for now just return null - cities are typically searched, not looked up by ID
+		return null;
 	}
 };
+
+// Keep the old name for backward compatibility
+export const fakeCityAdapter = cityAdapter;

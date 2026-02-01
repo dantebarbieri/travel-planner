@@ -1,5 +1,7 @@
 import type { AttractionAdapter, ActivitySearchParams, Activity } from '$lib/types/travel';
+import { searchAttractions as searchAttractionsApi } from '$lib/api/placesApi';
 
+// Fallback fake attractions for when API is unavailable or for demo/testing
 const fakeAttractions: Activity[] = [
 	// ============ SAN FRANCISCO (Primary Test City) ============
 	{
@@ -1254,5 +1256,79 @@ export const fakeAttractionAdapter: AttractionAdapter = {
 	async getDetails(activity: Activity): Promise<Activity> {
 		await delay(150);
 		return activity;
+	}
+};
+
+/**
+ * Search fake attractions data (used as fallback).
+ */
+function searchFakeAttractions(params: ActivitySearchParams): Activity[] {
+	return fakeAttractions
+		.filter((activity) => matchesQuery(activity, params.query))
+		.filter((activity) => {
+			if (!params.categories?.length) return true;
+			return params.categories.includes(activity.category);
+		})
+		.filter((activity) => {
+			if (!params.minRating) return true;
+			return (activity.rating ?? 0) >= params.minRating;
+		})
+		.slice(0, params.limit || 20);
+}
+
+/**
+ * Attraction adapter that uses real Foursquare API with fallback to fake data.
+ *
+ * The adapter first tries the real API. If the API call fails (network error,
+ * rate limit, API key not configured), it falls back to the fake data.
+ */
+export const attractionAdapter: AttractionAdapter = {
+	async search(params: ActivitySearchParams): Promise<Activity[]> {
+		// If no location provided, fall back to fake data
+		if (!params.location) {
+			console.log('[AttractionAdapter] No location provided, using fake data');
+			return searchFakeAttractions(params);
+		}
+
+		try {
+			// Try real API first
+			const apiResults = await searchAttractionsApi(params.location, {
+				query: params.query,
+				limit: params.limit,
+				categories: params.categories
+			});
+
+			if (apiResults.length > 0) {
+				return apiResults;
+			}
+
+			// If API returns no results, fall back to fake data
+			const fakeResults = searchFakeAttractions(params);
+			if (fakeResults.length > 0) {
+				console.log(`[AttractionAdapter] API returned no results, using fake data`);
+				return fakeResults;
+			}
+
+			return [];
+		} catch (error) {
+			// Log the error and fall back to fake data
+			console.warn(`[AttractionAdapter] API error, falling back to fake data:`, error);
+			return searchFakeAttractions(params);
+		}
+	},
+
+	async getById(id: string): Promise<Activity | null> {
+		// Check fake attractions first (for backward compatibility with existing IDs)
+		const fakeActivity = fakeAttractions.find((a) => a.id === id);
+		if (fakeActivity) {
+			return fakeActivity;
+		}
+		// For Foursquare IDs (format: "fsq-..."), we could fetch details
+		// but for now just return null
+		return null;
+	},
+
+	async getDetails(activity: Activity): Promise<Activity> {
+		return activity; // Already have full details from search
 	}
 };

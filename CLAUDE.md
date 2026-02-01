@@ -17,27 +17,34 @@ A travel itinerary planning application built with **SvelteKit 5** and **Svelte 
 
 ## Server Architecture
 
-External API calls (weather, flights, routing) go through server endpoints:
+External API calls (weather, flights, routing, geocoding, places) go through server endpoints:
 
 ```
 Browser                           Server (SvelteKit)
-┌─────────────────┐              ┌─────────────────────┐
-│ $lib/api/*      │──fetch──────►│ /api/weather        │
-│ (client cache)  │              │ /api/flights/*      │
-│                 │              │ /api/routing        │
-├─────────────────┤              ├─────────────────────┤
-│ localStorage    │              │ $lib/server/        │
-│ (trip data)     │              │ - SQLite cache      │
-└─────────────────┘              │ - Rate limiting     │
-                                 │ - API adapters      │
-                                 └──────────┬──────────┘
+┌─────────────────┐              ┌─────────────────────────┐
+│ $lib/api/*      │──fetch──────►│ /api/weather            │
+│ (client cache)  │              │ /api/flights/*          │
+│                 │              │ /api/routing            │
+│                 │              │ /api/geocoding          │
+│                 │              │ /api/cities             │
+│                 │              │ /api/places/food        │
+│                 │              │ /api/places/attractions │
+├─────────────────┤              ├─────────────────────────┤
+│ localStorage    │              │ $lib/server/            │
+│ (trip data)     │              │ - SQLite cache          │
+└─────────────────┘              │ - Rate limiting         │
+                                 │ - API adapters          │
+                                 └──────────┬──────────────┘
                                             │
-                                 ┌──────────▼──────────┐
-                                 │ External APIs       │
-                                 │ - Open-Meteo        │
-                                 │ - OSRM (routing)    │
-                                 │ - AeroDataBox       │
-                                 └─────────────────────┘
+                                 ┌──────────▼──────────────┐
+                                 │ External APIs           │
+                                 │ - Open-Meteo            │
+                                 │ - OSRM (routing)        │
+                                 │ - AeroDataBox           │
+                                 │ - Geoapify              │
+                                 │ - Foursquare            │
+                                 │ - TimezoneDB            │
+                                 └─────────────────────────┘
 ```
 
 ### Key Server Directories
@@ -45,7 +52,12 @@ Browser                           Server (SvelteKit)
 - `$lib/server/` - Server-only code (SvelteKit enforces this)
 - `$lib/server/db/cache.ts` - SQLite cache with TTL
 - `$lib/server/rateLimit.ts` - IP-based rate limiting
-- `$lib/server/adapters/` - Server-side API adapters
+- `$lib/server/adapters/` - Server-side API adapters:
+  - `geoapify.ts` - Geocoding, city search, timezone lookup
+  - `foursquare.ts` - Food and attraction search
+  - `weather.ts` - Weather data from Open-Meteo
+  - `flights.ts` - Flight data from AeroDataBox
+  - `routing.ts` - Travel times from OSRM
 - `$lib/api/` - Client-side API wrappers with in-memory caching
 
 ### API Endpoints
@@ -56,6 +68,23 @@ Browser                           Server (SvelteKit)
 | `GET /api/flights/search` | Flight route lookup |
 | `GET /api/flights/airlines` | Airline search |
 | `GET /api/routing` | Travel time/distance calculation |
+| `GET /api/geocoding` | Forward/reverse geocoding (address ↔ coordinates) |
+| `GET /api/cities` | City search with autocomplete and timezone |
+| `GET /api/places/food` | Food venue search (restaurants, cafes, bars) |
+| `GET /api/places/attractions` | Attraction search (museums, landmarks, parks) |
+
+### Environment Variables
+
+External APIs require the following environment variables:
+
+| Variable | API | Required | Get Key At |
+|----------|-----|----------|------------|
+| `GEOAPIFY_API_KEY` | Geocoding, City Search | Yes | https://myprojects.geoapify.com/ |
+| `FOURSQUARE_API_KEY` | Food, Attractions | Yes | https://foursquare.com/developers/ |
+| `TIMEZONEDB_API_KEY` | Timezone (fallback) | No | https://timezonedb.com/ |
+| `AERODATABOX_API_KEY` | Flights | Yes | https://rapidapi.com/aedbx-aedbx/api/aerodatabox |
+
+All APIs have free tiers sufficient for development and moderate usage. Without API keys, adapters fall back to fake data.
 
 ## Project Structure
 
@@ -72,15 +101,22 @@ src/
 │   ├── stores/
 │   │   └── tripStore.svelte.ts  # Main trip state (Svelte 5 runes)
 │   ├── adapters/
-│   │   ├── cities/fakeAdapter.ts      # 100+ pre-defined cities
+│   │   ├── cities/fakeAdapter.ts      # City search (real API + fallback)
 │   │   ├── lodging/fakeAdapter.ts     # Hotel, Airbnb, VRBO, Hostel data
-│   │   ├── food/fakeAdapter.ts        # Restaurant, cafe, bar data
-│   │   ├── attractions/fakeAdapter.ts # Activities and attractions
+│   │   ├── food/fakeAdapter.ts        # Food venues (real API + fallback)
+│   │   ├── attractions/fakeAdapter.ts # Attractions (real API + fallback)
 │   │   ├── weather/fakeAdapter.ts     # Weather forecasts
 │   │   └── transport/
 │   │       ├── fakeAdapter.ts         # Travel time/cost estimates (mock)
 │   │       ├── flightAdapter.ts       # Flight search
 │   │       └── trainBusAdapter.ts     # Train/Bus search
+│   ├── api/
+│   │   ├── clientCache.ts             # Client-side caching utilities
+│   │   ├── flightApi.ts               # Flight API client
+│   │   ├── routingApi.ts              # Routing API client
+│   │   ├── weatherApi.ts              # Weather API client
+│   │   ├── geocodingApi.ts            # City search, address geocoding
+│   │   └── placesApi.ts               # Food and attraction search
 │   ├── services/
 │   │   ├── storageService.ts    # localStorage persistence
 │   │   ├── documentService.ts   # PDF/DOCX export
@@ -156,7 +192,7 @@ interface LodgingAdapter {
 }
 ```
 
-Currently using fake adapters with mock data. To add real APIs, create new adapters implementing the same interface.
+Most adapters now use real APIs with automatic fallback to fake data when APIs are unavailable or return no results. Server-side adapters (`$lib/server/adapters/`) handle external API calls with SQLite caching, while client-side wrappers (`$lib/api/`) provide in-memory caching and request deduplication.
 
 ### TypeScript Discriminated Unions
 
@@ -456,14 +492,26 @@ Verify `Location.timezone` is set correctly for origin/destination. Use IANA tim
    - Default travel mode preferences
    - Budget tracking preferences
 
-### Medium-term
+### Implemented
 
 3. **Real API Adapters**
-   - Lodging: Booking.com, Airbnb API
-   - Food: Google Places, Yelp API
-   - Attractions: TripAdvisor, Viator API
-   - Flights: Amadeus, Skyscanner API
-   - Weather: OpenWeatherMap, WeatherAPI
+
+   The following real APIs replace fake adapters:
+
+   | Function | API | Documentation |
+   |----------|-----|---------------|
+   | City Search | Geoapify Geocoding | [apidocs.geoapify.com](https://apidocs.geoapify.com/docs/geocoding/) |
+   | Geocoding | Geoapify Geocoding | Forward/reverse address lookup |
+   | Food Venues | Foursquare Places | [docs.foursquare.com](https://docs.foursquare.com/) |
+   | Attractions | Foursquare Places | 120M+ POIs globally |
+   | Timezone | Geoapify + TimezoneDB | IANA timezone from coordinates |
+   | Weather | Open-Meteo | Forecast and historical data |
+   | Flights | AeroDataBox | Flight lookup by number |
+   | Routing | OSRM | Travel time/distance |
+
+   **Note**: Lodging uses manual entry with address auto-geocoding rather than hotel APIs (which require business partnerships).
+
+### Medium-term
 
 4. **Google Maps Integration**
    - Accurate travel time calculations

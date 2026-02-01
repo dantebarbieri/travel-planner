@@ -1,5 +1,7 @@
 import type { FoodAdapter, FoodSearchParams, FoodVenue } from '$lib/types/travel';
+import { searchFoodVenues as searchFoodVenuesApi } from '$lib/api/placesApi';
 
+// Fallback fake food venues for when API is unavailable or for demo/testing
 const fakeFoodVenues: FoodVenue[] = [
 	// ============ SAN FRANCISCO (Primary Test City) ============
 	{
@@ -1269,5 +1271,81 @@ export const fakeFoodAdapter: FoodAdapter = {
 	async getDetails(venue: FoodVenue): Promise<FoodVenue> {
 		await delay(150);
 		return venue;
+	}
+};
+
+/**
+ * Search fake food venues data (used as fallback).
+ */
+function searchFakeFoodVenues(params: FoodSearchParams): FoodVenue[] {
+	return fakeFoodVenues
+		.filter((venue) => matchesQuery(venue, params.query))
+		.filter((venue) => {
+			if (!params.cuisineTypes?.length) return true;
+			return venue.cuisineTypes?.some((c) =>
+				params.cuisineTypes!.some((pc) => c.toLowerCase().includes(pc.toLowerCase()))
+			);
+		})
+		.filter((venue) => {
+			if (!params.priceLevel?.length) return true;
+			return venue.priceLevel && params.priceLevel.includes(venue.priceLevel);
+		})
+		.slice(0, params.limit || 20);
+}
+
+/**
+ * Food adapter that uses real Foursquare API with fallback to fake data.
+ *
+ * The adapter first tries the real API. If the API call fails (network error,
+ * rate limit, API key not configured), it falls back to the fake data.
+ */
+export const foodAdapter: FoodAdapter = {
+	async search(params: FoodSearchParams): Promise<FoodVenue[]> {
+		// If no location provided, fall back to fake data
+		if (!params.location) {
+			console.log('[FoodAdapter] No location provided, using fake data');
+			return searchFakeFoodVenues(params);
+		}
+
+		try {
+			// Try real API first
+			const apiResults = await searchFoodVenuesApi(params.location, {
+				query: params.query,
+				limit: params.limit,
+				priceLevel: params.priceLevel
+			});
+
+			if (apiResults.length > 0) {
+				return apiResults;
+			}
+
+			// If API returns no results, fall back to fake data
+			const fakeResults = searchFakeFoodVenues(params);
+			if (fakeResults.length > 0) {
+				console.log(`[FoodAdapter] API returned no results, using fake data`);
+				return fakeResults;
+			}
+
+			return [];
+		} catch (error) {
+			// Log the error and fall back to fake data
+			console.warn(`[FoodAdapter] API error, falling back to fake data:`, error);
+			return searchFakeFoodVenues(params);
+		}
+	},
+
+	async getById(id: string): Promise<FoodVenue | null> {
+		// Check fake venues first (for backward compatibility with existing IDs)
+		const fakeVenue = fakeFoodVenues.find((v) => v.id === id);
+		if (fakeVenue) {
+			return fakeVenue;
+		}
+		// For Foursquare IDs (format: "fsq-..."), we could fetch details
+		// but for now just return null
+		return null;
+	},
+
+	async getDetails(venue: FoodVenue): Promise<FoodVenue> {
+		return venue; // Already have full details from search
 	}
 };
