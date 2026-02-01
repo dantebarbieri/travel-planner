@@ -225,20 +225,23 @@ function foursquareHoursToOperatingHours(hours?: FoursquareHours): OperatingHour
 		return undefined;
 	}
 
-	const dayMap: Record<number, keyof OperatingHours> = {
+	type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+	const dayMap: Record<number, DayKey> = {
 		1: 'monday',
 		2: 'tuesday',
 		3: 'wednesday',
 		4: 'thursday',
 		5: 'friday',
 		6: 'saturday',
-		7: 'sunday',
+		7: 'sunday'
 	};
 
 	const result: OperatingHours = {};
 
 	// Initialize all days as closed
-	for (const day of Object.values(dayMap)) {
+	const allDays: DayKey[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+	for (const day of allDays) {
 		result[day] = { open: '', close: '', closed: true };
 	}
 
@@ -250,7 +253,7 @@ function foursquareHoursToOperatingHours(hours?: FoursquareHours): OperatingHour
 				open: entry.open,
 				close: entry.close,
 				closed: false
-			} as DayHours;
+			};
 		}
 	}
 

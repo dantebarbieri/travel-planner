@@ -1,5 +1,7 @@
 # Travel Planner - AI Assistant Guide
 
+> **Living Document**: This file is a living document and must be kept up to date as work progresses. When making significant changes to the codebase architecture, adapters, or APIs, update the relevant sections here.
+
 This document helps AI assistants understand and work with this travel planner codebase effectively.
 
 ## Project Overview
@@ -101,13 +103,13 @@ src/
 │   ├── stores/
 │   │   └── tripStore.svelte.ts  # Main trip state (Svelte 5 runes)
 │   ├── adapters/
-│   │   ├── cities/fakeAdapter.ts      # City search (real API + fallback)
-│   │   ├── lodging/fakeAdapter.ts     # Hotel, Airbnb, VRBO, Hostel data
-│   │   ├── food/fakeAdapter.ts        # Food venues (real API + fallback)
-│   │   ├── attractions/fakeAdapter.ts # Attractions (real API + fallback)
+│   │   ├── cities/fakeAdapter.ts      # City search (Geoapify API)
+│   │   ├── lodging/fakeAdapter.ts     # Returns empty (users create custom stays)
+│   │   ├── food/fakeAdapter.ts        # Food venues (Foursquare API)
+│   │   ├── attractions/fakeAdapter.ts # Attractions (Foursquare API)
 │   │   ├── weather/fakeAdapter.ts     # Weather forecasts
 │   │   └── transport/
-│   │       ├── fakeAdapter.ts         # Travel time/cost estimates (mock)
+│   │       ├── estimateAdapter.ts     # Haversine-based estimates (isEstimate: true)
 │   │       ├── flightAdapter.ts       # Flight search
 │   │       └── trainBusAdapter.ts     # Train/Bus search
 │   ├── api/
@@ -192,7 +194,21 @@ interface LodgingAdapter {
 }
 ```
 
-Most adapters now use real APIs with automatic fallback to fake data when APIs are unavailable or return no results. Server-side adapters (`$lib/server/adapters/`) handle external API calls with SQLite caching, while client-side wrappers (`$lib/api/`) provide in-memory caching and request deduplication.
+Most adapters now use real APIs exclusively. Server-side adapters (`$lib/server/adapters/`) handle external API calls with SQLite caching, while client-side wrappers (`$lib/api/`) provide in-memory caching and request deduplication.
+
+**Adapter Status:**
+
+| Adapter | Data Source | Notes |
+|---------|-------------|-------|
+| Cities | Geoapify API | Real geocoding data |
+| Food | Foursquare API | Real venue data |
+| Attractions | Foursquare API | Real attraction data |
+| Lodging | None | Users create custom stays with geocoding |
+| Transport | OSRM (real) / Haversine (estimate) | `isEstimate: true` for fallback |
+| Weather | Open-Meteo API | Real forecast data |
+| Flights | AeroDataBox API | Real flight data |
+
+When a data source is unavailable, adapters return empty results rather than fake data.
 
 ### TypeScript Discriminated Unions
 
