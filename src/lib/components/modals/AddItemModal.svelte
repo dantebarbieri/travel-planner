@@ -138,7 +138,8 @@
 
 	function selectNearCity(city: CitySearchResult) {
 		selectedNearCity = city;
-		nearCityName = `${city.name}, ${city.country}`;
+		// Use formatted address for better context, or fallback to state/country
+		nearCityName = city.formatted || `${city.name}, ${city.state || city.country}`;
 		nearCityLocation = city.location;
 		nearCitySearchValue = nearCityName;
 	}
@@ -453,7 +454,7 @@
 						searchFn={searchCities}
 						renderItem={(city) => ({
 							name: city.name,
-							subtitle: city.country,
+							subtitle: city.formatted || `${city.state ? `${city.state}, ` : ''}${city.country}`,
 							icon: 'location'
 						})}
 						getItemId={(city) => city.id}
