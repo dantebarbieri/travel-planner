@@ -16,7 +16,7 @@ import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 const GEOAPIFY_GEOCODING_URL = 'https://api.geoapify.com/v1/geocode/search';
 const GEOAPIFY_REVERSE_URL = 'https://api.geoapify.com/v1/geocode/reverse';
 const GEOAPIFY_AUTOCOMPLETE_URL = 'https://api.geoapify.com/v1/geocode/autocomplete';
-const TIMEZONEDB_URL = 'http://api.timezonedb.com/v2.1/get-time-zone';
+const TIMEZONEDB_URL = 'https://api.timezonedb.com/v2.1/get-time-zone';
 
 // =============================================================================
 // Types
