@@ -14,6 +14,7 @@
 	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
+	import AddCityModal from '$lib/components/modals/AddCityModal.svelte';
 	import MoveItemModal from '$lib/components/modals/MoveItemModal.svelte';
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -37,10 +38,8 @@
 	let weatherData = $state<Record<string, WeatherState>>({});
 	let isEditing = $state(false);
 	let showAddCityModal = $state(false);
-	let citySearchValue = $state('');
-	let selectedCity = $state<CitySearchResult | null>(null);
-	let newCityStartDate = $state('');
-	let newCityEndDate = $state('');
+	let addCityDefaultStartDate = $state('');
+	let addCityDefaultEndDate = $state('');
 	let showExportModal = $state(false);
 	let isExporting = $state(false);
 	let showEditCityModal = $state(false);
@@ -220,70 +219,25 @@
 	}
 
 	function openAddCityModal() {
-		citySearchValue = '';
-		selectedCity = null;
-
 		// Smart defaults: find first unassigned gap
 		const unassignedRanges = getUnassignedDateRanges();
 		if (unassignedRanges.length > 0) {
-			newCityStartDate = unassignedRanges[0].start;
-			newCityEndDate = unassignedRanges[0].end;
+			addCityDefaultStartDate = unassignedRanges[0].start;
+			addCityDefaultEndDate = unassignedRanges[0].end;
 		} else {
 			// No gaps - default to trip dates (user will need to adjust or overlap is expected)
-			newCityStartDate = trip?.startDate || '';
-			newCityEndDate = trip?.endDate || '';
+			addCityDefaultStartDate = trip?.startDate || '';
+			addCityDefaultEndDate = trip?.endDate || '';
 		}
 
 		showAddCityModal = true;
 	}
 
-	function addCity() {
-		if (!trip || !selectedCity || !newCityStartDate || !newCityEndDate) return;
-
-		tripStore.addCity(trip.id, {
-			name: selectedCity.name,
-			country: selectedCity.country,
-			location: selectedCity.location,
-			timezone: selectedCity.timezone,
-			startDate: newCityStartDate,
-			endDate: newCityEndDate
-		});
-
+	function handleAddCity(cityData: Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'>) {
+		if (!trip) return;
+		tripStore.addCity(trip.id, cityData);
 		showAddCityModal = false;
-		citySearchValue = '';
-		selectedCity = null;
 	}
-
-	// Check for date conflicts with existing cities (excluding allowed 1-day transitions)
-	const dateConflict = $derived.by(() => {
-		if (!trip || !newCityStartDate || !newCityEndDate) return null;
-
-		const newStart = new Date(newCityStartDate);
-		const newEnd = new Date(newCityEndDate);
-
-		for (const city of trip.cities) {
-			const cityStart = new Date(city.startDate);
-			const cityEnd = new Date(city.endDate);
-
-			// Check if ranges overlap
-			if (newStart <= cityEnd && newEnd >= cityStart) {
-				// Allow 1-day transition overlap (new city starts on old city's last day, or vice versa)
-				const isTransitionOverlap =
-					(newStart.getTime() === cityEnd.getTime() && newEnd > cityEnd) ||
-					(newEnd.getTime() === cityStart.getTime() && newStart < cityStart);
-
-				if (!isTransitionOverlap) {
-					return {
-						cityName: city.name,
-						start: city.startDate,
-						end: city.endDate
-					};
-				}
-			}
-		}
-
-		return null;
-	});
 
 	function handleAddItem(day: ItineraryDay) {
 		addItemDayId = day.id;
@@ -733,7 +687,7 @@
 						{#each trip.cities as city (city.id)}
 							<div class="city-item">
 								<div class="city-info">
-									<span class="city-name">{city.name}, {city.country}</span>
+									<span class="city-name">{city.formatted || `${city.name}, ${city.state || city.country}`}</span>
 									<span class="city-dates">{formatDate(city.startDate, { month: 'short', day: 'numeric' })} - {formatDate(city.endDate, { month: 'short', day: 'numeric' })}</span>
 								</div>
 								<div class="city-actions">
@@ -785,60 +739,19 @@
 		{/if}
 	</div>
 
-	<Modal isOpen={showAddCityModal} title="Add City" onclose={() => (showAddCityModal = false)}>
-		<form class="city-form" onsubmit={(e) => { e.preventDefault(); addCity(); }}>
-			<SearchAutocomplete
-				label="City"
-				placeholder="Search for a city..."
-				searchFn={cityAdapter.search}
-				renderItem={(city) => ({ name: city.name, subtitle: city.country, icon: 'location' })}
-				getItemId={(city) => city.id}
-				onSelect={(city) => { selectedCity = city; }}
-				bind:value={citySearchValue}
-				bind:selectedItem={selectedCity}
-				required
-			/>
-			<div class="date-row">
-				<div class="form-field">
-					<label class="label" for="city-start">Start Date</label>
-					<input
-						type="date"
-						id="city-start"
-						class="input"
-						bind:value={newCityStartDate}
-						required
-					/>
-				</div>
-				<div class="form-field">
-					<label class="label" for="city-end">End Date</label>
-					<input
-						type="date"
-						id="city-end"
-						class="input"
-						bind:value={newCityEndDate}
-						min={newCityStartDate}
-						required
-					/>
-				</div>
-			</div>
-			{#if dateConflict}
-				<div class="date-conflict-warning">
-					<Icon name="close" size={16} />
-					<span>Dates overlap with <strong>{dateConflict.cityName}</strong> ({formatDate(dateConflict.start, { month: 'short', day: 'numeric' })} - {formatDate(dateConflict.end, { month: 'short', day: 'numeric' })})</span>
-				</div>
-			{/if}
-			<p class="date-hint">Dates outside current trip range will extend the trip. A 1-day overlap for transition days is allowed.</p>
-			<div class="form-actions">
-				<Button variant="secondary" onclick={() => (showAddCityModal = false)}>Cancel</Button>
-				<Button type="submit" disabled={!selectedCity || !!dateConflict}>Add City</Button>
-			</div>
-		</form>
-	</Modal>
+	<AddCityModal
+		isOpen={showAddCityModal}
+		existingCities={trip?.cities || []}
+		defaultStartDate={addCityDefaultStartDate}
+		defaultEndDate={addCityDefaultEndDate}
+		onAdd={handleAddCity}
+		onClose={() => (showAddCityModal = false)}
+	/>
 
 	<Modal isOpen={showEditCityModal} title="Edit City Dates" onclose={() => (showEditCityModal = false)}>
 		{#if editingCity}
 			<form class="city-form" onsubmit={(e) => { e.preventDefault(); saveCityDates(); }}>
-				<p class="city-name-display">{editingCity.name}, {editingCity.country}</p>
+				<p class="city-name-display">{editingCity.formatted || `${editingCity.name}, ${editingCity.state || editingCity.country}`}</p>
 				<div class="date-row">
 					<div class="form-field">
 						<label class="label" for="edit-city-start">Start Date</label>
@@ -1021,29 +934,6 @@
 		flex-shrink: 0;
 	}
 
-	.empty-cities {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		text-align: center;
-		padding: var(--space-16) var(--space-4);
-		background: var(--surface-primary);
-		border: 1px dashed var(--border-color);
-		border-radius: var(--radius-lg);
-		color: var(--text-tertiary);
-
-		& h2 {
-			margin: var(--space-4) 0 var(--space-2);
-			color: var(--text-primary);
-		}
-
-		& p {
-			color: var(--text-secondary);
-			margin-bottom: var(--space-6);
-		}
-	}
-
 	.empty-cities-banner {
 		display: flex;
 		align-items: center;
@@ -1145,22 +1035,6 @@
 		color: var(--text-tertiary);
 		margin: 0;
 		font-style: italic;
-	}
-
-	.date-conflict-warning {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		background: color-mix(in oklch, var(--color-error), transparent 90%);
-		border: 1px solid var(--color-error);
-		border-radius: var(--radius-md);
-		color: var(--color-error);
-		font-size: 0.875rem;
-
-		& strong {
-			font-weight: 600;
-		}
 	}
 
 	.itinerary-container {

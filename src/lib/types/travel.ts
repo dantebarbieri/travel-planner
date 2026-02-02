@@ -348,6 +348,9 @@ export interface City {
 	id: CityId;
 	name: string;
 	country: string;
+	state?: string;      // State, province, region
+	county?: string;     // County, district
+	formatted?: string;  // Full formatted address (e.g., "Monterey, CA, United States")
 	location: GeoLocation;
 	timezone: string;
 	startDate: string;
