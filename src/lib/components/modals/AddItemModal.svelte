@@ -144,6 +144,13 @@
 		nearCitySearchValue = nearCityName;
 	}
 
+	function clearNearCity() {
+		selectedNearCity = null;
+		nearCityName = undefined;
+		nearCityLocation = undefined;
+		nearCitySearchValue = '';
+	}
+
 	// Search function for activities
 	async function searchActivities(query: string): Promise<Activity[]> {
 		// Require city to be set for Foursquare searches
@@ -441,14 +448,7 @@
 		{#if selectedKind !== 'transport'}
 			<div class="near-city-field">
 				<span class="label" id="near-city-label">Search near <span class="required">*</span></span>
-				{#if cityName && cityLocation}
-					<!-- Day has city - show it as read-only -->
-					<div class="city-display" aria-labelledby="near-city-label">
-						<Icon name="location" size={16} />
-						<span>{cityName}</span>
-					</div>
-				{:else}
-					<!-- No city - allow search -->
+				<div class="city-field">
 					<SearchAutocomplete
 						placeholder="Search for a city..."
 						searchFn={searchCities}
@@ -462,9 +462,19 @@
 						bind:value={nearCitySearchValue}
 						bind:selectedItem={selectedNearCity}
 					/>
-					{#if !nearCityLocation}
-						<span class="field-hint">Select a city to enable search</span>
+					{#if nearCityLocation}
+						<button
+							type="button"
+							class="clear-city-btn"
+							onclick={clearNearCity}
+							title="Clear city to search elsewhere"
+						>
+							<Icon name="close" size={16} />
+						</button>
 					{/if}
+				</div>
+				{#if !nearCityLocation}
+					<span class="field-hint">Select a city to enable search</span>
 				{/if}
 			</div>
 		{/if}
@@ -889,15 +899,32 @@
 		border-bottom: 1px solid var(--border-color);
 	}
 
-	.city-display {
+	.city-field {
 		display: flex;
-		align-items: center;
 		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
+		align-items: flex-start;
+	}
+
+	.city-field :global(.search-autocomplete) {
+		flex: 1;
+	}
+
+	.clear-city-btn {
+		padding: var(--space-2);
 		background: var(--surface-secondary);
 		border: 1px solid var(--border-color);
 		border-radius: var(--radius-md);
-		font-size: 0.875rem;
+		cursor: pointer;
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+
+		&:hover {
+			background: var(--surface-hover);
+			color: var(--text-primary);
+		}
 	}
 
 	.required {

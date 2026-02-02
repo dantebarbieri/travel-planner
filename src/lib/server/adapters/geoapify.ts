@@ -310,8 +310,8 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
 		const params = new URLSearchParams({
 			text: address,
 			apiKey,
-			limit: '1',
-			format: 'json'
+			limit: '1'
+			// No format param = GeoJSON (has features array)
 		});
 
 		const url = `${GEOAPIFY_GEOCODING_URL}?${params}`;
