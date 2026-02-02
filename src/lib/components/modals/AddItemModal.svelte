@@ -117,10 +117,22 @@
 			setDefaultStayDates();
 			// Initialize city state from props
 			if (cityName && cityLocation) {
-				// Day has a city - use it
-				nearCityName = cityName;
+				// Day has a city - search to get properly formatted name
 				nearCityLocation = cityLocation;
 				nearCitySearchValue = cityName;
+				// Do a city search to get the full formatted name (async)
+				searchCities(cityName).then((results) => {
+					if (results.length > 0) {
+						// Use the first result's formatted name
+						const city = results[0];
+						nearCityName = city.formatted || `${city.name}, ${city.state || city.country}`;
+						nearCitySearchValue = nearCityName;
+						selectedNearCity = city;
+					} else {
+						// Fallback to prop value if search fails
+						nearCityName = cityName;
+					}
+				});
 			} else {
 				// No city - user must search
 				nearCityName = undefined;
