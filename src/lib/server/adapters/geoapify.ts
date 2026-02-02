@@ -234,8 +234,8 @@ export async function searchCities(query: string, limit = 10): Promise<CitySearc
 			text: query,
 			apiKey,
 			type: 'city',  // Focus on cities/towns
-			limit: limit.toString(),
-			format: 'json'
+			limit: limit.toString()
+			// No format param = default GeoJSON response (FeatureCollection)
 		});
 
 		const url = `${GEOAPIFY_AUTOCOMPLETE_URL}?${params}`;
@@ -258,10 +258,11 @@ export async function searchCities(query: string, limit = 10): Promise<CitySearc
 		}
 
 		// Filter to only city-type results and convert
+		// Include 'suburb' because major cities like Paris return as suburb (they have arrondissements)
 		const results = data.features
 			.filter(f => {
 				const type = f.properties.result_type;
-				return type === 'city' || type === 'town' || type === 'village' || type === 'locality';
+				return type === 'city' || type === 'town' || type === 'village' || type === 'locality' || type === 'suburb';
 			})
 			.map(featureToCityResult)
 			.slice(0, limit);
