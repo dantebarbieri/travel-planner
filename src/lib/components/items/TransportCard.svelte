@@ -361,10 +361,13 @@
 				{#if isFlight && leg.flightNumber}
 					<span class="flight-number">{leg.flightNumber}</span>
 				{/if}
+				{#if leg.mode === 'ground_transit' && leg.transitNumber}
+					<span class="transit-number">{leg.transitNumber}</span>
+				{/if}
 				{#if leg.distance}
 					<span class="distance">{formatDistance(leg.distance, distanceUnit)}</span>
 				{/if}
-				{#if priceDisplay}
+				{#if priceDisplay && !isCarRental}
 					<span class="price">{priceDisplay}</span>
 				{/if}
 			</div>
@@ -544,7 +547,8 @@
 		font-size: 0.875rem;
 	}
 
-	.flight-number {
+	.flight-number,
+	.transit-number {
 		font-weight: 600;
 		color: var(--text-primary);
 	}

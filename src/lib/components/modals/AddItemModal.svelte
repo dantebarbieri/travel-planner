@@ -13,6 +13,7 @@
 	import TransportKindModal from '$lib/components/modals/TransportKindModal.svelte';
 	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
 	import CarRentalModal from '$lib/components/modals/CarRentalModal.svelte';
+	import TransportEntryModal from '$lib/components/modals/TransportEntryModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
 	import { geocodeAddress, type GeocodingResult } from '$lib/api/geocodingApi';
 	import { parseAddress, formatParsedAddress } from '$lib/utils/addressParser';
@@ -64,6 +65,9 @@
 	let showTransportKindModal = $state(false);
 	let showFlightSearchModal = $state(false);
 	let showCarRentalModal = $state(false);
+	let showTransportEntryModal = $state(false);
+	let transportEntryMode = $state<TransportMode>('ground_transit');
+	let transportEntrySubType = $state<GroundTransitSubType | undefined>(undefined);
 
 	// Derived: whichever item is currently selected based on kind
 	const selectedItem = $derived.by(() => {
@@ -508,16 +512,24 @@
 		} else if (selection.type === 'car_rental') {
 			showCarRentalModal = true;
 		} else if (selection.type === 'ground_transit') {
-			// TODO: Open ground transit search/entry modal
-			console.log(`Ground transit selected: ${selection.subType}`);
+			transportEntryMode = 'ground_transit';
+			transportEntrySubType = selection.subType;
+			showTransportEntryModal = true;
 		} else if (selection.type === 'local') {
-			// TODO: Open simple transport entry for local modes
-			console.log(`Local transport selected: ${selection.mode}`);
+			transportEntryMode = selection.mode;
+			transportEntrySubType = undefined;
+			showTransportEntryModal = true;
 		}
 	}
 
 	function handleAddCarRental(leg: TransportLeg) {
 		showCarRentalModal = false;
+		onAddTransport?.(leg);
+		onclose();
+	}
+
+	function handleAddTransportEntry(leg: TransportLeg) {
+		showTransportEntryModal = false;
 		onAddTransport?.(leg);
 		onclose();
 	}
@@ -808,6 +820,15 @@
 	isOpen={showCarRentalModal}
 	onclose={() => (showCarRentalModal = false)}
 	onAdd={handleAddCarRental}
+	defaultDate={selectedDate}
+/>
+
+<TransportEntryModal
+	isOpen={showTransportEntryModal}
+	onclose={() => (showTransportEntryModal = false)}
+	onAdd={handleAddTransportEntry}
+	mode={transportEntryMode}
+	subType={transportEntrySubType}
 	defaultDate={selectedDate}
 />
 
