@@ -3,6 +3,7 @@
 	import { attractionAdapter } from '$lib/adapters/attractions';
 	import { foodAdapter } from '$lib/adapters/food';
 	import { lodgingAdapter } from '$lib/adapters/lodging';
+	import { cityAdapter, type CitySearchResult } from '$lib/adapters/cities';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -23,13 +24,15 @@
 		onAddStay?: (stay: Stay) => void;
 		onAddTransport?: (leg: TransportLeg) => void;
 		cityLocation?: GeoLocation;
+		/** Pre-filled city name from day, e.g., "Paris, France" */
+		cityName?: string;
 		/** The date of the selected day (for default check-in) */
 		selectedDate?: string;
 		/** The default check-out date (end of city, span, or trip) */
 		defaultCheckOutDate?: string;
 	}
 
-	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, selectedDate, defaultCheckOutDate }: Props = $props();
+	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, cityName, selectedDate, defaultCheckOutDate }: Props = $props();
 
 	let selectedKind = $state<'activity' | 'food' | 'stay' | 'transport'>('activity');
 	let activitySearchQuery = $state('');
@@ -69,6 +72,12 @@
 	let geocodeResult = $state<GeocodingResult | null>(null);
 	let geocodeError = $state<string | null>(null);
 
+	// City/location state for "near" parameter (required for Foursquare searches)
+	let selectedNearCity = $state<CitySearchResult | null>(null);
+	let nearCitySearchValue = $state('');
+	let nearCityLocation = $state<GeoLocation | undefined>(undefined);
+	let nearCityName = $state<string | undefined>(undefined);
+
 	// Set default dates when modal opens or when switching to stay kind
 	function setDefaultStayDates() {
 		stayCheckIn = selectedDate || '';
@@ -98,60 +107,95 @@
 			geocodeError = null;
 			showTransportKindModal = false;
 			showFlightSearchModal = false;
+			// Reset city state
+			selectedNearCity = null;
+			nearCitySearchValue = '';
+			nearCityLocation = undefined;
+			nearCityName = undefined;
 		} else {
 			// Set default dates when modal opens
 			setDefaultStayDates();
+			// Initialize city state from props
+			if (cityName && cityLocation) {
+				// Day has a city - use it
+				nearCityName = cityName;
+				nearCityLocation = cityLocation;
+				nearCitySearchValue = cityName;
+			} else {
+				// No city - user must search
+				nearCityName = undefined;
+				nearCityLocation = undefined;
+				nearCitySearchValue = '';
+				selectedNearCity = null;
+			}
 		}
 	});
 
+	// Search function for cities (for "near" field)
+	async function searchCities(query: string): Promise<CitySearchResult[]> {
+		return cityAdapter.search(query, 10);
+	}
+
+	function selectNearCity(city: CitySearchResult) {
+		selectedNearCity = city;
+		nearCityName = `${city.name}, ${city.country}`;
+		nearCityLocation = city.location;
+		nearCitySearchValue = nearCityName;
+	}
+
 	// Search function for activities
 	async function searchActivities(query: string): Promise<Activity[]> {
-		const location: Location | undefined = cityLocation
-			? {
-					name: 'Search Location',
-					address: { street: '', city: '', country: '', formatted: '' },
-					geo: cityLocation
-				}
-			: undefined;
+		// Require city to be set for Foursquare searches
+		if (!nearCityLocation) return [];
+
+		const location: Location = {
+			name: nearCityName || 'Search Location',
+			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+			geo: nearCityLocation
+		};
 
 		return attractionAdapter.search({
 			query,
 			location,
+			near: nearCityName,
 			limit: 10
 		});
 	}
 
 	// Search function for food venues
 	async function searchFoodVenues(query: string): Promise<FoodVenue[]> {
-		const location: Location | undefined = cityLocation
-			? {
-					name: 'Search Location',
-					address: { street: '', city: '', country: '', formatted: '' },
-					geo: cityLocation
-				}
-			: undefined;
+		// Require city to be set for Foursquare searches
+		if (!nearCityLocation) return [];
+
+		const location: Location = {
+			name: nearCityName || 'Search Location',
+			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+			geo: nearCityLocation
+		};
 
 		return foodAdapter.search({
 			query,
 			location,
+			near: nearCityName,
 			limit: 10
 		});
 	}
 
 	// Search function for stays
 	async function searchStays(query: string): Promise<Stay[]> {
-		// Optionally pass cityLocation for location-biased results
-		const location = cityLocation
-			? {
-					name: 'Search Location',
-					address: { street: '', city: '', country: '', formatted: '' },
-					geo: cityLocation
-				}
-			: undefined;
+		// Require city to be set for Foursquare searches
+		if (!nearCityLocation) return [];
+
+		const location: Location = {
+			name: nearCityName || 'Search Location',
+			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+			geo: nearCityLocation
+		};
 
 		return lodgingAdapter.search({
 			query,
 			location,
+			near: nearCityName,
 			checkIn: stayCheckIn || undefined,
 			checkOut: stayCheckOut || undefined,
 			limit: 10
@@ -220,7 +264,7 @@
 					country: parsed.country || '',
 					formatted: formattedAddr || customAddress || customName
 				},
-				geo: cityLocation || { latitude: 0, longitude: 0 }
+				geo: nearCityLocation || cityLocation || { latitude: 0, longitude: 0 }
 			};
 		}
 
@@ -392,50 +436,94 @@
 			{/each}
 		</div>
 
+		<!-- City/Location Field (required for non-transport searches) -->
+		{#if selectedKind !== 'transport'}
+			<div class="near-city-field">
+				<span class="label" id="near-city-label">Search near <span class="required">*</span></span>
+				{#if cityName && cityLocation}
+					<!-- Day has city - show it as read-only -->
+					<div class="city-display" aria-labelledby="near-city-label">
+						<Icon name="location" size={16} />
+						<span>{cityName}</span>
+					</div>
+				{:else}
+					<!-- No city - allow search -->
+					<SearchAutocomplete
+						placeholder="Search for a city..."
+						searchFn={searchCities}
+						renderItem={(city) => ({
+							name: city.name,
+							subtitle: city.country,
+							icon: 'location'
+						})}
+						getItemId={(city) => city.id}
+						onSelect={selectNearCity}
+						bind:value={nearCitySearchValue}
+						bind:selectedItem={selectedNearCity}
+					/>
+					{#if !nearCityLocation}
+						<span class="field-hint">Select a city to enable search</span>
+					{/if}
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Search -->
 		<div class="search-section">
 			{#if selectedKind === 'activity'}
-				<SearchAutocomplete
-					placeholder="Search attractions, tours, museums..."
-					searchFn={searchActivities}
-					renderItem={(item) => ({
-						name: item.name,
-						subtitle: item.location.address.formatted,
-						icon: 'attraction'
-					})}
-					getItemId={(item) => item.id}
-					onSelect={selectActivity}
-					bind:value={activitySearchQuery}
-					bind:selectedItem={selectedActivity}
-				/>
+				{#if nearCityLocation}
+					<SearchAutocomplete
+						placeholder="Search attractions, tours, museums..."
+						searchFn={searchActivities}
+						renderItem={(item) => ({
+							name: item.name,
+							subtitle: item.location.address.formatted,
+							icon: 'attraction'
+						})}
+						getItemId={(item) => item.id}
+						onSelect={selectActivity}
+						bind:value={activitySearchQuery}
+						bind:selectedItem={selectedActivity}
+					/>
+				{:else}
+					<div class="search-disabled">Select a city above to search for activities</div>
+				{/if}
 			{:else if selectedKind === 'food'}
-				<SearchAutocomplete
-					placeholder="Search restaurants, cafes, bars..."
-					searchFn={searchFoodVenues}
-					renderItem={(item) => ({
-						name: item.name,
-						subtitle: `${item.venueType} • ${item.location.address.formatted}`,
-						icon: 'restaurant'
-					})}
-					getItemId={(item) => item.id}
-					onSelect={selectFoodVenue}
-					bind:value={foodSearchQuery}
-					bind:selectedItem={selectedFoodVenue}
-				/>
+				{#if nearCityLocation}
+					<SearchAutocomplete
+						placeholder="Search restaurants, cafes, bars..."
+						searchFn={searchFoodVenues}
+						renderItem={(item) => ({
+							name: item.name,
+							subtitle: `${item.venueType} • ${item.location.address.formatted}`,
+							icon: 'restaurant'
+						})}
+						getItemId={(item) => item.id}
+						onSelect={selectFoodVenue}
+						bind:value={foodSearchQuery}
+						bind:selectedItem={selectedFoodVenue}
+					/>
+				{:else}
+					<div class="search-disabled">Select a city above to search for food venues</div>
+				{/if}
 			{:else if selectedKind === 'stay'}
-				<SearchAutocomplete
-					placeholder="Search hotels, airbnbs, hostels..."
-					searchFn={searchStays}
-					renderItem={(item) => ({
-						name: item.name,
-						subtitle: `${item.type} • ${item.location.address.formatted}`,
-						icon: 'hotel'
-					})}
-					getItemId={(item) => item.id}
-					onSelect={selectStay}
-					bind:value={staySearchQuery}
-					bind:selectedItem={selectedStay}
-				/>
+				{#if nearCityLocation}
+					<SearchAutocomplete
+						placeholder="Search hotels, airbnbs, hostels..."
+						searchFn={searchStays}
+						renderItem={(item) => ({
+							name: item.name,
+							subtitle: `${item.type} • ${item.location.address.formatted}`,
+							icon: 'hotel'
+						})}
+						getItemId={(item) => item.id}
+						onSelect={selectStay}
+						bind:value={staySearchQuery}
+						bind:selectedItem={selectedStay}
+					/>
+				{:else}
+					<div class="search-disabled">Select a city above to search for stays</div>
+				{/if}
 			{:else if selectedKind === 'transport'}
 				<div class="transport-prompt">
 					<p>Select a transport type to add flights, trains, or intercity buses to your itinerary.</p>
@@ -790,5 +878,43 @@
 
 	.geocoding-status.error {
 		color: var(--color-warning);
+	}
+
+	.near-city-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-bottom: var(--space-3);
+		border-bottom: 1px solid var(--border-color);
+	}
+
+	.city-display {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
+	}
+
+	.required {
+		color: var(--color-error);
+	}
+
+	.field-hint {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+	}
+
+	.search-disabled {
+		padding: var(--space-4);
+		background: var(--surface-secondary);
+		border: 1px dashed var(--border-color);
+		border-radius: var(--radius-md);
+		text-align: center;
+		color: var(--text-secondary);
+		font-size: 0.875rem;
 	}
 </style>

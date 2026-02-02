@@ -496,6 +496,16 @@
 		return city?.location;
 	});
 
+	// Get the city name for the current add item day (for Foursquare "near" parameter)
+	const addItemCityName = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return undefined;
+		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+		if (!city) return undefined;
+		return `${city.name}, ${city.country}`;
+	});
+
 	// Get the selected day's date for default check-in
 	const addItemSelectedDate = $derived.by(() => {
 		if (!trip || !addItemDayId) return undefined;
@@ -872,6 +882,7 @@
 		onAddStay={handleAddStayToDay}
 		onAddTransport={handleAddTransportToDay}
 		cityLocation={addItemCityLocation}
+		cityName={addItemCityName}
 		selectedDate={addItemSelectedDate}
 		defaultCheckOutDate={addItemDefaultCheckOutDate}
 	/>

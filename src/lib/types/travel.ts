@@ -447,6 +447,7 @@ export interface SearchParams {
 	location?: Location;
 	radius?: number;
 	limit?: number;
+	near?: string; // City name for Foursquare "near" parameter
 }
 
 export interface LodgingSearchParams extends SearchParams {

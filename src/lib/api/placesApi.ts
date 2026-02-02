@@ -26,13 +26,16 @@ function attractionsCacheKey(lat: number, lon: number, query?: string): string {
 	return `places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
 }
 
-function lodgingCacheKey(query: string, lat?: number, lon?: number): string {
+function lodgingCacheKey(query: string, lat?: number, lon?: number, near?: string): string {
 	const queryPart = query.toLowerCase().trim();
 	if (lat !== undefined && lon !== undefined) {
 		// Round to 3 decimal places (~100m precision)
 		const roundedLat = Math.round(lat * 1000) / 1000;
 		const roundedLon = Math.round(lon * 1000) / 1000;
 		return `places:lodging:${queryPart}:${roundedLat}:${roundedLon}`;
+	}
+	if (near) {
+		return `places:lodging:${queryPart}:${near.toLowerCase().trim()}`;
 	}
 	return `places:lodging:${queryPart}`;
 }
@@ -171,6 +174,7 @@ export interface LodgingSearchOptions {
 	radius?: number;
 	lat?: number;   // Optional: for location-biased search
 	lon?: number;   // Optional: for location-biased search
+	near?: string;  // City name for Foursquare "near" parameter
 }
 
 /**
@@ -184,7 +188,7 @@ export async function searchLodging(
 		return [];
 	}
 
-	const cacheKey = lodgingCacheKey(options.query, options.lat, options.lon);
+	const cacheKey = lodgingCacheKey(options.query, options.lat, options.lon, options.near);
 
 	return clientCache.dedupeRequest(
 		cacheKey,
@@ -201,6 +205,9 @@ export async function searchLodging(
 			}
 			if (options.radius) {
 				params.set('radius', options.radius.toString());
+			}
+			if (options.near) {
+				params.set('near', options.near);
 			}
 
 			const response = await fetch(`/api/places/lodging?${params}`);
