@@ -132,6 +132,9 @@
 						// Fallback to prop value if search fails
 						nearCityName = cityName;
 					}
+				}).catch((error) => {
+					console.warn('[AddItemModal] City search failed:', error);
+					nearCityName = cityName;
 				});
 			} else {
 				// No city - user must search
