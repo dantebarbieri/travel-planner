@@ -3,16 +3,31 @@
 	import { formatTime, formatDuration } from '$lib/utils/dates';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import BusinessHours from '$lib/components/places/BusinessHours.svelte';
+	import TagList from '$lib/components/places/TagList.svelte';
+	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
 		activity: Activity;
+		/** The date this activity is scheduled for (YYYY-MM-DD) - used for showing hours */
+		scheduledDate?: string;
+		/** Notes specific to this item on this day */
+		itemNotes?: string;
 		isEditing?: boolean;
 		onclick?: () => void;
+		onNotesChange?: (notes: string) => void;
 	}
 
-	let { activity, isEditing = false, onclick }: Props = $props();
+	let { 
+		activity, 
+		scheduledDate,
+		itemNotes = '',
+		isEditing = false, 
+		onclick,
+		onNotesChange
+	}: Props = $props();
 
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
@@ -36,11 +51,19 @@
 		return labels[activity.category] || 'Activity';
 	});
 
+	// Price display - prefer entryFee, fallback to price
 	const priceDisplay = $derived.by(() => {
-		if (activity.price === undefined) return null;
-		if (activity.price === 0) return 'Free';
+		const price = activity.entryFee ?? activity.price;
+		if (price === undefined) return null;
+		if (price === 0) return 'Free';
 		const symbol = activity.currency === 'EUR' ? '€' : activity.currency === 'JPY' ? '¥' : '$';
-		return `${symbol}${activity.price}`;
+		return `${symbol}${price}`;
+	});
+
+	// Price level display ($-$$$$)
+	const priceLevelDisplay = $derived.by(() => {
+		if (!activity.priceLevel) return null;
+		return '$'.repeat(activity.priceLevel);
 	});
 
 	const timeDisplay = $derived.by(() => {
@@ -52,15 +75,44 @@
 		return start;
 	});
 
+	// Check if has user overrides
+	const hasOverrides = $derived(
+		activity.userOverrides && Object.keys(activity.userOverrides).length > 0
+	);
+
+	// Get effective opening hours (user override or API data)
+	const effectiveHours = $derived(
+		activity.userOverrides?.openingHours || activity.openingHours
+	);
+
+	// Get effective tags
+	const effectiveTags = $derived(
+		activity.userOverrides?.tags || activity.tags || []
+	);
+
 	function openInMaps() {
 		window.open(getMapsUrl(activity.location, mapApp), '_blank');
 	}
 
 	function openWebsite() {
-		if (activity.website) {
-			window.open(activity.website, '_blank');
+		// Prefer official website, fallback to API page (Google Maps, Foursquare)
+		const url = activity.website || activity.apiPageUrl;
+		if (url) {
+			window.open(url, '_blank');
 		}
 	}
+
+	// Title click handler - open website if available
+	function handleTitleClick() {
+		const url = activity.website || activity.apiPageUrl;
+		if (url) {
+			window.open(url, '_blank');
+		} else if (onclick) {
+			onclick();
+		}
+	}
+
+	const hasTitleLink = $derived(!!activity.website || !!activity.apiPageUrl || !!onclick);
 </script>
 
 <div class="item-card" data-kind="activity">
@@ -73,12 +125,26 @@
 			{#if activity.bookingRequired}
 				<Badge variant="warning" size="sm">Booking required</Badge>
 			{/if}
+			{#if hasOverrides}
+				<Badge variant="info" size="sm" title="Some fields edited by you">Edited</Badge>
+			{/if}
 		</div>
 	</div>
 
 	<div class="card-content">
-		<button type="button" class="card-title-btn" onclick={onclick} disabled={!onclick}>
-			<h3 class="card-title">{activity.name}</h3>
+		<button 
+			type="button" 
+			class="card-title-btn" 
+			onclick={handleTitleClick} 
+			disabled={!hasTitleLink}
+			title={activity.website ? 'Open website' : activity.apiPageUrl ? 'View on map' : undefined}
+		>
+			<h3 class="card-title">
+				{activity.name}
+				{#if activity.website || activity.apiPageUrl}
+					<Icon name="external" size={12} />
+				{/if}
+			</h3>
 		</button>
 
 		{#if activity.description}
@@ -102,23 +168,39 @@
 					<span class="duration">{formatDuration(activity.duration)}</span>
 				{/if}
 				{#if priceDisplay}
-					<span class="price" class:free={activity.price === 0}>{priceDisplay}</span>
+					<span class="price" class:free={activity.entryFee === 0 || activity.price === 0}>
+						{priceDisplay}
+					</span>
+				{:else if priceLevelDisplay}
+					<span class="price-level">{priceLevelDisplay}</span>
+				{/if}
+				{#if activity.rating}
+					<span class="rating">★ {activity.rating.toFixed(1)}</span>
 				{/if}
 			</div>
 
-			{#if activity.openingHours}
-				<div class="hours-info">
-					<Icon name="time" size={12} />
-					<span>Check hours for today</span>
-				</div>
+			{#if effectiveHours && scheduledDate}
+				<BusinessHours hours={effectiveHours} date={scheduledDate} />
 			{/if}
 
-			{#if activity.website}
-				<button type="button" class="website-link" onclick={openWebsite}>
-					Visit website
-				</button>
+			{#if effectiveTags.length > 0}
+				<TagList tags={effectiveTags} />
+			{/if}
+
+			{#if activity.confirmationNumber}
+				<div class="confirmation">
+					<Icon name="ticket" size={12} />
+					Confirmation: <strong>{activity.confirmationNumber}</strong>
+				</div>
 			{/if}
 		</div>
+
+		<ItemNotes 
+			notes={itemNotes} 
+			placeholder="Add notes (tips, what to see...)"
+			{isEditing}
+			onSave={onNotesChange}
+		/>
 	</div>
 
 </div>
@@ -152,6 +234,7 @@
 
 	.card-badges {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-1);
 	}
 
@@ -180,6 +263,9 @@
 	}
 
 	.card-title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
 		font-size: 1rem;
 		font-weight: 600;
 		margin: 0;
@@ -248,26 +334,24 @@
 		}
 	}
 
-	.hours-info {
+	.price-level {
+		font-weight: 600;
+		color: var(--color-success);
+	}
+
+	.rating {
+		color: var(--color-warning);
+		font-weight: 500;
+	}
+
+	.confirmation {
 		display: flex;
 		align-items: center;
 		gap: var(--space-1);
 		font-size: 0.75rem;
-		color: var(--text-tertiary);
-	}
-
-	.website-link {
-		display: inline-block;
-		background: none;
-		border: none;
-		padding: 0;
-		font-size: 0.75rem;
-		color: var(--color-primary);
-		cursor: pointer;
-		text-decoration: underline;
-
-		&:hover {
-			color: var(--color-primary-dark);
-		}
+		color: var(--text-secondary);
+		padding: var(--space-1) var(--space-2);
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
 	}
 </style>

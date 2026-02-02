@@ -37,13 +37,24 @@ export interface Location {
 
 export type StayType = 'hotel' | 'airbnb' | 'vrbo' | 'hostel' | 'custom';
 
+/** Fields that can be overridden by user edits */
+export interface StayUserOverrides {
+	checkInTime?: string;
+	checkOutTime?: string;
+	pricePerNight?: number;
+	amenities?: string[];
+	notes?: string;
+}
+
 export interface StayBase {
 	id: StayId;
 	type: StayType;
 	name: string;
 	location: Location;
-	checkIn: string;
-	checkOut: string;
+	checkIn: string;  // Date (YYYY-MM-DD)
+	checkOut: string; // Date (YYYY-MM-DD)
+	checkInTime?: string;  // Time (HH:MM) - typical check-in time
+	checkOutTime?: string; // Time (HH:MM) - typical check-out time
 	confirmationNumber?: string;
 	pricePerNight?: number;
 	totalPrice?: number;
@@ -53,6 +64,10 @@ export interface StayBase {
 	phone?: string;
 	amenities?: string[];
 	images?: string[];
+	/** User overrides for API-fetched data */
+	userOverrides?: StayUserOverrides;
+	/** Timestamp of last API data fetch */
+	lastFetched?: string;
 }
 
 export interface HotelStay extends StayBase {
@@ -126,6 +141,31 @@ export interface OperatingHours {
 	exceptions?: HoursException[];
 }
 
+/** Common place tags/amenities */
+export type PlaceTag =
+	| 'wifi'
+	| 'wheelchair_accessible'
+	| 'parking'
+	| 'outdoor_seating'
+	| 'reservations_required'
+	| 'ticket_required'
+	| 'guided_tour'
+	| 'audio_guide'
+	| 'family_friendly'
+	| 'pet_friendly'
+	| 'credit_cards'
+	| 'cash_only';
+
+/** Fields that can be overridden by user edits for activities */
+export interface ActivityUserOverrides {
+	openingHours?: OperatingHours;
+	price?: number;
+	entryFee?: number;
+	tags?: PlaceTag[];
+	notes?: string;
+	bookingRequired?: boolean;
+}
+
 export interface Activity {
 	id: ActivityId;
 	name: string;
@@ -135,12 +175,19 @@ export interface Activity {
 	duration?: number;
 	startTime?: string;
 	endTime?: string;
+	/** General price/cost */
 	price?: number;
+	/** Specific entry/admission fee */
+	entryFee?: number;
 	currency?: string;
+	/** Price level indicator (1-4, like $-$$$$) */
+	priceLevel?: 1 | 2 | 3 | 4;
 	bookingRequired?: boolean;
 	bookingUrl?: string;
 	confirmationNumber?: string;
 	website?: string;
+	/** Foursquare/Google place page URL */
+	apiPageUrl?: string;
 	phone?: string;
 	openingHours?: OperatingHours;
 	admissionInfo?: string;
@@ -148,6 +195,12 @@ export interface Activity {
 	images?: string[];
 	rating?: number;
 	reviewCount?: number;
+	/** Tags/amenities for this place */
+	tags?: PlaceTag[];
+	/** User overrides for API-fetched data */
+	userOverrides?: ActivityUserOverrides;
+	/** Timestamp of last API data fetch */
+	lastFetched?: string;
 }
 
 // ============ Food Venues ============
@@ -165,6 +218,34 @@ export type FoodVenueType =
 
 export type MealType = 'breakfast' | 'brunch' | 'lunch' | 'tea' | 'dinner' | 'dessert' | 'drinks';
 
+/** Food-specific tags */
+export type FoodTag =
+	| 'wifi'
+	| 'outdoor_seating'
+	| 'reservations_required'
+	| 'takeout'
+	| 'delivery'
+	| 'vegetarian_options'
+	| 'vegan_options'
+	| 'gluten_free_options'
+	| 'halal'
+	| 'kosher'
+	| 'family_friendly'
+	| 'pet_friendly'
+	| 'credit_cards'
+	| 'cash_only'
+	| 'byob';
+
+/** Fields that can be overridden by user edits for food venues */
+export interface FoodVenueUserOverrides {
+	openingHours?: OperatingHours;
+	priceLevel?: 1 | 2 | 3 | 4;
+	estimatedCost?: number;
+	tags?: FoodTag[];
+	notes?: string;
+	reservationRequired?: boolean;
+}
+
 export interface FoodVenue {
 	id: FoodVenueId;
 	name: string;
@@ -181,6 +262,8 @@ export interface FoodVenue {
 	reservationConfirmation?: string;
 	menuUrl?: string;
 	website?: string;
+	/** Foursquare/Google place page URL */
+	apiPageUrl?: string;
 	phone?: string;
 	openingHours?: OperatingHours;
 	notes?: string;
@@ -188,21 +271,64 @@ export interface FoodVenue {
 	rating?: number;
 	reviewCount?: number;
 	images?: string[];
+	/** Tags/amenities for this place */
+	tags?: FoodTag[];
+	/** User overrides for API-fetched data */
+	userOverrides?: FoodVenueUserOverrides;
+	/** Timestamp of last API data fetch */
+	lastFetched?: string;
 }
 
 // ============ Transportation ============
 
 export type TransportMode =
 	| 'flight'
-	| 'train'
-	| 'bus'
+	| 'ground_transit'  // Consolidated: train, bus, metro, tram, coach
+	| 'car_rental'
 	| 'car'
 	| 'taxi'
 	| 'rideshare'
 	| 'ferry'
-	| 'subway'
 	| 'walking'
 	| 'biking';
+
+/** @deprecated Use 'ground_transit' with subType instead. Kept for migration compatibility. */
+export type LegacyTransportMode = 'train' | 'bus' | 'subway';
+
+export type GroundTransitSubType = 'train' | 'bus' | 'metro' | 'tram' | 'coach';
+
+export type VehicleType =
+	| 'economy'
+	| 'compact'
+	| 'midsize'
+	| 'fullsize'
+	| 'sedan'
+	| 'suv'
+	| 'minivan'
+	| 'sports_car'
+	| 'convertible'
+	| 'truck'
+	| 'van'
+	| 'luxury';
+
+export type TransmissionType = 'automatic' | 'manual';
+
+export interface VehicleTags {
+	isElectric?: boolean;
+	isHybrid?: boolean;
+	transmission?: TransmissionType;
+	seatCount?: number;
+	baggageCapacity?: number; // number of large bags
+	hasGPS?: boolean;
+	hasChildSeat?: boolean;
+}
+
+export interface RentalCompany {
+	name: string;
+	code?: string; // e.g., 'HERTZ', 'ENTERPRISE'
+	website?: string;
+	phone?: string;
+}
 
 export type TravelMode = 'driving' | 'walking' | 'transit' | 'bicycling';
 
@@ -228,7 +354,12 @@ export interface TransportLeg {
 	distance?: number;
 	carrier?: string;
 	flightNumber?: string;
+	/** @deprecated Use transitNumber instead */
 	trainNumber?: string;
+	/** Transit number for ground_transit (train number, bus number, etc.) */
+	transitNumber?: string;
+	/** Sub-type for ground_transit mode */
+	groundTransitSubType?: GroundTransitSubType;
 	bookingReference?: string;
 	price?: number;
 	currency?: string;
@@ -238,6 +369,13 @@ export interface TransportLeg {
 	gate?: string;
 	notes?: string;
 	ticketUrl?: string;
+	// Car rental specific fields
+	rentalCompany?: RentalCompany;
+	vehicleType?: VehicleType;
+	vehicleTags?: VehicleTags;
+	pickupLocation?: Location;
+	returnLocation?: Location;
+	dailyRate?: number;
 }
 
 // ============ Travel Calculation ============
@@ -332,6 +470,14 @@ export type NewDailyItem = NewStayDailyItem | NewActivityDailyItem | NewFoodDail
 
 // ============ Itinerary Day ============
 
+/** A note entry for a day (independent of items) */
+export interface DayNote {
+	id: string;
+	content: string;
+	createdAt: string;
+	updatedAt?: string;
+}
+
 export interface ItineraryDay {
 	id: ItineraryDayId;
 	date: string;
@@ -339,7 +485,10 @@ export interface ItineraryDay {
 	title?: string;
 	cityIds: CityId[];
 	items: DailyItem[];
+	/** Legacy notes field - single string */
 	notes?: string;
+	/** Day-level notes (not tied to specific items) */
+	dailyNotes?: DayNote[];
 }
 
 // ============ City ============

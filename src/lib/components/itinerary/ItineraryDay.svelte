@@ -10,11 +10,13 @@
 		WeatherCondition,
 		DailyItem,
 		TravelMode,
-		StaySegment
+		StaySegment,
+		DayNote
 	} from '$lib/types/travel';
 	import type { DayUnitResolution } from '$lib/utils/units';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
+	import DayNotes from './DayNotes.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { getSegmentForDay, getDayBackgroundColor } from '$lib/utils/colors';
@@ -47,6 +49,10 @@
 		onMoveItem?: (itemId: string) => void;
 		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
+		// Daily notes handlers
+		onAddDayNote?: (note: DayNote) => void;
+		onUpdateDayNote?: (noteId: string, content: string) => void;
+		onDeleteDayNote?: (noteId: string) => void;
 	}
 
 	let {
@@ -72,7 +78,10 @@
 		onRemoveEntireTransport,
 		onMoveItem,
 		onDuplicateItem,
-		onTravelModeChange
+		onTravelModeChange,
+		onAddDayNote,
+		onUpdateDayNote,
+		onDeleteDayNote
 	}: Props = $props();
 
 	// Check if this day is today or in the past
@@ -202,6 +211,17 @@
 		{/if}
 	</div>
 
+	<!-- Day Notes Section -->
+	<div class="day-notes-section">
+		<DayNotes
+			notes={day.dailyNotes || []}
+			{isEditing}
+			onAdd={onAddDayNote}
+			onUpdate={onUpdateDayNote}
+			onDelete={onDeleteDayNote}
+		/>
+	</div>
+
 	{#if isEditing && onAddItem}
 		<div class="day-footer">
 			<Button variant="secondary" size="sm" onclick={onAddItem}>
@@ -276,6 +296,10 @@
 		margin: 0;
 	}
 
+	.day-notes-section {
+		padding: 0 var(--space-4) var(--space-4);
+	}
+
 	.day-footer {
 		padding: var(--space-2) var(--space-4);
 		border-top: 1px solid var(--border-color);
@@ -285,6 +309,10 @@
 	@container day (min-width: 600px) {
 		.day-content {
 			padding: var(--space-6);
+		}
+
+		.day-notes-section {
+			padding: 0 var(--space-6) var(--space-4);
 		}
 	}
 </style>

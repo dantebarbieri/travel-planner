@@ -577,6 +577,25 @@
 		}
 	}
 
+	// Daily notes handlers
+	function handleAddDayNote(dayId: string, note: import('$lib/types/travel').DayNote) {
+		if (trip) {
+			tripStore.addDayNote(trip.id, dayId, note);
+		}
+	}
+
+	function handleUpdateDayNote(dayId: string, noteId: string, content: string) {
+		if (trip) {
+			tripStore.updateDayNote(trip.id, dayId, noteId, content);
+		}
+	}
+
+	function handleDeleteDayNote(dayId: string, noteId: string) {
+		if (trip) {
+			tripStore.deleteDayNote(trip.id, dayId, noteId);
+		}
+	}
+
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
 
@@ -734,6 +753,9 @@
 						onMoveItem={(itemId) => handleMoveItem(day.id, itemId)}
 						onDuplicateItem={(itemId) => handleDuplicateItem(day.id, itemId)}
 						onTravelModeChange={(itemId, mode) => handleTravelModeChange(day.id, itemId, mode)}
+						onAddDayNote={(note) => handleAddDayNote(day.id, note)}
+						onUpdateDayNote={(noteId, content) => handleUpdateDayNote(day.id, noteId, content)}
+						onDeleteDayNote={(noteId) => handleDeleteDayNote(day.id, noteId)}
 					/>
 				{/each}
 			</div>

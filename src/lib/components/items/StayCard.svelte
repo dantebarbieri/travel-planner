@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Stay } from '$lib/types/travel';
-	import { formatDateShort } from '$lib/utils/dates';
+	import { formatDateShort, formatTime } from '$lib/utils/dates';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
@@ -10,14 +11,28 @@
 		stay: Stay;
 		isCheckIn?: boolean;
 		isCheckOut?: boolean;
+		/** Notes specific to this item on this day */
+		itemNotes?: string;
 		isEditing?: boolean;
 		onclick?: () => void;
+		onNotesChange?: (notes: string) => void;
 	}
 
-	let { stay, isCheckIn = false, isCheckOut = false, isEditing = false, onclick }: Props = $props();
+	let { 
+		stay, 
+		isCheckIn = false, 
+		isCheckOut = false, 
+		itemNotes = '',
+		isEditing = false, 
+		onclick,
+		onNotesChange
+	}: Props = $props();
 
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
+
+	// Get time format preference (12h vs 24h)
+	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
 
 	const stayTypeLabel = $derived.by(() => {
 		const labels: Record<string, string> = {
@@ -36,9 +51,57 @@
 		return `${symbol}${stay.pricePerNight}/night`;
 	});
 
+	// Get effective check-in/out times (user override or API data)
+	const effectiveCheckInTime = $derived(
+		stay.userOverrides?.checkInTime || stay.checkInTime
+	);
+	const effectiveCheckOutTime = $derived(
+		stay.userOverrides?.checkOutTime || stay.checkOutTime
+	);
+
+	// Check if has user overrides
+	const hasOverrides = $derived(
+		stay.userOverrides && Object.keys(stay.userOverrides).length > 0
+	);
+
+	// Format check-in/out time display
+	const checkInTimeDisplay = $derived.by(() => {
+		if (!effectiveCheckInTime) return null;
+		return formatTime(effectiveCheckInTime, use24h);
+	});
+
+	const checkOutTimeDisplay = $derived.by(() => {
+		if (!effectiveCheckOutTime) return null;
+		return formatTime(effectiveCheckOutTime, use24h);
+	});
+
 	function openInMaps() {
 		window.open(getMapsUrl(stay.location, mapApp), '_blank');
 	}
+
+	// Title click handler - open website if available
+	function handleTitleClick() {
+		// For Airbnb/VRBO, prefer listing URL
+		let url = stay.website;
+		if (stay.type === 'airbnb' && 'listingUrl' in stay && stay.listingUrl) {
+			url = stay.listingUrl;
+		} else if (stay.type === 'vrbo' && 'listingUrl' in stay && stay.listingUrl) {
+			url = stay.listingUrl;
+		}
+
+		if (url) {
+			window.open(url, '_blank');
+		} else if (onclick) {
+			onclick();
+		}
+	}
+
+	const hasTitleLink = $derived(
+		!!stay.website ||
+		(stay.type === 'airbnb' && 'listingUrl' in stay && !!stay.listingUrl) ||
+		(stay.type === 'vrbo' && 'listingUrl' in stay && !!stay.listingUrl) ||
+		!!onclick
+	);
 </script>
 
 <div class="item-card" data-kind="stay">
@@ -54,12 +117,26 @@
 				<Badge variant="warning" size="sm">Check-out</Badge>
 			{/if}
 			<Badge size="sm">{stayTypeLabel}</Badge>
+			{#if hasOverrides}
+				<Badge variant="info" size="sm" title="Some fields edited by you">Edited</Badge>
+			{/if}
 		</div>
 	</div>
 
 	<div class="card-content">
-		<button type="button" class="card-title-btn" onclick={onclick} disabled={!onclick}>
-			<h3 class="card-title">{stay.name}</h3>
+		<button 
+			type="button" 
+			class="card-title-btn" 
+			onclick={handleTitleClick} 
+			disabled={!hasTitleLink}
+			title={stay.website ? 'Open website' : undefined}
+		>
+			<h3 class="card-title">
+				{stay.name}
+				{#if hasTitleLink}
+					<Icon name="external" size={12} />
+				{/if}
+			</h3>
 		</button>
 
 		<div class="card-details">
@@ -77,6 +154,31 @@
 				</span>
 			</div>
 
+			<!-- Check-in/out times -->
+			{#if (isCheckIn && checkInTimeDisplay) || (isCheckOut && checkOutTimeDisplay)}
+				<div class="times-row">
+					{#if isCheckIn && checkInTimeDisplay}
+						<span class="check-time">
+							<Icon name="time" size={12} />
+							Check-in: {checkInTimeDisplay}
+						</span>
+					{/if}
+					{#if isCheckOut && checkOutTimeDisplay}
+						<span class="check-time">
+							<Icon name="time" size={12} />
+							Check-out: {checkOutTimeDisplay}
+						</span>
+					{/if}
+				</div>
+			{/if}
+
+			{#if stay.confirmationNumber}
+				<div class="confirmation">
+					<Icon name="ticket" size={12} />
+					Confirmation: <strong>{stay.confirmationNumber}</strong>
+				</div>
+			{/if}
+
 			{#if stay.amenities && stay.amenities.length > 0}
 				<div class="amenities">
 					{#each stay.amenities.slice(0, 4) as amenity}
@@ -88,6 +190,13 @@
 				</div>
 			{/if}
 		</div>
+
+		<ItemNotes 
+			notes={itemNotes} 
+			placeholder="Add notes (room preferences, requests...)"
+			{isEditing}
+			onSave={onNotesChange}
+		/>
 	</div>
 
 </div>
@@ -121,6 +230,7 @@
 
 	.card-badges {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-1);
 	}
 
@@ -149,6 +259,9 @@
 	}
 
 	.card-title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
 		font-size: 1rem;
 		font-weight: 600;
 		margin: 0;
@@ -192,6 +305,30 @@
 
 	.dates {
 		color: var(--text-secondary);
+	}
+
+	.times-row {
+		display: flex;
+		gap: var(--space-3);
+	}
+
+	.check-time {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+	}
+
+	.confirmation {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		padding: var(--space-1) var(--space-2);
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
 	}
 
 	.amenities {

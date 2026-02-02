@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg, EnrichedCityData } from '$lib/types/travel';
+	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg, EnrichedCityData, TransportMode, GroundTransitSubType } from '$lib/types/travel';
 	import { attractionAdapter } from '$lib/adapters/attractions';
 	import { foodAdapter } from '$lib/adapters/food';
 	import { lodgingAdapter } from '$lib/adapters/lodging';
@@ -12,9 +12,16 @@
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
 	import TransportKindModal from '$lib/components/modals/TransportKindModal.svelte';
 	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
+	import CarRentalModal from '$lib/components/modals/CarRentalModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
 	import { geocodeAddress, type GeocodingResult } from '$lib/api/geocodingApi';
 	import { parseAddress, formatParsedAddress } from '$lib/utils/addressParser';
+	
+	type TransportSelection = 
+		| { type: 'flight' }
+		| { type: 'ground_transit'; subType: GroundTransitSubType }
+		| { type: 'car_rental' }
+		| { type: 'local'; mode: TransportMode };
 
 	interface Props {
 		isOpen: boolean;
@@ -56,6 +63,7 @@
 	// Transport-specific state
 	let showTransportKindModal = $state(false);
 	let showFlightSearchModal = $state(false);
+	let showCarRentalModal = $state(false);
 
 	// Derived: whichever item is currently selected based on kind
 	const selectedItem = $derived.by(() => {
@@ -493,12 +501,25 @@
 	};
 
 	// Transport handlers
-	function handleTransportKindSelect(kind: 'flight' | 'train' | 'bus') {
+	function handleTransportKindSelect(selection: TransportSelection) {
 		showTransportKindModal = false;
-		if (kind === 'flight') {
+		if (selection.type === 'flight') {
 			showFlightSearchModal = true;
+		} else if (selection.type === 'car_rental') {
+			showCarRentalModal = true;
+		} else if (selection.type === 'ground_transit') {
+			// TODO: Open ground transit search/entry modal
+			console.log(`Ground transit selected: ${selection.subType}`);
+		} else if (selection.type === 'local') {
+			// TODO: Open simple transport entry for local modes
+			console.log(`Local transport selected: ${selection.mode}`);
 		}
-		// Train/bus search removed - users should use manual transport entry
+	}
+
+	function handleAddCarRental(leg: TransportLeg) {
+		showCarRentalModal = false;
+		onAddTransport?.(leg);
+		onclose();
 	}
 
 	function handleAddFlight(leg: TransportLeg) {
@@ -780,6 +801,13 @@
 	isOpen={showFlightSearchModal}
 	onclose={() => (showFlightSearchModal = false)}
 	onAddFlight={handleAddFlight}
+	defaultDate={selectedDate}
+/>
+
+<CarRentalModal
+	isOpen={showCarRentalModal}
+	onclose={() => (showCarRentalModal = false)}
+	onAdd={handleAddCarRental}
 	defaultDate={selectedDate}
 />
 
