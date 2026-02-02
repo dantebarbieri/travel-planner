@@ -148,7 +148,7 @@
 			<h3 class="card-title">
 				{venue.name}
 				{#if venue.website || venue.apiPageUrl}
-					<Icon name="external" size={12} />
+					<Icon name="externalLink" size={12} />
 				{/if}
 			</h3>
 		</button>

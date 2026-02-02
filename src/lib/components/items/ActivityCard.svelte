@@ -142,7 +142,7 @@
 			<h3 class="card-title">
 				{activity.name}
 				{#if activity.website || activity.apiPageUrl}
-					<Icon name="external" size={12} />
+					<Icon name="externalLink" size={12} />
 				{/if}
 			</h3>
 		</button>

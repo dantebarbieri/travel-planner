@@ -134,7 +134,7 @@
 			<h3 class="card-title">
 				{stay.name}
 				{#if hasTitleLink}
-					<Icon name="external" size={12} />
+					<Icon name="externalLink" size={12} />
 				{/if}
 			</h3>
 		</button>

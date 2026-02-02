@@ -116,7 +116,7 @@
 		<!-- Ground Transit Sub-Type Selection -->
 		<div class="sub-header">
 			<button type="button" class="back-btn" onclick={goBack}>
-				<Icon name="chevron-left" size={16} />
+				<Icon name="chevronLeft" size={16} />
 				Back
 			</button>
 			<span class="sub-title">Select Transit Type</span>
@@ -135,7 +135,7 @@
 		<!-- Local Transport Options -->
 		<div class="sub-header">
 			<button type="button" class="back-btn" onclick={goBack}>
-				<Icon name="chevron-left" size={16} />
+				<Icon name="chevronLeft" size={16} />
 				Back
 			</button>
 			<span class="sub-title">Select Transport Type</span>
