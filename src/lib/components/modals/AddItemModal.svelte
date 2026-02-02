@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg } from '$lib/types/travel';
+	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg, EnrichedCityData } from '$lib/types/travel';
 	import { attractionAdapter } from '$lib/adapters/attractions';
 	import { foodAdapter } from '$lib/adapters/food';
 	import { lodgingAdapter } from '$lib/adapters/lodging';
@@ -21,7 +21,8 @@
 		onclose: () => void;
 		onAddActivity: (activity: Activity) => void;
 		onAddFoodVenue: (venue: FoodVenue) => void;
-		onAddStay?: (stay: Stay) => void;
+		/** Called when a stay is added. Includes optional enriched city data from Geoapify for proper city creation. */
+		onAddStay?: (stay: Stay, enrichedCityData?: EnrichedCityData) => void;
 		onAddTransport?: (leg: TransportLeg) => void;
 		cityLocation?: GeoLocation;
 		/** Pre-filled city name from day, e.g., "Paris, France" */
@@ -47,6 +48,10 @@
 	let stayCheckIn = $state('');
 	let stayCheckOut = $state('');
 	let stayType = $state<StayType>('hotel');
+	
+	// Enriched city data for stays (from Geoapify search)
+	let enrichedCityData = $state<EnrichedCityData | undefined>(undefined);
+	let isEnrichingCity = $state(false);
 
 	// Transport-specific state
 	let showTransportKindModal = $state(false);
@@ -238,6 +243,71 @@
 	function selectStay(item: Stay) {
 		selectedStay = item;
 		showCustomForm = false;
+		// Enrich city data from the stay's location
+		enrichCityFromLocation(item.location);
+	}
+	
+	/**
+	 * Enrich city data by searching Geoapify for the city based on location.
+	 * This provides proper country names (e.g., "United States" instead of "US")
+	 * and additional metadata (state, formatted address, etc.)
+	 */
+	async function enrichCityFromLocation(location: Location) {
+		const cityName = location.address.city;
+		if (!cityName) {
+			enrichedCityData = undefined;
+			return;
+		}
+		
+		isEnrichingCity = true;
+		try {
+			// Search for the city using Geoapify
+			const results = await cityAdapter.search(cityName, 5);
+			
+			if (results.length > 0) {
+				// Find the best match - prefer one close to the location's coordinates
+				let bestMatch = results[0];
+				const locationLat = location.geo.latitude;
+				const locationLon = location.geo.longitude;
+				
+				for (const result of results) {
+					const resultLat = result.location.latitude;
+					const resultLon = result.location.longitude;
+					const bestLat = bestMatch.location.latitude;
+					const bestLon = bestMatch.location.longitude;
+					
+					// Simple distance comparison (not Haversine, just for rough proximity)
+					const resultDist = Math.abs(resultLat - locationLat) + Math.abs(resultLon - locationLon);
+					const bestDist = Math.abs(bestLat - locationLat) + Math.abs(bestLon - locationLon);
+					
+					if (resultDist < bestDist) {
+						bestMatch = result;
+					}
+				}
+				
+				// Create enriched city data from the search result
+				enrichedCityData = {
+					name: bestMatch.name,
+					country: bestMatch.country,
+					state: bestMatch.state,
+					county: bestMatch.county,
+					formatted: bestMatch.formatted,
+					location: bestMatch.location,
+					timezone: bestMatch.timezone,
+					// Dates will be set from the stay when actually creating the city
+					startDate: '',
+					endDate: ''
+				};
+			} else {
+				// No results - clear enriched data, will fall back to stay's location
+				enrichedCityData = undefined;
+			}
+		} catch (error) {
+			console.warn('[AddItemModal] Failed to enrich city data:', error);
+			enrichedCityData = undefined;
+		} finally {
+			isEnrichingCity = false;
+		}
 	}
 
 	function addSelectedItem() {
@@ -256,7 +326,7 @@
 				...selectedStay,
 				checkIn: stayCheckIn || selectedStay.checkIn,
 				checkOut: stayCheckOut || selectedStay.checkOut
-			});
+			}, enrichedCityData);
 		} else {
 			return;
 		}
@@ -321,7 +391,24 @@
 				checkOut: stayCheckOut,
 				notes: customNotes || undefined
 			};
-			onAddStay(stay);
+			
+			// For custom stays, use the selected near city for enriched data if available
+			let customEnrichedCityData: EnrichedCityData | undefined;
+			if (selectedNearCity) {
+				customEnrichedCityData = {
+					name: selectedNearCity.name,
+					country: selectedNearCity.country,
+					state: selectedNearCity.state,
+					county: selectedNearCity.county,
+					formatted: selectedNearCity.formatted,
+					location: selectedNearCity.location,
+					timezone: selectedNearCity.timezone,
+					startDate: '',
+					endDate: ''
+				};
+			}
+			
+			onAddStay(stay, customEnrichedCityData);
 		}
 
 		onclose();
@@ -335,6 +422,7 @@
 		selectedFoodVenue = null;
 		selectedStay = null;
 		showCustomForm = false;
+		enrichedCityData = undefined;
 	}
 
 	async function handleAddressBlur() {

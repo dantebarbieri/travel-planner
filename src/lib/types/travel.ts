@@ -360,6 +360,9 @@ export interface City {
 	departureTransportId?: TransportLegId;
 }
 
+/** City data used when inferring a city from a stay (without id, stays, transport) */
+export type EnrichedCityData = Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'>;
+
 // ============ Color Theming ============
 
 export type ColorMode = 'by-kind' | 'by-stay';

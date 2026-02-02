@@ -341,7 +341,7 @@
 		});
 	}
 
-	function handleAddStayToDay(stay: Stay) {
+	function handleAddStayToDay(stay: Stay, enrichedCityData?: import('$lib/types/travel').EnrichedCityData) {
 		if (!trip || !addItemDayId) return;
 
 		// Check if stay extends beyond trip end date
@@ -378,7 +378,8 @@
 
 		// Add the stay using city inference - this will create a city if needed
 		// or add to an existing city that matches by name or proximity
-		tripStore.addStayWithCityInference(trip.id, stay);
+		// Pass enriched city data if available for proper country/state info
+		tripStore.addStayWithCityInference(trip.id, stay, enrichedCityData);
 
 		// Get all dates for this stay
 		const stayDates = getDatesInRange(stay.checkIn, stay.checkOut);

@@ -10,7 +10,8 @@ import type {
 	NewDailyItem,
 	ColorScheme,
 	KindColors,
-	Location
+	Location,
+	EnrichedCityData
 } from '$lib/types/travel';
 import type { TripSettings, CustomColorScheme } from '$lib/types/settings';
 import { createOverride } from '$lib/types/settings';
@@ -377,9 +378,16 @@ function findMatchingCity(trip: Trip, stay: Stay): City | null {
  * If a matching city exists (by name or proximity), the stay is added to it.
  * Otherwise, a new city is created from the stay's location data.
  *
- * Returns the cityId and whether a new city was created.
+ * @param tripId - The trip to add the stay to
+ * @param stay - The stay to add
+ * @param enrichedCityData - Optional pre-enriched city data from Geoapify (for proper country names, etc.)
+ * @returns The cityId and whether a new city was created.
  */
-function addStayWithCityInference(tripId: string, stay: Stay): { cityId: string; isNewCity: boolean } {
+function addStayWithCityInference(
+	tripId: string,
+	stay: Stay,
+	enrichedCityData?: EnrichedCityData
+): { cityId: string; isNewCity: boolean } {
 	const trip = state.trips.find((t) => t.id === tripId);
 	if (!trip) throw new Error('Trip not found');
 
@@ -402,8 +410,21 @@ function addStayWithCityInference(tripId: string, stay: Stay): { cityId: string;
 
 		return { cityId: existingCity.id, isNewCity: false };
 	} else {
-		// Create new city from stay's location
-		const cityData = inferCityFromStay(stay);
+		// Create new city - use enriched data if available, otherwise infer from stay
+		let cityData: Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'>;
+		
+		if (enrichedCityData) {
+			// Use enriched data with stay dates
+			cityData = {
+				...enrichedCityData,
+				startDate: stay.checkIn,
+				endDate: stay.checkOut
+			};
+		} else {
+			// Fall back to inferring from stay's location
+			cityData = inferCityFromStay(stay);
+		}
+		
 		const newCity = addCity(tripId, cityData);
 		addStay(tripId, newCity.id, stay);
 		return { cityId: newCity.id, isNewCity: true };
