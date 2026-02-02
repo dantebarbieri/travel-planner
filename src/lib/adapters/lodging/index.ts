@@ -2,7 +2,7 @@
  * Lodging Adapter
  *
  * Uses the Foursquare Places API for lodging search (hotels, hostels, etc.).
- * Returns empty results if the API is unavailable or no location is provided.
+ * Query is required. Location is optional for location-biased results.
  *
  * The UI also provides a "Custom Entry" option for users who don't find
  * what they're looking for in the search results.
@@ -13,26 +13,28 @@ import { searchLodging as searchLodgingApi } from '$lib/api/placesApi';
 
 /**
  * Lodging adapter using Foursquare Places API.
- * Returns empty results if API is unavailable.
+ * Searches globally by query, with optional location bias.
  */
 export const lodgingAdapter: LodgingAdapter = {
 	async search(params: LodgingSearchParams): Promise<Stay[]> {
-		// Need a location to search
-		if (!params.location) {
-			console.log('[LodgingAdapter] No location provided');
-			return [];
-		}
-
-		// Skip search if coordinates are invalid (0,0)
-		if (params.location.geo.latitude === 0 && params.location.geo.longitude === 0) {
-			console.log('[LodgingAdapter] Invalid coordinates (0,0), skipping search');
+		// Need a query to search
+		if (!params.query) {
 			return [];
 		}
 
 		try {
-			const stays = await searchLodgingApi(params.location, {
+			// Get optional location for biased results
+			const lat = params.location?.geo.latitude;
+			const lon = params.location?.geo.longitude;
+
+			// Skip location bias if coordinates are invalid (0,0)
+			const useLocation = lat && lon && !(lat === 0 && lon === 0);
+
+			const stays = await searchLodgingApi({
 				query: params.query,
-				limit: params.limit
+				limit: params.limit,
+				lat: useLocation ? lat : undefined,
+				lon: useLocation ? lon : undefined
 			});
 
 			// If check-in/check-out dates provided, add them to results

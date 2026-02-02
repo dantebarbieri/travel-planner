@@ -1,8 +1,9 @@
 /**
  * Lodging Places API endpoint.
- * GET /api/places/lodging?lat=...&lon=...&query=...&limit=...
+ * GET /api/places/lodging?query=...&limit=...&lat=...&lon=...
  *
- * Search for lodging (hotels, hostels, etc.) near a location.
+ * Search for lodging (hotels, hostels, etc.) by query.
+ * Query is required. Location (lat/lon) is optional for location-biased results.
  */
 
 import { json, error } from '@sveltejs/kit';
@@ -24,48 +25,63 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		});
 	}
 
-	// Parse required parameters
-	const latParam = url.searchParams.get('lat');
-	const lonParam = url.searchParams.get('lon');
+	// Parse required parameter
+	const query = url.searchParams.get('query');
 
-	if (!latParam || !lonParam) {
-		error(400, 'Missing required parameters: lat and lon');
+	if (!query) {
+		error(400, 'Missing required parameter: query');
 	}
 
-	const lat = parseFloat(latParam);
-	const lon = parseFloat(lonParam);
-
-	if (isNaN(lat) || isNaN(lon)) {
-		error(400, 'Invalid lat/lon parameters');
-	}
-
-	if (lat < -90 || lat > 90) {
-		error(400, 'Latitude must be between -90 and 90');
-	}
-
-	if (lon < -180 || lon > 180) {
-		error(400, 'Longitude must be between -180 and 180');
+	if (query.length < 2) {
+		error(400, 'Query must be at least 2 characters');
 	}
 
 	// Parse optional parameters
-	const query = url.searchParams.get('query') || undefined;
+	const latParam = url.searchParams.get('lat');
+	const lonParam = url.searchParams.get('lon');
 	const limitParam = url.searchParams.get('limit');
 	const radiusParam = url.searchParams.get('radius');
+
+	// Optional location for biased results
+	let lat: number | undefined;
+	let lon: number | undefined;
+
+	if (latParam && lonParam) {
+		lat = parseFloat(latParam);
+		lon = parseFloat(lonParam);
+
+		if (isNaN(lat) || isNaN(lon)) {
+			error(400, 'Invalid lat/lon parameters');
+		}
+
+		if (lat < -90 || lat > 90) {
+			error(400, 'Latitude must be between -90 and 90');
+		}
+
+		if (lon < -180 || lon > 180) {
+			error(400, 'Longitude must be between -180 and 180');
+		}
+	}
 
 	const limit = limitParam ? parseInt(limitParam, 10) : 20;
 	if (isNaN(limit) || limit < 1 || limit > 50) {
 		error(400, 'Limit must be a number between 1 and 50');
 	}
 
-	const radius = radiusParam ? parseInt(radiusParam, 10) : 10000;
-	if (isNaN(radius) || radius < 100 || radius > 50000) {
-		error(400, 'Radius must be a number between 100 and 50000 (meters)');
+	let radius: number | undefined;
+	if (radiusParam) {
+		radius = parseInt(radiusParam, 10);
+		if (isNaN(radius) || radius < 100 || radius > 50000) {
+			error(400, 'Radius must be a number between 100 and 50000 (meters)');
+		}
 	}
 
 	try {
-		const stays = await searchLodging(lat, lon, {
+		const stays = await searchLodging({
 			query,
 			limit,
+			lat,
+			lon,
 			radius
 		});
 

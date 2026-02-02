@@ -22,9 +22,12 @@ import { cache, foodPlacesCacheKey, attractionPlacesCacheKey, placeDetailsCacheK
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 
-// API endpoints
-const FOURSQUARE_SEARCH_URL = 'https://api.foursquare.com/v3/places/search';
-const FOURSQUARE_DETAILS_URL = 'https://api.foursquare.com/v3/places';
+// API endpoints (new Foursquare Places API - migrated from v3)
+const FOURSQUARE_SEARCH_URL = 'https://places-api.foursquare.com/places/search';
+const FOURSQUARE_DETAILS_URL = 'https://places-api.foursquare.com/places';
+
+// Required version header for new API
+const FOURSQUARE_API_VERSION = '2025-06-17';
 
 // =============================================================================
 // Foursquare Category IDs
@@ -167,9 +170,10 @@ function classifyError(error: unknown): FoursquareError {
 // =============================================================================
 
 interface FoursquareCategory {
-	id: number;
+	fsq_category_id: string;  // New API uses string IDs
 	name: string;
 	short_name?: string;
+	plural_name?: string;
 	icon?: {
 		prefix: string;
 		suffix: string;
@@ -186,13 +190,6 @@ interface FoursquareLocation {
 	formatted_address?: string;
 }
 
-interface FoursquareGeocodes {
-	main?: {
-		latitude: number;
-		longitude: number;
-	};
-}
-
 interface FoursquareHours {
 	display?: string;
 	is_local_holiday?: boolean;
@@ -205,15 +202,18 @@ interface FoursquareHours {
 }
 
 interface FoursquarePlace {
-	fsq_id: string;
+	fsq_place_id: string;  // Changed from fsq_id in new API
 	name: string;
 	categories?: FoursquareCategory[];
 	location?: FoursquareLocation;
-	geocodes?: FoursquareGeocodes;
+	// New API has lat/lon at top level instead of nested geocodes
+	latitude?: number;
+	longitude?: number;
 	rating?: number;
 	price?: number;
 	hours?: FoursquareHours;
 	tel?: string;
+	email?: string;
 	website?: string;
 	photos?: Array<{
 		id: string;
@@ -286,7 +286,6 @@ function foursquareHoursToOperatingHours(hours?: FoursquareHours): OperatingHour
 
 function foursquarePlaceToLocation(place: FoursquarePlace): Location {
 	const loc = place.location;
-	const geo = place.geocodes?.main;
 
 	return {
 		name: place.name,
@@ -299,18 +298,19 @@ function foursquarePlaceToLocation(place: FoursquarePlace): Location {
 			formatted: loc?.formatted_address || place.name
 		},
 		geo: {
-			latitude: geo?.latitude || 0,
-			longitude: geo?.longitude || 0
+			// New API has lat/lon at top level
+			latitude: place.latitude || 0,
+			longitude: place.longitude || 0
 		}
 	};
 }
 
 function foursquarePlaceToFoodVenue(place: FoursquarePlace): FoodVenue {
 	const category = place.categories?.[0];
-	const categoryId = category?.id?.toString() || '';
+	const categoryId = category?.fsq_category_id || '';
 
 	return {
-		id: `fsq-${place.fsq_id}`,
+		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
 		venueType: FOOD_CATEGORY_MAP[categoryId] || 'restaurant',
 		cuisineTypes: place.categories?.map(c => c.name) || [],
@@ -326,10 +326,10 @@ function foursquarePlaceToFoodVenue(place: FoursquarePlace): FoodVenue {
 
 function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 	const category = place.categories?.[0];
-	const categoryId = category?.id?.toString() || '';
+	const categoryId = category?.fsq_category_id || '';
 
 	return {
-		id: `fsq-${place.fsq_id}`,
+		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
 		category: ATTRACTION_CATEGORY_MAP[categoryId] || 'sightseeing',
 		location: foursquarePlaceToLocation(place),
@@ -344,12 +344,12 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 
 function foursquarePlaceToStay(place: FoursquarePlace): Stay {
 	const category = place.categories?.[0];
-	const categoryId = category?.id?.toString() || '';
+	const categoryId = category?.fsq_category_id || '';
 	const stayType = LODGING_CATEGORY_MAP[categoryId] || 'hotel';
 
 	// Build the base stay object with required fields
 	const baseStay = {
-		id: `fsq-${place.fsq_id}`,
+		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
 		location: foursquarePlaceToLocation(place),
 		checkIn: '',  // User will set these
@@ -398,8 +398,7 @@ export async function searchFoodVenues(
 			ll: `${lat},${lon}`,
 			categories: FOOD_CATEGORIES.join(','),
 			limit: (options.limit ?? 20).toString(),
-			radius: (options.radius ?? 5000).toString(),
-			fields: 'fsq_id,name,categories,location,geocodes,rating,price,hours,tel,website,photos'
+			radius: (options.radius ?? 5000).toString()
 		});
 
 		if (options.query) {
@@ -409,8 +408,9 @@ export async function searchFoodVenues(
 		const url = `${FOURSQUARE_SEARCH_URL}?${params}`;
 		const response = await fetchWithRetry(url, {
 			headers: {
-				'Authorization': apiKey,
-				'Accept': 'application/json'
+				'Authorization': `Bearer ${apiKey}`,
+				'Accept': 'application/json',
+				'X-Places-Api-Version': FOURSQUARE_API_VERSION
 			}
 		}, {
 			maxAttempts: 3,
@@ -479,8 +479,7 @@ export async function searchAttractions(
 			ll: `${lat},${lon}`,
 			categories: ATTRACTION_CATEGORIES.join(','),
 			limit: (options.limit ?? 20).toString(),
-			radius: (options.radius ?? 10000).toString(), // Larger radius for attractions
-			fields: 'fsq_id,name,categories,location,geocodes,rating,hours,tel,website,photos,description,tips'
+			radius: (options.radius ?? 10000).toString() // Larger radius for attractions
 		});
 
 		if (options.query) {
@@ -490,8 +489,9 @@ export async function searchAttractions(
 		const url = `${FOURSQUARE_SEARCH_URL}?${params}`;
 		const response = await fetchWithRetry(url, {
 			headers: {
-				'Authorization': apiKey,
-				'Accept': 'application/json'
+				'Authorization': `Bearer ${apiKey}`,
+				'Accept': 'application/json',
+				'X-Places-Api-Version': FOURSQUARE_API_VERSION
 			}
 		}, {
 			maxAttempts: 3,
@@ -533,20 +533,31 @@ export async function searchAttractions(
 // =============================================================================
 
 export interface LodgingSearchOptions {
-	query?: string;
+	query?: string;  // Required for search
 	limit?: number;
 	radius?: number;
+	lat?: number;    // Optional: for location-biased search
+	lon?: number;    // Optional: for location-biased search
 }
 
 /**
- * Search for lodging (hotels, hostels, etc.) near a location.
+ * Search for lodging (hotels, hostels, etc.) globally by query.
+ * Optionally provide lat/lon for location-biased results.
  */
 export async function searchLodging(
-	lat: number,
-	lon: number,
 	options: LodgingSearchOptions = {}
 ): Promise<Stay[]> {
-	const cacheKey = lodgingPlacesCacheKey(lat, lon, options.query);
+	// Require a query for search
+	if (!options.query) {
+		return [];
+	}
+
+	// Generate cache key based on query and optional location
+	const cacheKey = lodgingPlacesCacheKey(
+		options.lat ?? 0,
+		options.lon ?? 0,
+		options.query
+	);
 	const cached = cache.get<Stay[]>(cacheKey);
 	if (cached) {
 		return cached;
@@ -556,22 +567,25 @@ export async function searchLodging(
 		const apiKey = getApiKey();
 
 		const params = new URLSearchParams({
-			ll: `${lat},${lon}`,
+			query: options.query,
 			categories: LODGING_CATEGORIES.join(','),
-			limit: (options.limit ?? 20).toString(),
-			radius: (options.radius ?? 10000).toString(),
-			fields: 'fsq_id,name,categories,location,geocodes,rating,price,hours,tel,website,photos'
+			limit: (options.limit ?? 20).toString()
 		});
 
-		if (options.query) {
-			params.set('query', options.query);
+		// Optionally add location bias if coordinates provided
+		if (options.lat && options.lon) {
+			params.set('ll', `${options.lat},${options.lon}`);
+			if (options.radius) {
+				params.set('radius', options.radius.toString());
+			}
 		}
 
 		const url = `${FOURSQUARE_SEARCH_URL}?${params}`;
 		const response = await fetchWithRetry(url, {
 			headers: {
-				'Authorization': apiKey,
-				'Accept': 'application/json'
+				'Authorization': `Bearer ${apiKey}`,
+				'Accept': 'application/json',
+				'X-Places-Api-Version': FOURSQUARE_API_VERSION
 			}
 		}, {
 			maxAttempts: 3,
@@ -597,7 +611,7 @@ export async function searchLodging(
 		return stays;
 	} catch (error) {
 		const fsqError = classifyError(error);
-		console.error(`[Foursquare] Lodging search failed for (${lat}, ${lon}):`, fsqError.message);
+		console.error(`[Foursquare] Lodging search failed for query "${options.query}":`, fsqError.message);
 		throw fsqError;
 	}
 }
@@ -620,15 +634,12 @@ export async function getPlaceDetails(fsqId: string): Promise<FoursquarePlace | 
 	try {
 		const apiKey = getApiKey();
 
-		const params = new URLSearchParams({
-			fields: 'fsq_id,name,categories,location,geocodes,rating,price,hours,tel,website,photos,description,tips'
-		});
-
-		const url = `${FOURSQUARE_DETAILS_URL}/${fsqId}?${params}`;
+		const url = `${FOURSQUARE_DETAILS_URL}/${fsqId}`;
 		const response = await fetchWithRetry(url, {
 			headers: {
-				'Authorization': apiKey,
-				'Accept': 'application/json'
+				'Authorization': `Bearer ${apiKey}`,
+				'Accept': 'application/json',
+				'X-Places-Api-Version': FOURSQUARE_API_VERSION
 			}
 		}, {
 			maxAttempts: 2

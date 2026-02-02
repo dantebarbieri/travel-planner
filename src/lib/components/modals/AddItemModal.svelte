@@ -140,8 +140,18 @@
 
 	// Search function for stays
 	async function searchStays(query: string): Promise<Stay[]> {
+		// Optionally pass cityLocation for location-biased results
+		const location = cityLocation
+			? {
+					name: 'Search Location',
+					address: { street: '', city: '', country: '', formatted: '' },
+					geo: cityLocation
+				}
+			: undefined;
+
 		return lodgingAdapter.search({
 			query,
+			location,
 			checkIn: stayCheckIn || undefined,
 			checkOut: stayCheckOut || undefined,
 			limit: 10

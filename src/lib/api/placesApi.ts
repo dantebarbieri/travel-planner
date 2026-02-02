@@ -26,12 +26,15 @@ function attractionsCacheKey(lat: number, lon: number, query?: string): string {
 	return `places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
 }
 
-function lodgingCacheKey(lat: number, lon: number, query?: string): string {
-	// Round to 3 decimal places (~100m precision)
-	const roundedLat = Math.round(lat * 1000) / 1000;
-	const roundedLon = Math.round(lon * 1000) / 1000;
-	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
-	return `places:lodging:${roundedLat}:${roundedLon}${queryPart}`;
+function lodgingCacheKey(query: string, lat?: number, lon?: number): string {
+	const queryPart = query.toLowerCase().trim();
+	if (lat !== undefined && lon !== undefined) {
+		// Round to 3 decimal places (~100m precision)
+		const roundedLat = Math.round(lat * 1000) / 1000;
+		const roundedLon = Math.round(lon * 1000) / 1000;
+		return `places:lodging:${queryPart}:${roundedLat}:${roundedLon}`;
+	}
+	return `places:lodging:${queryPart}`;
 }
 
 // =============================================================================
@@ -163,32 +166,38 @@ interface LodgingSearchResponse {
 }
 
 export interface LodgingSearchOptions {
-	query?: string;
+	query: string;  // Required for search
 	limit?: number;
 	radius?: number;
+	lat?: number;   // Optional: for location-biased search
+	lon?: number;   // Optional: for location-biased search
 }
 
 /**
- * Search for lodging (hotels, hostels, etc.) near a location.
+ * Search for lodging (hotels, hostels, etc.) by query.
+ * Optionally provide lat/lon for location-biased results.
  */
 export async function searchLodging(
-	location: Location,
-	options: LodgingSearchOptions = {}
+	options: LodgingSearchOptions
 ): Promise<Stay[]> {
-	const { latitude, longitude } = location.geo;
-	const cacheKey = lodgingCacheKey(latitude, longitude, options.query);
+	if (!options.query) {
+		return [];
+	}
+
+	const cacheKey = lodgingCacheKey(options.query, options.lat, options.lon);
 
 	return clientCache.dedupeRequest(
 		cacheKey,
 		async () => {
 			const params = new URLSearchParams({
-				lat: latitude.toString(),
-				lon: longitude.toString(),
+				query: options.query,
 				limit: (options.limit ?? 20).toString()
 			});
 
-			if (options.query) {
-				params.set('query', options.query);
+			// Optional location bias
+			if (options.lat !== undefined && options.lon !== undefined) {
+				params.set('lat', options.lat.toString());
+				params.set('lon', options.lon.toString());
 			}
 			if (options.radius) {
 				params.set('radius', options.radius.toString());
