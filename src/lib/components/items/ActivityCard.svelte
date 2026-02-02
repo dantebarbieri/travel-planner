@@ -126,6 +126,17 @@
 		activity.userOverrides?.openingHours || activity.openingHours
 	);
 
+	// Debug: Log business hours data flow
+	$effect(() => {
+		console.log(`[ActivityCard] ${activity.name}:`, {
+			scheduledDate,
+			hasOpeningHours: !!activity.openingHours,
+			openingHours: activity.openingHours,
+			effectiveHours,
+			willRender: !!(effectiveHours && scheduledDate)
+		});
+	});
+
 	// Get effective tags
 	const effectiveTags = $derived(
 		activity.userOverrides?.tags || activity.tags || []
@@ -432,6 +443,11 @@
 		font-weight: 400;
 		color: var(--text-tertiary);
 		font-style: italic;
+		background: transparent;
+	}
+
+	.price.editable .not-set {
+		color: var(--text-tertiary);
 	}
 
 	.entry-fee-edit {

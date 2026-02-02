@@ -29,6 +29,24 @@ const FOURSQUARE_DETAILS_URL = 'https://places-api.foursquare.com/places';
 // Required version header for new API
 const FOURSQUARE_API_VERSION = '2025-06-17';
 
+// Fields to request from the API (hours, rating, etc. must be explicitly requested)
+const FOURSQUARE_SEARCH_FIELDS = [
+	'fsq_place_id',
+	'name',
+	'categories',
+	'location',
+	'latitude',
+	'longitude',
+	'rating',
+	'price',
+	'hours',
+	'tel',
+	'website',
+	'photos',
+	'description',
+	'tips'
+].join(',');
+
 // =============================================================================
 // Foursquare Category IDs
 // =============================================================================
@@ -401,6 +419,7 @@ export async function searchFoodVenues(
 		const params = new URLSearchParams({
 			ll: `${lat},${lon}`,
 			categories: FOOD_CATEGORIES.join(','),
+			fields: FOURSQUARE_SEARCH_FIELDS,
 			limit: (options.limit ?? 20).toString(),
 			radius: (options.radius ?? 5000).toString()
 		});
@@ -482,6 +501,7 @@ export async function searchAttractions(
 		const params = new URLSearchParams({
 			ll: `${lat},${lon}`,
 			categories: ATTRACTION_CATEGORIES.join(','),
+			fields: FOURSQUARE_SEARCH_FIELDS,
 			limit: (options.limit ?? 20).toString(),
 			radius: (options.radius ?? 10000).toString() // Larger radius for attractions
 		});
@@ -573,6 +593,7 @@ export async function searchLodging(
 
 		const params = new URLSearchParams({
 			query: options.query,
+			fields: FOURSQUARE_SEARCH_FIELDS,
 			limit: (options.limit ?? 20).toString()
 		});
 

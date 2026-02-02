@@ -453,13 +453,21 @@
 	});
 
 	// Get the city name for the current add item day (for Foursquare "near" parameter)
-	// Pass just the city name - the modal will search to get the full formatted address
 	const addItemCityName = $derived.by(() => {
 		if (!trip || !addItemDayId) return undefined;
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
 		if (!day || day.cityIds.length === 0) return undefined;
 		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
 		return city?.name;
+	});
+
+	// Get the city formatted name for immediate display (no flash)
+	const addItemCityFormatted = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return undefined;
+		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+		return city?.formatted;
 	});
 
 	// Get the selected day's date for default check-in
@@ -846,6 +854,7 @@
 		onAddTransport={handleAddTransportToDay}
 		cityLocation={addItemCityLocation}
 		cityName={addItemCityName}
+		cityFormatted={addItemCityFormatted}
 		selectedDate={addItemSelectedDate}
 		defaultCheckOutDate={addItemDefaultCheckOutDate}
 	/>

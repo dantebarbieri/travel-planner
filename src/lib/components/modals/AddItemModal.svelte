@@ -35,13 +35,15 @@
 		cityLocation?: GeoLocation;
 		/** Pre-filled city name from day, e.g., "Paris, France" */
 		cityName?: string;
+		/** Pre-filled city formatted name (e.g., "Paris, Île-de-France, France") */
+		cityFormatted?: string;
 		/** The date of the selected day (for default check-in) */
 		selectedDate?: string;
 		/** The default check-out date (end of city, span, or trip) */
 		defaultCheckOutDate?: string;
 	}
 
-	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, cityName, selectedDate, defaultCheckOutDate }: Props = $props();
+	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, cityName, cityFormatted, selectedDate, defaultCheckOutDate }: Props = $props();
 
 	let selectedKind = $state<'activity' | 'food' | 'stay' | 'transport'>('activity');
 	let activitySearchQuery = $state('');
@@ -133,26 +135,37 @@
 			// Set default dates when modal opens
 			setDefaultStayDates();
 			// Initialize city state from props
-			if (cityName && cityLocation) {
-				// Day has a city - search to get properly formatted name
+			if (cityLocation) {
 				nearCityLocation = cityLocation;
-				nearCitySearchValue = cityName;
-				// Do a city search to get the full formatted name (async)
-				searchCities(cityName).then((results) => {
-					if (results.length > 0) {
-						// Use the first result's formatted name
-						const city = results[0];
-						nearCityName = city.formatted || `${city.name}, ${city.state || city.country}`;
-						nearCitySearchValue = nearCityName;
-						selectedNearCity = city;
-					} else {
-						// Fallback to prop value if search fails
-						nearCityName = cityName;
-					}
-				}).catch((error) => {
-					console.warn('[AddItemModal] City search failed:', error);
-					nearCityName = cityName;
-				});
+				
+				// Use formatted name immediately if available (no flash)
+				const displayName = cityFormatted || cityName || '';
+				nearCitySearchValue = displayName;
+				nearCityName = displayName;
+				
+				// If we have a formatted name, create a pseudo-result to avoid API call
+				if (cityFormatted && cityName) {
+					selectedNearCity = {
+						id: '', // Not needed for search
+						name: cityName,
+						country: '', // Not critical for search
+						formatted: cityFormatted,
+						location: cityLocation,
+						timezone: '' // Not critical for search
+					};
+				} else if (cityName) {
+					// Fallback: do async search only if we don't have formatted name
+					searchCities(cityName).then((results) => {
+						if (results.length > 0) {
+							const city = results[0];
+							nearCityName = city.formatted || `${city.name}, ${city.state || city.country}`;
+							nearCitySearchValue = nearCityName;
+							selectedNearCity = city;
+						}
+					}).catch((error) => {
+						console.warn('[AddItemModal] City search failed:', error);
+					});
+				}
 			} else {
 				// No city - user must search
 				nearCityName = undefined;
