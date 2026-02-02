@@ -3,7 +3,7 @@
  * Calls the server's /api/places/* endpoints with client-side caching.
  */
 
-import type { Location, FoodVenue, Activity, ActivityCategory } from '$lib/types/travel';
+import type { Location, FoodVenue, Activity, ActivityCategory, Stay } from '$lib/types/travel';
 import { clientCache } from './clientCache';
 
 // =============================================================================
@@ -24,6 +24,14 @@ function attractionsCacheKey(lat: number, lon: number, query?: string): string {
 	const roundedLon = Math.round(lon * 1000) / 1000;
 	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
 	return `places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+function lodgingCacheKey(lat: number, lon: number, query?: string): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `places:lodging:${roundedLat}:${roundedLon}${queryPart}`;
 }
 
 // =============================================================================
@@ -147,6 +155,62 @@ export async function searchAttractions(
 }
 
 // =============================================================================
+// Lodging
+// =============================================================================
+
+interface LodgingSearchResponse {
+	stays: Stay[];
+}
+
+export interface LodgingSearchOptions {
+	query?: string;
+	limit?: number;
+	radius?: number;
+}
+
+/**
+ * Search for lodging (hotels, hostels, etc.) near a location.
+ */
+export async function searchLodging(
+	location: Location,
+	options: LodgingSearchOptions = {}
+): Promise<Stay[]> {
+	const { latitude, longitude } = location.geo;
+	const cacheKey = lodgingCacheKey(latitude, longitude, options.query);
+
+	return clientCache.dedupeRequest(
+		cacheKey,
+		async () => {
+			const params = new URLSearchParams({
+				lat: latitude.toString(),
+				lon: longitude.toString(),
+				limit: (options.limit ?? 20).toString()
+			});
+
+			if (options.query) {
+				params.set('query', options.query);
+			}
+			if (options.radius) {
+				params.set('radius', options.radius.toString());
+			}
+
+			const response = await fetch(`/api/places/lodging?${params}`);
+
+			if (!response.ok) {
+				if (response.status === 429) {
+					throw new Error('Rate limit exceeded. Please try again later.');
+				}
+				throw new Error(`Lodging search failed: ${response.status}`);
+			}
+
+			const data: LodgingSearchResponse = await response.json();
+			return data.stays;
+		},
+		'PLACES_LODGING'
+	);
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 
@@ -164,5 +228,6 @@ export function clearPlacesCache(): void {
 export const placesApi = {
 	searchFoodVenues,
 	searchAttractions,
+	searchLodging,
 	clearCache: clearPlacesCache
 };

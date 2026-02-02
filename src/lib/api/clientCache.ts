@@ -25,7 +25,8 @@ export const CLIENT_CACHE_TTL = {
 	GEOCODING: 30 * 60 * 1000,           // 30 minutes (addresses don't move)
 	// Places (Foursquare)
 	PLACES_FOOD: 15 * 60 * 1000,         // 15 minutes
-	PLACES_ATTRACTIONS: 15 * 60 * 1000   // 15 minutes
+	PLACES_ATTRACTIONS: 15 * 60 * 1000,  // 15 minutes
+	PLACES_LODGING: 15 * 60 * 1000       // 15 minutes
 } as const;
 
 export type ClientCacheType = keyof typeof CLIENT_CACHE_TTL;

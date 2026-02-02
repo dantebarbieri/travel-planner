@@ -13,6 +13,7 @@
 	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
 	import { geocodeAddress, type GeocodingResult } from '$lib/api/geocodingApi';
+	import { parseAddress, formatParsedAddress } from '$lib/utils/addressParser';
 
 	interface Props {
 		isOpen: boolean;
@@ -189,17 +190,29 @@
 	function addCustomItem() {
 		if (!customName.trim()) return;
 
-		// Use geocoded location if available, otherwise create a fallback
-		const customLocation: Location = geocodeResult?.location ?? {
-			name: customName,
-			address: {
-				street: customAddress,
-				city: '',
-				country: '',
-				formatted: customAddress || customName
-			},
-			geo: cityLocation || { latitude: 0, longitude: 0 }
-		};
+		// Use geocoded location if available, otherwise create a fallback with parsed address
+		let customLocation: Location;
+
+		if (geocodeResult?.location) {
+			customLocation = geocodeResult.location;
+		} else {
+			// Geocoding failed or wasn't performed - use fallback parsing
+			const parsed = parseAddress(customAddress);
+			const formattedAddr = formatParsedAddress(parsed);
+
+			customLocation = {
+				name: customName,
+				address: {
+					street: parsed.street || customAddress,
+					city: parsed.city || '',
+					state: parsed.state,
+					postalCode: parsed.postalCode,
+					country: parsed.country || '',
+					formatted: formattedAddr || customAddress || customName
+				},
+				geo: cityLocation || { latitude: 0, longitude: 0 }
+			};
+		}
 
 		if (selectedKind === 'activity') {
 			const activity: Activity = {
@@ -262,10 +275,23 @@
 			const result = await geocodeAddress(customAddress);
 			geocodeResult = result;
 			if (!result) {
-				geocodeError = 'Address not found. You can still add the stay.';
+				// Parse the address to provide better feedback
+				const parsed = parseAddress(customAddress);
+				if (parsed.city) {
+					geocodeError = `Could not verify address. Using "${parsed.city}" as the city.`;
+				} else {
+					geocodeError = 'Address not found. Location features may be limited.';
+				}
 			}
 		} catch (error) {
-			geocodeError = error instanceof Error ? error.message : 'Geocoding failed';
+			const message = error instanceof Error ? error.message : 'Geocoding failed';
+			// Try to parse even on error
+			const parsed = parseAddress(customAddress);
+			if (parsed.city) {
+				geocodeError = `${message}. Using "${parsed.city}" as the city.`;
+			} else {
+				geocodeError = `${message}. Location features may be limited.`;
+			}
 			geocodeResult = null;
 		} finally {
 			isGeocoding = false;
@@ -686,10 +712,12 @@
 		border: 1px solid var(--border-color);
 		border-radius: var(--radius-md);
 		font-size: 0.875rem;
+		color: var(--text-primary);
 		cursor: pointer;
 		transition:
 			border-color var(--transition-fast),
-			background-color var(--transition-fast);
+			background-color var(--transition-fast),
+			color var(--transition-fast);
 
 		&:hover {
 			border-color: var(--color-primary);
@@ -698,6 +726,7 @@
 		&.selected {
 			border-color: var(--color-primary);
 			background: color-mix(in oklch, var(--color-primary), transparent 90%);
+			color: var(--text-primary);
 		}
 	}
 

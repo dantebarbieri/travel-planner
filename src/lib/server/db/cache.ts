@@ -31,6 +31,7 @@ export const CACHE_TTL = {
 	// Places (Foursquare)
 	PLACES_FOOD: 7 * 24 * 60 * 60 * 1000,      // 7 days (restaurants may change)
 	PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000,  // 14 days (attractions more stable)
+	PLACES_LODGING: 7 * 24 * 60 * 60 * 1000,   // 7 days (hotels may change)
 	PLACE_DETAILS: 14 * 24 * 60 * 60 * 1000    // 14 days (individual place details)
 } as const;
 
@@ -421,6 +422,17 @@ export function attractionPlacesCacheKey(lat: number, lon: number, query?: strin
 }
 
 /**
+ * Generate a cache key for lodging search.
+ */
+export function lodgingPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `places:lodging:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+/**
  * Generate a cache key for place details.
  */
 export function placeDetailsCacheKey(fsqId: string): string {
@@ -452,6 +464,7 @@ export const cache = {
 	timezoneCacheKey,
 	foodPlacesCacheKey,
 	attractionPlacesCacheKey,
+	lodgingPlacesCacheKey,
 	placeDetailsCacheKey,
 	// TTL constants
 	TTL: CACHE_TTL

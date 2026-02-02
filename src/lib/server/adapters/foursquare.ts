@@ -14,9 +14,11 @@ import type {
 	Activity,
 	ActivityCategory,
 	OperatingHours,
-	DayHours
+	DayHours,
+	Stay,
+	StayType
 } from '$lib/types/travel';
-import { cache, foodPlacesCacheKey, attractionPlacesCacheKey, placeDetailsCacheKey } from '$lib/server/db/cache';
+import { cache, foodPlacesCacheKey, attractionPlacesCacheKey, placeDetailsCacheKey, lodgingPlacesCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 
@@ -56,6 +58,17 @@ const ATTRACTION_CATEGORIES = [
 	'10003', // Aquarium
 ];
 
+// Lodging category IDs (from Foursquare taxonomy)
+const LODGING_CATEGORIES = [
+	'19014', // Hotel
+	'19013', // Hostel
+	'19012', // Bed and Breakfast
+	'19043', // Motel
+	'19025', // Resort
+	'19009', // Vacation Rental
+	'19048', // Inn
+];
+
 // Category ID to FoodVenueType mapping
 const FOOD_CATEGORY_MAP: Record<string, FoodVenueType> = {
 	'13065': 'restaurant',
@@ -83,6 +96,17 @@ const ATTRACTION_CATEGORY_MAP: Record<string, ActivityCategory> = {
 	'16020': 'sightseeing',
 	'10007': 'outdoor',
 	'10003': 'outdoor',
+};
+
+// Category ID to StayType mapping
+const LODGING_CATEGORY_MAP: Record<string, StayType> = {
+	'19014': 'hotel',    // Hotel
+	'19013': 'hostel',   // Hostel
+	'19012': 'custom',   // Bed and Breakfast -> custom
+	'19043': 'hotel',    // Motel -> hotel
+	'19025': 'hotel',    // Resort -> hotel
+	'19009': 'airbnb',   // Vacation Rental -> airbnb (most similar)
+	'19048': 'hotel',    // Inn -> hotel
 };
 
 // =============================================================================
@@ -318,6 +342,29 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 	};
 }
 
+function foursquarePlaceToStay(place: FoursquarePlace): Stay {
+	const category = place.categories?.[0];
+	const categoryId = category?.id?.toString() || '';
+	const stayType = LODGING_CATEGORY_MAP[categoryId] || 'hotel';
+
+	// Build the base stay object with required fields
+	const baseStay = {
+		id: `fsq-${place.fsq_id}`,
+		name: place.name,
+		location: foursquarePlaceToLocation(place),
+		checkIn: '',  // User will set these
+		checkOut: '',
+		website: place.website,
+		phone: place.tel,
+		images: place.photos?.slice(0, 5).map(p => `${p.prefix}original${p.suffix}`),
+		// Store rating in notes since Stay doesn't have a rating field
+		notes: place.rating ? `Rating: ${(place.rating / 2).toFixed(1)}/5` : undefined,
+	};
+
+	// Return appropriate stay type
+	return { ...baseStay, type: stayType } as Stay;
+}
+
 // =============================================================================
 // Food Venue Search
 // =============================================================================
@@ -482,6 +529,80 @@ export async function searchAttractions(
 }
 
 // =============================================================================
+// Lodging Search
+// =============================================================================
+
+export interface LodgingSearchOptions {
+	query?: string;
+	limit?: number;
+	radius?: number;
+}
+
+/**
+ * Search for lodging (hotels, hostels, etc.) near a location.
+ */
+export async function searchLodging(
+	lat: number,
+	lon: number,
+	options: LodgingSearchOptions = {}
+): Promise<Stay[]> {
+	const cacheKey = lodgingPlacesCacheKey(lat, lon, options.query);
+	const cached = cache.get<Stay[]>(cacheKey);
+	if (cached) {
+		return cached;
+	}
+
+	try {
+		const apiKey = getApiKey();
+
+		const params = new URLSearchParams({
+			ll: `${lat},${lon}`,
+			categories: LODGING_CATEGORIES.join(','),
+			limit: (options.limit ?? 20).toString(),
+			radius: (options.radius ?? 10000).toString(),
+			fields: 'fsq_id,name,categories,location,geocodes,rating,price,hours,tel,website,photos'
+		});
+
+		if (options.query) {
+			params.set('query', options.query);
+		}
+
+		const url = `${FOURSQUARE_SEARCH_URL}?${params}`;
+		const response = await fetchWithRetry(url, {
+			headers: {
+				'Authorization': apiKey,
+				'Accept': 'application/json'
+			}
+		}, {
+			maxAttempts: 3,
+			onRetry: (attempt, delayMs) => {
+				console.log(`[Foursquare] Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
+			}
+		});
+
+		if (!response.ok) {
+			throw new HttpError(response.status, `Foursquare API error: ${response.status}`);
+		}
+
+		const data: FoursquareSearchResponse = await response.json();
+
+		if (!data.results || data.results.length === 0) {
+			cache.set(cacheKey, [], 'PLACES_LODGING');
+			return [];
+		}
+
+		const stays = data.results.map(foursquarePlaceToStay);
+
+		cache.set(cacheKey, stays, 'PLACES_LODGING');
+		return stays;
+	} catch (error) {
+		const fsqError = classifyError(error);
+		console.error(`[Foursquare] Lodging search failed for (${lat}, ${lon}):`, fsqError.message);
+		throw fsqError;
+	}
+}
+
+// =============================================================================
 // Place Details
 // =============================================================================
 
@@ -540,5 +661,6 @@ export async function getPlaceDetails(fsqId: string): Promise<FoursquarePlace | 
 export const foursquareAdapter = {
 	searchFoodVenues,
 	searchAttractions,
+	searchLodging,
 	getPlaceDetails
 };
