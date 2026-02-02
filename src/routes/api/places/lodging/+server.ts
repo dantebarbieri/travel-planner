@@ -41,6 +41,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const lonParam = url.searchParams.get('lon');
 	const limitParam = url.searchParams.get('limit');
 	const radiusParam = url.searchParams.get('radius');
+	const near = url.searchParams.get('near') || undefined;
 
 	// Optional location for biased results
 	let lat: number | undefined;
@@ -82,7 +83,8 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			limit,
 			lat,
 			lon,
-			radius
+			radius,
+			near
 		});
 
 		return json(

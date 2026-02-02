@@ -61,15 +61,15 @@ const ATTRACTION_CATEGORIES = [
 	'10003', // Aquarium
 ];
 
-// Lodging category IDs (from Foursquare taxonomy)
+// Lodging category IDs (new Foursquare API format)
 const LODGING_CATEGORIES = [
-	'19014', // Hotel
-	'19013', // Hostel
-	'19012', // Bed and Breakfast
-	'19043', // Motel
-	'19025', // Resort
-	'19009', // Vacation Rental
-	'19048', // Inn
+	'4bf58dd8d48988d1fa931735', // Hotel
+	'4bf58dd8d48988d1ee931735', // Hostel
+	'4bf58dd8d48988d1f8931735', // Bed and Breakfast
+	'4bf58dd8d48988d1fb931735', // Motel
+	'4bf58dd8d48988d12f951735', // Resort
+	'4bf58dd8d48988d1f9931735', // Vacation Rental
+	'4bf58dd8d48988d100951735', // Inn
 ];
 
 // Category ID to FoodVenueType mapping
@@ -101,15 +101,15 @@ const ATTRACTION_CATEGORY_MAP: Record<string, ActivityCategory> = {
 	'10003': 'outdoor',
 };
 
-// Category ID to StayType mapping
+// Category ID to StayType mapping (new Foursquare API format)
 const LODGING_CATEGORY_MAP: Record<string, StayType> = {
-	'19014': 'hotel',    // Hotel
-	'19013': 'hostel',   // Hostel
-	'19012': 'custom',   // Bed and Breakfast -> custom
-	'19043': 'hotel',    // Motel -> hotel
-	'19025': 'hotel',    // Resort -> hotel
-	'19009': 'airbnb',   // Vacation Rental -> airbnb (most similar)
-	'19048': 'hotel',    // Inn -> hotel
+	'4bf58dd8d48988d1fa931735': 'hotel',    // Hotel
+	'4bf58dd8d48988d1ee931735': 'hostel',   // Hostel
+	'4bf58dd8d48988d1f8931735': 'custom',   // Bed and Breakfast -> custom
+	'4bf58dd8d48988d1fb931735': 'hotel',    // Motel -> hotel
+	'4bf58dd8d48988d12f951735': 'hotel',    // Resort -> hotel
+	'4bf58dd8d48988d1f9931735': 'airbnb',   // Vacation Rental -> airbnb (most similar)
+	'4bf58dd8d48988d100951735': 'hotel',    // Inn -> hotel
 };
 
 // =============================================================================
@@ -538,6 +538,7 @@ export interface LodgingSearchOptions {
 	radius?: number;
 	lat?: number;    // Optional: for location-biased search
 	lon?: number;    // Optional: for location-biased search
+	near?: string;   // Optional: city/location name (e.g., "Monterey, CA")
 }
 
 /**
@@ -552,12 +553,12 @@ export async function searchLodging(
 		return [];
 	}
 
-	// Generate cache key based on query and optional location
-	const cacheKey = lodgingPlacesCacheKey(
-		options.lat ?? 0,
-		options.lon ?? 0,
-		options.query
-	);
+	// Generate cache key based on query and optional location/near
+	const cacheKey = lodgingPlacesCacheKey(options.query, {
+		lat: options.lat,
+		lon: options.lon,
+		near: options.near
+	});
 	const cached = cache.get<Stay[]>(cacheKey);
 	if (cached) {
 		return cached;
@@ -568,17 +569,21 @@ export async function searchLodging(
 
 		const params = new URLSearchParams({
 			query: options.query,
-			categories: LODGING_CATEGORIES.join(','),
 			limit: (options.limit ?? 20).toString()
 		});
 
-		// Optionally add location bias if coordinates provided
+		// Add location bias - prefer coordinates, fall back to near parameter
 		if (options.lat && options.lon) {
 			params.set('ll', `${options.lat},${options.lon}`);
+			params.set('categories', LODGING_CATEGORIES.join(','));
 			if (options.radius) {
 				params.set('radius', options.radius.toString());
 			}
+		} else if (options.near) {
+			params.set('near', options.near);
+			params.set('categories', LODGING_CATEGORIES.join(','));
 		}
+		// Without any location, rely on query alone (API uses IP geolocation)
 
 		const url = `${FOURSQUARE_SEARCH_URL}?${params}`;
 		const response = await fetchWithRetry(url, {

@@ -7,7 +7,7 @@
 
 import Database from 'better-sqlite3';
 import { env } from '$env/dynamic/private';
-import { building } from '$app/environment';
+import { building, dev } from '$app/environment';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -82,7 +82,9 @@ function getDb(): Database.Database | null {
 		return null;
 	}
 
-	const dbPath = env.DATABASE_PATH || './data/cache.db';
+	// In development mode, always use local path regardless of DATABASE_PATH env var
+	// (DATABASE_PATH is typically set to /app/data/cache.db for Docker production)
+	const dbPath = dev ? './data/cache.db' : (env.DATABASE_PATH || './data/cache.db');
 	
 	// Ensure directory exists (sync, but only runs once at startup)
 	// Use a synchronous lock pattern: check db again after directory creation
@@ -423,13 +425,23 @@ export function attractionPlacesCacheKey(lat: number, lon: number, query?: strin
 
 /**
  * Generate a cache key for lodging search.
+ * Supports query-only, query+near, or query+coordinates.
  */
-export function lodgingPlacesCacheKey(lat: number, lon: number, query?: string): string {
-	// Round to 3 decimal places (~100m precision)
-	const roundedLat = Math.round(lat * 1000) / 1000;
-	const roundedLon = Math.round(lon * 1000) / 1000;
-	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
-	return `places:lodging:${roundedLat}:${roundedLon}${queryPart}`;
+export function lodgingPlacesCacheKey(query: string, options?: { lat?: number; lon?: number; near?: string }): string {
+	const queryPart = query.toLowerCase().trim();
+
+	if (options?.lat && options?.lon) {
+		// Round to 3 decimal places (~100m precision)
+		const roundedLat = Math.round(options.lat * 1000) / 1000;
+		const roundedLon = Math.round(options.lon * 1000) / 1000;
+		return `places:lodging:${queryPart}:${roundedLat}:${roundedLon}`;
+	}
+
+	if (options?.near) {
+		return `places:lodging:${queryPart}:near:${options.near.toLowerCase().trim()}`;
+	}
+
+	return `places:lodging:${queryPart}`;
 }
 
 /**
