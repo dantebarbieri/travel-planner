@@ -14,6 +14,7 @@
 		DayNote
 	} from '$lib/types/travel';
 	import type { DayUnitResolution } from '$lib/utils/units';
+	import type { StayBadgeState } from '$lib/utils/stayUtils';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
 	import DayNotes from './DayNotes.svelte';
@@ -32,6 +33,8 @@
 		colorScheme: ColorScheme;
 		/** Pre-computed stay segments for by-stay coloring */
 		staySegments?: StaySegment[];
+		/** Pre-computed stay badges (check-in/check-out) */
+		stayBadges?: Map<string, StayBadgeState>;
 		/** Whether this day has a city but no lodging booked */
 		hasMissingLodging?: boolean;
 		weatherList?: WeatherCondition[];
@@ -53,6 +56,9 @@
 		onAddDayNote?: (note: DayNote) => void;
 		onUpdateDayNote?: (noteId: string, content: string) => void;
 		onDeleteDayNote?: (noteId: string) => void;
+		// Stay time handlers
+		onStayCheckInTimeChange?: (stayId: string, time: string) => void;
+		onStayCheckOutTimeChange?: (stayId: string, time: string) => void;
 	}
 
 	let {
@@ -64,6 +70,7 @@
 		transportLegs,
 		colorScheme,
 		staySegments = [],
+		stayBadges,
 		hasMissingLodging = false,
 		weatherList = [],
 		weatherLoading = false,
@@ -81,7 +88,9 @@
 		onTravelModeChange,
 		onAddDayNote,
 		onUpdateDayNote,
-		onDeleteDayNote
+		onDeleteDayNote,
+		onStayCheckInTimeChange,
+		onStayCheckOutTimeChange
 	}: Props = $props();
 
 	// Check if this day is today or in the past
@@ -185,6 +194,7 @@
 				{foodVenues}
 				{transportLegs}
 				{colorScheme}
+				{stayBadges}
 				cityId={primaryCityId}
 				segmentId={daySegment?.id}
 				distanceUnit={unitResolution?.distanceUnit}
@@ -197,6 +207,8 @@
 				{onMoveItem}
 				{onDuplicateItem}
 				{onTravelModeChange}
+				{onStayCheckInTimeChange}
+				{onStayCheckOutTimeChange}
 			/>
 		{:else}
 			<div class="empty-state">

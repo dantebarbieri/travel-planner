@@ -11,6 +11,7 @@
 	import { isStayItem } from '$lib/types/travel';
 	import { cityAdapter, type CitySearchResult } from '$lib/adapters/cities';
 	import { computeStaySegments, dayHasMissingLodging, defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
+	import { computeStayBadges, type StayBadgeState } from '$lib/utils/stayUtils';
 	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
@@ -596,6 +597,19 @@
 		}
 	}
 
+	// Stay time change handlers
+	function handleStayCheckInTimeChange(stayId: string, time: string) {
+		if (trip) {
+			tripStore.updateStayOverride(trip.id, stayId, { checkInTime: time || undefined });
+		}
+	}
+
+	function handleStayCheckOutTimeChange(stayId: string, time: string) {
+		if (trip) {
+			tripStore.updateStayOverride(trip.id, stayId, { checkOutTime: time || undefined });
+		}
+	}
+
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
 
@@ -620,6 +634,9 @@
 
 	// Compute stay segments for by-stay coloring (using resolved scheme)
 	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments({ ...trip, colorScheme: resolvedColorScheme }) : []);
+
+	// Compute stay badges (which items are check-in / check-out)
+	const stayBadges = $derived<Map<string, StayBadgeState>>(trip ? computeStayBadges(trip) : new Map());
 
 	// Resolve trip settings (includes trip-specific overrides)
 	const resolvedSettings = $derived(trip ? settingsStore.resolveSettingsForTrip(trip) : null);
@@ -739,6 +756,7 @@
 						transportLegs={trip.transportLegs}
 						colorScheme={resolvedColorScheme}
 						{staySegments}
+						{stayBadges}
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date]?.data || []}
 						weatherLoading={weatherData[day.date]?.loading || false}
@@ -756,6 +774,8 @@
 						onAddDayNote={(note) => handleAddDayNote(day.id, note)}
 						onUpdateDayNote={(noteId, content) => handleUpdateDayNote(day.id, noteId, content)}
 						onDeleteDayNote={(noteId) => handleDeleteDayNote(day.id, noteId)}
+						onStayCheckInTimeChange={handleStayCheckInTimeChange}
+						onStayCheckOutTimeChange={handleStayCheckOutTimeChange}
 					/>
 				{/each}
 			</div>

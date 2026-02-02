@@ -313,6 +313,30 @@ function updateStay(tripId: string, cityId: string, stayId: string, updates: Par
 	saveTrips();
 }
 
+function updateStayOverride(tripId: string, stayId: string, overrides: Partial<import('$lib/types/travel').StayUserOverrides>): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			cities: t.cities.map((c) => ({
+				...c,
+				stays: c.stays.map((s) => {
+					if (s.id !== stayId) return s;
+					return {
+						...s,
+						userOverrides: {
+							...s.userOverrides,
+							...overrides
+						}
+					} as Stay;
+				})
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 function removeStay(tripId: string, cityId: string, stayId: string): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
@@ -1209,6 +1233,7 @@ export const tripStore = {
 	addStay,
 	addStayWithCityInference,
 	updateStay,
+	updateStayOverride,
 	removeStay,
 
 	// Activity

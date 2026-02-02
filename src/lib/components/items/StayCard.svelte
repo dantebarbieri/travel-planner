@@ -16,6 +16,8 @@
 		isEditing?: boolean;
 		onclick?: () => void;
 		onNotesChange?: (notes: string) => void;
+		onCheckInTimeChange?: (time: string) => void;
+		onCheckOutTimeChange?: (time: string) => void;
 	}
 
 	let { 
@@ -25,7 +27,9 @@
 		itemNotes = '',
 		isEditing = false, 
 		onclick,
-		onNotesChange
+		onNotesChange,
+		onCheckInTimeChange,
+		onCheckOutTimeChange
 	}: Props = $props();
 
 	// Get resolved map app from settings
@@ -154,20 +158,46 @@
 				</span>
 			</div>
 
-			<!-- Check-in/out times -->
-			{#if (isCheckIn && checkInTimeDisplay) || (isCheckOut && checkOutTimeDisplay)}
+			<!-- Check-in/out times - always show on check-in/out cards -->
+			{#if isCheckIn || isCheckOut}
 				<div class="times-row">
-					{#if isCheckIn && checkInTimeDisplay}
-						<span class="check-time">
+					{#if isCheckIn}
+						<div class="check-time-item">
 							<Icon name="time" size={12} />
-							Check-in: {checkInTimeDisplay}
-						</span>
+							<span class="check-time-label">Check-in:</span>
+							{#if isEditing}
+								<input
+									type="time"
+									class="time-input"
+									value={effectiveCheckInTime || ''}
+									onchange={(e) => onCheckInTimeChange?.(e.currentTarget.value)}
+									placeholder="HH:MM"
+								/>
+							{:else}
+								<span class="check-time-value" class:not-set={!checkInTimeDisplay}>
+									{checkInTimeDisplay || 'Not set'}
+								</span>
+							{/if}
+						</div>
 					{/if}
-					{#if isCheckOut && checkOutTimeDisplay}
-						<span class="check-time">
+					{#if isCheckOut}
+						<div class="check-time-item">
 							<Icon name="time" size={12} />
-							Check-out: {checkOutTimeDisplay}
-						</span>
+							<span class="check-time-label">Check-out:</span>
+							{#if isEditing}
+								<input
+									type="time"
+									class="time-input"
+									value={effectiveCheckOutTime || ''}
+									onchange={(e) => onCheckOutTimeChange?.(e.currentTarget.value)}
+									placeholder="HH:MM"
+								/>
+							{:else}
+								<span class="check-time-value" class:not-set={!checkOutTimeDisplay}>
+									{checkOutTimeDisplay || 'Not set'}
+								</span>
+							{/if}
+						</div>
 					{/if}
 				</div>
 			{/if}
@@ -309,7 +339,50 @@
 
 	.times-row {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-3);
+		padding: var(--space-2);
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
+	}
+
+	.check-time-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		font-size: 0.8125rem;
+		color: var(--text-secondary);
+	}
+
+	.check-time-label {
+		font-weight: 500;
+	}
+
+	.check-time-value {
+		color: var(--text-primary);
+		font-weight: 600;
+	}
+
+	.check-time-value.not-set {
+		color: var(--text-tertiary);
+		font-weight: 400;
+		font-style: italic;
+	}
+
+	.time-input {
+		padding: 2px 6px;
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-sm);
+		font-size: 0.8125rem;
+		background: var(--surface-primary);
+		color: var(--text-primary);
+		font-family: inherit;
+		width: 90px;
+
+		&:focus {
+			outline: none;
+			border-color: var(--color-primary);
+		}
 	}
 
 	.check-time {
