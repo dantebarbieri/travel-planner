@@ -59,6 +59,8 @@
 		// Stay time handlers
 		onStayCheckInTimeChange?: (stayId: string, time: string) => void;
 		onStayCheckOutTimeChange?: (stayId: string, time: string) => void;
+		// Activity handlers
+		onActivityEntryFeeChange?: (activityId: string, entryFee: number | undefined) => void;
 	}
 
 	let {
@@ -90,7 +92,8 @@
 		onUpdateDayNote,
 		onDeleteDayNote,
 		onStayCheckInTimeChange,
-		onStayCheckOutTimeChange
+		onStayCheckOutTimeChange,
+		onActivityEntryFeeChange
 	}: Props = $props();
 
 	// Check if this day is today or in the past
@@ -198,6 +201,7 @@
 				cityId={primaryCityId}
 				segmentId={daySegment?.id}
 				distanceUnit={unitResolution?.distanceUnit}
+				scheduledDate={day.date}
 				{isEditing}
 				{onReorder}
 				{onItemClick}
@@ -209,6 +213,7 @@
 				{onTravelModeChange}
 				{onStayCheckInTimeChange}
 				{onStayCheckOutTimeChange}
+				{onActivityEntryFeeChange}
 			/>
 		{:else}
 			<div class="empty-state">

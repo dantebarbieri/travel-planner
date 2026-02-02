@@ -162,6 +162,7 @@ export interface ActivityUserOverrides {
 	price?: number;
 	entryFee?: number;
 	tags?: PlaceTag[];
+	categoryTags?: string[];
 	notes?: string;
 	bookingRequired?: boolean;
 }
@@ -197,6 +198,8 @@ export interface Activity {
 	reviewCount?: number;
 	/** Tags/amenities for this place */
 	tags?: PlaceTag[];
+	/** Category tags from API (e.g., "Aquarium", "Zoo", "Art Gallery") */
+	categoryTags?: string[];
 	/** User overrides for API-fetched data */
 	userOverrides?: ActivityUserOverrides;
 	/** Timestamp of last API data fetch */

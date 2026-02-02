@@ -610,6 +610,12 @@
 		}
 	}
 
+	function handleActivityEntryFeeChange(activityId: string, entryFee: number | undefined) {
+		if (trip) {
+			tripStore.setActivityEntryFee(trip.id, activityId, entryFee);
+		}
+	}
+
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
 
@@ -776,6 +782,7 @@
 						onDeleteDayNote={(noteId) => handleDeleteDayNote(day.id, noteId)}
 						onStayCheckInTimeChange={handleStayCheckInTimeChange}
 						onStayCheckOutTimeChange={handleStayCheckOutTimeChange}
+						onActivityEntryFeeChange={handleActivityEntryFeeChange}
 					/>
 				{/each}
 			</div>

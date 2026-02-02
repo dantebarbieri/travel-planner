@@ -47,6 +47,10 @@
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
 		onStayCheckInTimeChange?: (stayId: string, time: string) => void;
 		onStayCheckOutTimeChange?: (stayId: string, time: string) => void;
+		onItemNotesChange?: (itemId: string, notes: string) => void;
+		onActivityEntryFeeChange?: (activityId: string, entryFee: number | undefined) => void;
+		/** The date this day is scheduled for (YYYY-MM-DD) - used for business hours display */
+		scheduledDate?: string;
 	}
 
 	let {
@@ -70,7 +74,10 @@
 		onDuplicateItem,
 		onTravelModeChange,
 		onStayCheckInTimeChange,
-		onStayCheckOutTimeChange
+		onStayCheckOutTimeChange,
+		onItemNotesChange,
+		onActivityEntryFeeChange,
+		scheduledDate
 	}: Props = $props();
 
 	// Context menu state
@@ -506,8 +513,10 @@
 					{#if activity}
 						<ActivityCard
 							{activity}
+							{scheduledDate}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
+							onEntryFeeChange={(entryFee) => onActivityEntryFeeChange?.(activity.id, entryFee)}
 						/>
 					{/if}
 				{:else if isFoodItem(item)}
@@ -516,6 +525,7 @@
 						<FoodCard
 							{venue}
 							mealSlot={item.mealSlot}
+							{scheduledDate}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
 						/>

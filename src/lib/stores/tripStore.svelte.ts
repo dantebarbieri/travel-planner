@@ -596,6 +596,22 @@ async function refreshActivityDetails(tripId: string, activityId: string): Promi
 }
 
 /**
+ * Update an activity's entry fee via userOverrides.
+ */
+function setActivityEntryFee(tripId: string, activityId: string, entryFee: number | undefined): void {
+	const trip = state.trips.find(t => t.id === tripId);
+	const activity = trip?.activities.find(a => a.id === activityId);
+	if (!activity) return;
+
+	updateActivity(tripId, activityId, {
+		userOverrides: {
+			...activity.userOverrides,
+			entryFee
+		}
+	});
+}
+
+/**
  * Manually refresh place details for a food venue.
  */
 async function refreshFoodVenueDetails(tripId: string, venueId: string): Promise<boolean> {
@@ -1240,6 +1256,7 @@ export const tripStore = {
 	addActivity,
 	addActivityWithEnrichment,
 	updateActivity,
+	setActivityEntryFee,
 	removeActivity,
 	refreshActivityDetails,
 

@@ -328,6 +328,9 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 	const category = place.categories?.[0];
 	const categoryId = category?.fsq_category_id || '';
 
+	// Extract all category names for display as tags
+	const categoryTags = place.categories?.map(c => c.name).filter(Boolean) || [];
+
 	return {
 		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
@@ -338,7 +341,8 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 		website: place.website,
 		phone: place.tel,
 		openingHours: foursquareHoursToOperatingHours(place.hours),
-		images: place.photos?.slice(0, 5).map(p => `${p.prefix}original${p.suffix}`)
+		images: place.photos?.slice(0, 5).map(p => `${p.prefix}original${p.suffix}`),
+		categoryTags: categoryTags.length > 0 ? categoryTags : undefined
 	};
 }
 

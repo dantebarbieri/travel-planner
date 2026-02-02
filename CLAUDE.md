@@ -83,6 +83,7 @@ External APIs require the following environment variables:
 |----------|-----|----------|------------|
 | `GEOAPIFY_API_KEY` | Geocoding, City Search | Yes | https://myprojects.geoapify.com/ |
 | `FOURSQUARE_API_KEY` | Food, Attractions | Yes | https://foursquare.com/developers/ |
+| `GOOGLE_PLACES_API_KEY` | Place Details (fallback) | No | https://console.cloud.google.com/ |
 | `TIMEZONEDB_API_KEY` | Timezone (fallback) | No | https://timezonedb.com/ |
 | `AERODATABOX_API_KEY` | Flights | Yes | https://rapidapi.com/aedbx-aedbx/api/aerodatabox |
 

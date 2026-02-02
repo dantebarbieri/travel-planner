@@ -5,6 +5,7 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import BusinessHours from '$lib/components/places/BusinessHours.svelte';
 	import TagList from '$lib/components/places/TagList.svelte';
+	import CategoryTagList from '$lib/components/places/CategoryTagList.svelte';
 	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
@@ -18,6 +19,7 @@
 		isEditing?: boolean;
 		onclick?: () => void;
 		onNotesChange?: (notes: string) => void;
+		onEntryFeeChange?: (entryFee: number | undefined) => void;
 	}
 
 	let { 
@@ -26,7 +28,8 @@
 		itemNotes = '',
 		isEditing = false, 
 		onclick,
-		onNotesChange
+		onNotesChange,
+		onEntryFeeChange
 	}: Props = $props();
 
 	// Get resolved map app from settings
@@ -51,9 +54,14 @@
 		return labels[activity.category] || 'Activity';
 	});
 
+	// Get effective entry fee (user override or API data)
+	const effectiveEntryFee = $derived(
+		activity.userOverrides?.entryFee ?? activity.entryFee
+	);
+
 	// Price display - prefer entryFee, fallback to price
 	const priceDisplay = $derived.by(() => {
-		const price = activity.entryFee ?? activity.price;
+		const price = effectiveEntryFee ?? activity.price;
 		if (price === undefined) return null;
 		if (price === 0) return 'Free';
 		const symbol = activity.currency === 'EUR' ? '€' : activity.currency === 'JPY' ? '¥' : '$';
@@ -65,6 +73,39 @@
 		if (!activity.priceLevel) return null;
 		return '$'.repeat(activity.priceLevel);
 	});
+
+	// State for inline entry fee editing
+	let editingEntryFee = $state(false);
+	let entryFeeInput = $state('');
+
+	function startEditEntryFee() {
+		editingEntryFee = true;
+		entryFeeInput = effectiveEntryFee !== undefined ? String(effectiveEntryFee) : '';
+	}
+
+	function saveEntryFee() {
+		editingEntryFee = false;
+		if (entryFeeInput.trim() === '') {
+			onEntryFeeChange?.(undefined);
+		} else {
+			const value = parseFloat(entryFeeInput);
+			if (!isNaN(value) && value >= 0) {
+				onEntryFeeChange?.(value);
+			}
+		}
+	}
+
+	function cancelEditEntryFee() {
+		editingEntryFee = false;
+	}
+
+	function handleEntryFeeKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			saveEntryFee();
+		} else if (event.key === 'Escape') {
+			cancelEditEntryFee();
+		}
+	}
 
 	const timeDisplay = $derived.by(() => {
 		if (!activity.startTime) return null;
@@ -88,6 +129,11 @@
 	// Get effective tags
 	const effectiveTags = $derived(
 		activity.userOverrides?.tags || activity.tags || []
+	);
+
+	// Get effective category tags (from API, user can override)
+	const effectiveCategoryTags = $derived(
+		activity.userOverrides?.categoryTags || activity.categoryTags || []
 	);
 
 	function openInMaps() {
@@ -167,8 +213,33 @@
 				{#if activity.duration}
 					<span class="duration">{formatDuration(activity.duration)}</span>
 				{/if}
-				{#if priceDisplay}
-					<span class="price" class:free={activity.entryFee === 0 || activity.price === 0}>
+				{#if isEditing && onEntryFeeChange}
+					{#if editingEntryFee}
+						<span class="entry-fee-edit">
+							<span class="currency-symbol">$</span>
+							<input
+								type="number"
+								min="0"
+								step="0.01"
+								placeholder="0.00"
+								bind:value={entryFeeInput}
+								onkeydown={handleEntryFeeKeydown}
+								onblur={saveEntryFee}
+								class="entry-fee-input"
+							/>
+						</span>
+					{:else}
+						<button type="button" class="price editable" onclick={startEditEntryFee} title="Click to edit entry fee">
+							{#if priceDisplay}
+								{priceDisplay}
+							{:else}
+								<span class="not-set">Entry fee not set</span>
+							{/if}
+							<Icon name="edit" size={10} />
+						</button>
+					{/if}
+				{:else if priceDisplay}
+					<span class="price" class:free={effectiveEntryFee === 0 || activity.price === 0}>
 						{priceDisplay}
 					</span>
 				{:else if priceLevelDisplay}
@@ -181,6 +252,10 @@
 
 			{#if effectiveHours && scheduledDate}
 				<BusinessHours hours={effectiveHours} date={scheduledDate} />
+			{/if}
+
+			{#if effectiveCategoryTags.length > 0}
+				<CategoryTagList tags={effectiveCategoryTags} />
 			{/if}
 
 			{#if effectiveTags.length > 0}
@@ -331,6 +406,58 @@
 
 		&.free {
 			color: var(--color-success);
+		}
+
+		&.editable {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			background: none;
+			border: 1px dashed var(--border-secondary);
+			border-radius: var(--radius-sm);
+			padding: 2px 6px;
+			cursor: pointer;
+			font: inherit;
+			font-weight: 600;
+			color: var(--text-primary);
+
+			&:hover {
+				border-color: var(--color-primary);
+				background: var(--surface-secondary);
+			}
+		}
+	}
+
+	.not-set {
+		font-weight: 400;
+		color: var(--text-tertiary);
+		font-style: italic;
+	}
+
+	.entry-fee-edit {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.currency-symbol {
+		color: var(--text-secondary);
+		font-weight: 500;
+	}
+
+	.entry-fee-input {
+		width: 60px;
+		padding: 2px 4px;
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-sm);
+		font: inherit;
+		font-size: 0.875rem;
+		background: var(--surface-primary);
+		color: var(--text-primary);
+
+		&:focus {
+			outline: none;
+			box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-primary), transparent 70%);
 		}
 	}
 
