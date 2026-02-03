@@ -3,7 +3,7 @@
  * GET /api/flights/airlines?query=...
  */
 
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { searchAirlines } from '$lib/server/adapters/flights';
 import { rateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
@@ -27,7 +27,10 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 	// Validate required parameters
 	if (!query || query.length < 2) {
-		error(400, 'Query must be at least 2 characters');
+		return json(
+			{ error: 'Query must be at least 2 characters' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'flights') }
+		);
 	}
 
 	try {
@@ -41,6 +44,9 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		);
 	} catch (err) {
 		console.error('Airline search error:', err);
-		error(500, 'Failed to search airlines');
+		return json(
+			{ error: 'Failed to search airlines' },
+			{ status: 500, headers: rateLimit.getHeaders(ip, 'flights') }
+		);
 	}
 };

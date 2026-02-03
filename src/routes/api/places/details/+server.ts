@@ -6,7 +6,7 @@
  * Uses Google Places API with Foursquare fallback.
  */
 
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { googlePlacesAdapter, GooglePlacesError, type PlaceDetails } from '$lib/server/adapters/googlePlaces';
 import { getPlaceDetails as getFoursquareDetails, FoursquareError } from '$lib/server/adapters/foursquare';
 import { rateLimit } from '$lib/server/rateLimit';
