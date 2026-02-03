@@ -10,6 +10,7 @@
 		CityId
 	} from '$lib/types/travel';
 	import { isStayItem, isActivityItem, isFoodItem, isTransportItem } from '$lib/types/travel';
+	import type { StayBadgeState } from '$lib/utils/stayUtils';
 	import StayCard from '$lib/components/items/StayCard.svelte';
 	import ActivityCard from '$lib/components/items/ActivityCard.svelte';
 	import FoodCard from '$lib/components/items/FoodCard.svelte';
@@ -28,6 +29,8 @@
 		foodVenues: FoodVenue[];
 		transportLegs: TransportLeg[];
 		colorScheme: ColorScheme;
+		/** Pre-computed stay badges (check-in/check-out) */
+		stayBadges?: Map<string, StayBadgeState>;
 		cityId?: CityId;
 		/** The stay segment ID for this day (used for by-stay coloring) */
 		segmentId?: string;
@@ -42,6 +45,12 @@
 		onMoveItem?: (itemId: string) => void;
 		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
+		onStayCheckInTimeChange?: (stayId: string, time: string) => void;
+		onStayCheckOutTimeChange?: (stayId: string, time: string) => void;
+		onItemNotesChange?: (itemId: string, notes: string) => void;
+		onActivityEntryFeeChange?: (activityId: string, entryFee: number | undefined) => void;
+		/** The date this day is scheduled for (YYYY-MM-DD) - used for business hours display */
+		scheduledDate?: string;
 	}
 
 	let {
@@ -51,6 +60,7 @@
 		foodVenues,
 		transportLegs,
 		colorScheme,
+		stayBadges,
 		cityId,
 		segmentId,
 		distanceUnit = 'km',
@@ -62,7 +72,12 @@
 		onRemoveEntireTransport,
 		onMoveItem,
 		onDuplicateItem,
-		onTravelModeChange
+		onTravelModeChange,
+		onStayCheckInTimeChange,
+		onStayCheckOutTimeChange,
+		onItemNotesChange,
+		onActivityEntryFeeChange,
+		scheduledDate
 	}: Props = $props();
 
 	// Context menu state
@@ -481,13 +496,16 @@
 			<div class="item-content">
 				{#if isStayItem(item)}
 					{@const stay = getStay(item.stayId)}
+					{@const badgeState = stayBadges?.get(item.id)}
 					{#if stay}
 						<StayCard
 							{stay}
-							isCheckIn={item.isCheckIn}
-							isCheckOut={item.isCheckOut}
+							isCheckIn={badgeState?.isCheckIn ?? item.isCheckIn}
+							isCheckOut={badgeState?.isCheckOut ?? item.isCheckOut}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
+							onCheckInTimeChange={(time) => onStayCheckInTimeChange?.(item.stayId, time)}
+							onCheckOutTimeChange={(time) => onStayCheckOutTimeChange?.(item.stayId, time)}
 						/>
 					{/if}
 				{:else if isActivityItem(item)}
@@ -495,8 +513,10 @@
 					{#if activity}
 						<ActivityCard
 							{activity}
+							{scheduledDate}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
+							onEntryFeeChange={(entryFee) => onActivityEntryFeeChange?.(activity.id, entryFee)}
 						/>
 					{/if}
 				{:else if isFoodItem(item)}
@@ -505,6 +525,7 @@
 						<FoodCard
 							{venue}
 							mealSlot={item.mealSlot}
+							{scheduledDate}
 							{isEditing}
 							onclick={() => onItemClick?.(item)}
 						/>

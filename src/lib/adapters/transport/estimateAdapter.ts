@@ -1,3 +1,11 @@
+/**
+ * Transport Estimate Adapter
+ *
+ * Provides Haversine-based travel time estimates when the real OSRM
+ * routing API is unavailable. All estimates are marked with isEstimate: true
+ * and displayed with a "~" indicator in the UI.
+ */
+
 import type { TransportAdapter, TravelEstimate, TravelMode, Location } from '$lib/types/travel';
 
 function calculateHaversineDistance(from: Location, to: Location): number {
@@ -35,21 +43,24 @@ function estimateRidesharePrice(distance: number): { min: number; max: number } 
 	};
 }
 
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export const fakeTransportAdapter: TransportAdapter = {
-	async getEstimate(origin: Location, destination: Location, mode: TravelMode): Promise<TravelEstimate> {
-		await delay(100 + Math.random() * 100);
-
+/**
+ * Transport adapter that provides Haversine-based estimates.
+ * All estimates are marked with isEstimate: true.
+ */
+export const estimateTransportAdapter: TransportAdapter = {
+	async getEstimate(
+		origin: Location,
+		destination: Location,
+		mode: TravelMode
+	): Promise<TravelEstimate> {
 		const distance = calculateHaversineDistance(origin, destination);
 		const duration = estimateDuration(distance, mode);
 
 		const estimate: TravelEstimate = {
 			mode,
 			duration,
-			distance: Math.round(distance * 10) / 10
+			distance: Math.round(distance * 10) / 10,
+			isEstimate: true // Mark as estimate
 		};
 
 		// Add cost estimate for driving (taxi/rideshare)
@@ -69,8 +80,6 @@ export const fakeTransportAdapter: TransportAdapter = {
 	},
 
 	async getAllModeEstimates(origin: Location, destination: Location): Promise<TravelEstimate[]> {
-		await delay(150 + Math.random() * 100);
-
 		const modes: TravelMode[] = ['driving', 'walking', 'transit', 'bicycling'];
 		const distance = calculateHaversineDistance(origin, destination);
 
@@ -79,7 +88,8 @@ export const fakeTransportAdapter: TransportAdapter = {
 			const estimate: TravelEstimate = {
 				mode,
 				duration,
-				distance: Math.round(distance * 10) / 10
+				distance: Math.round(distance * 10) / 10,
+				isEstimate: true // Mark as estimate
 			};
 
 			if (mode === 'driving') {
@@ -101,8 +111,6 @@ export const fakeTransportAdapter: TransportAdapter = {
 		origin: Location,
 		destination: Location
 	): Promise<{ min: number; max: number; currency: string }> {
-		await delay(80 + Math.random() * 50);
-
 		const distance = calculateHaversineDistance(origin, destination);
 		return {
 			...estimateRidesharePrice(distance),
@@ -110,3 +118,6 @@ export const fakeTransportAdapter: TransportAdapter = {
 		};
 	}
 };
+
+// Keep the old export name for backward compatibility
+export const fakeTransportAdapter = estimateTransportAdapter;

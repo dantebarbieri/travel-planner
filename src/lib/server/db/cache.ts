@@ -7,20 +7,34 @@
 
 import Database from 'better-sqlite3';
 import { env } from '$env/dynamic/private';
-import { building } from '$app/environment';
+import { building, dev } from '$app/environment';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Cache TTL constants (in milliseconds)
 export const CACHE_TTL = {
+	// Weather
 	WEATHER_FORECAST: 60 * 60 * 1000,          // 1 hour
 	WEATHER_HISTORICAL: 24 * 60 * 60 * 1000,   // 24 hours
 	WEATHER_PREDICTION: 6 * 60 * 60 * 1000,    // 6 hours
+	// Flights
 	FLIGHT_ROUTE: 6 * 60 * 60 * 1000,          // 6 hours (schedules can change)
 	FLIGHT_STATUS: 60 * 60 * 1000,             // 1 hour (for day-of status)
 	AIRLINE_SEARCH: 30 * 24 * 60 * 60 * 1000,  // 30 days (rarely changes)
 	AIRPORT_DATA: 30 * 24 * 60 * 60 * 1000,    // 30 days (rarely changes)
-	ROUTING: 7 * 24 * 60 * 60 * 1000           // 7 days
+	// Routing
+	ROUTING: 7 * 24 * 60 * 60 * 1000,          // 7 days
+	// Geocoding & Cities (Geoapify)
+	CITY_SEARCH: 30 * 24 * 60 * 60 * 1000,     // 30 days (city data rarely changes)
+	GEOCODING: 30 * 24 * 60 * 60 * 1000,       // 30 days (addresses don't move)
+	TIMEZONE: 365 * 24 * 60 * 60 * 1000,       // 1 year (timezone boundaries stable)
+	// Places (Foursquare)
+	PLACES_FOOD: 7 * 24 * 60 * 60 * 1000,      // 7 days (restaurants may change)
+	PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000,  // 14 days (attractions more stable)
+	PLACES_LODGING: 7 * 24 * 60 * 60 * 1000,   // 7 days (hotels may change)
+	PLACE_DETAILS: 14 * 24 * 60 * 60 * 1000,   // 14 days (individual place details)
+	// Google Places
+	GOOGLE_PLACE_ID_SEARCH: 30 * 24 * 60 * 60 * 1000  // 30 days (place ID lookups rarely change)
 } as const;
 
 export type CacheType = keyof typeof CACHE_TTL;
@@ -70,7 +84,9 @@ function getDb(): Database.Database | null {
 		return null;
 	}
 
-	const dbPath = env.DATABASE_PATH || './data/cache.db';
+	// In development mode, always use local path regardless of DATABASE_PATH env var
+	// (DATABASE_PATH is typically set to /app/data/cache.db for Docker production)
+	const dbPath = dev ? './data/cache.db' : (env.DATABASE_PATH || './data/cache.db');
 	
 	// Ensure directory exists (sync, but only runs once at startup)
 	// Use a synchronous lock pattern: check db again after directory creation
@@ -353,6 +369,100 @@ export function routingCacheKey(fromLat: number, fromLon: number, toLat: number,
 	return `routing:${mode}:${round(fromLat)},${round(fromLon)}:${round(toLat)},${round(toLon)}`;
 }
 
+/**
+ * Generate a cache key for city search.
+ */
+export function cityCacheKey(query: string, limit: number): string {
+	return `city:${query.toLowerCase().trim()}:${limit}`;
+}
+
+/**
+ * Generate a cache key for geocoding.
+ */
+export function geocodeCacheKey(address: string): string {
+	return `geocode:${address.toLowerCase().trim()}`;
+}
+
+/**
+ * Generate a cache key for reverse geocoding.
+ */
+export function reverseGeocodeCacheKey(lat: number, lon: number): string {
+	// Round to 5 decimal places (~1m precision)
+	const roundedLat = Math.round(lat * 100000) / 100000;
+	const roundedLon = Math.round(lon * 100000) / 100000;
+	return `reverse-geocode:${roundedLat}:${roundedLon}`;
+}
+
+/**
+ * Generate a cache key for timezone lookup.
+ */
+export function timezoneCacheKey(lat: number, lon: number): string {
+	// Round to 2 decimal places (~1km precision - timezone is consistent within this)
+	const roundedLat = Math.round(lat * 100) / 100;
+	const roundedLon = Math.round(lon * 100) / 100;
+	return `timezone:${roundedLat}:${roundedLon}`;
+}
+
+/**
+ * Generate a cache key for food venue search.
+ */
+export function foodPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `places:food:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+/**
+ * Generate a cache key for attraction search.
+ */
+export function attractionPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+/**
+ * Generate a cache key for lodging search.
+ * Supports query-only, query+near, or query+coordinates.
+ */
+export function lodgingPlacesCacheKey(query: string, options?: { lat?: number; lon?: number; near?: string }): string {
+	const queryPart = query.toLowerCase().trim();
+
+	if (options?.lat && options?.lon) {
+		// Round to 3 decimal places (~100m precision)
+		const roundedLat = Math.round(options.lat * 1000) / 1000;
+		const roundedLon = Math.round(options.lon * 1000) / 1000;
+		return `places:lodging:${queryPart}:${roundedLat}:${roundedLon}`;
+	}
+
+	if (options?.near) {
+		return `places:lodging:${queryPart}:near:${options.near.toLowerCase().trim()}`;
+	}
+
+	return `places:lodging:${queryPart}`;
+}
+
+/**
+ * Generate a cache key for place details.
+ */
+export function placeDetailsCacheKey(fsqId: string): string {
+	return `places:details:${fsqId}`;
+}
+
+/**
+ * Generate a cache key for Google Place ID lookup by name and location.
+ */
+export function googlePlaceIdCacheKey(name: string, lat: number, lon: number): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	return `google:placeid:${name.toLowerCase().trim()}:${roundedLat}:${roundedLon}`;
+}
+
 // Export as a cache service object
 export const cache = {
 	get,
@@ -372,6 +482,15 @@ export const cache = {
 	airlineCacheKey,
 	airportCacheKey,
 	routingCacheKey,
+	cityCacheKey,
+	geocodeCacheKey,
+	reverseGeocodeCacheKey,
+	timezoneCacheKey,
+	foodPlacesCacheKey,
+	attractionPlacesCacheKey,
+	lodgingPlacesCacheKey,
+	placeDetailsCacheKey,
+	googlePlaceIdCacheKey,
 	// TTL constants
 	TTL: CACHE_TTL
 };

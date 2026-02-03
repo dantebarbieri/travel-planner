@@ -9,11 +9,13 @@
 	import { resolveAllDayUnits, type DayUnitResolution } from '$lib/utils/units';
 	import type { WeatherCondition, City, DailyItem, ItineraryDay, Activity, FoodVenue, Stay, TravelMode, StayDailyItem, StaySegment, TransportLeg } from '$lib/types/travel';
 	import { isStayItem } from '$lib/types/travel';
-	import { fakeCityAdapter, type CitySearchResult } from '$lib/adapters/cities/fakeAdapter';
+	import { cityAdapter, type CitySearchResult } from '$lib/adapters/cities';
 	import { computeStaySegments, dayHasMissingLodging, defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
+	import { computeStayBadges, type StayBadgeState } from '$lib/utils/stayUtils';
 	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
+	import AddCityModal from '$lib/components/modals/AddCityModal.svelte';
 	import MoveItemModal from '$lib/components/modals/MoveItemModal.svelte';
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -37,10 +39,8 @@
 	let weatherData = $state<Record<string, WeatherState>>({});
 	let isEditing = $state(false);
 	let showAddCityModal = $state(false);
-	let citySearchValue = $state('');
-	let selectedCity = $state<CitySearchResult | null>(null);
-	let newCityStartDate = $state('');
-	let newCityEndDate = $state('');
+	let addCityDefaultStartDate = $state('');
+	let addCityDefaultEndDate = $state('');
 	let showExportModal = $state(false);
 	let isExporting = $state(false);
 	let showEditCityModal = $state(false);
@@ -220,70 +220,25 @@
 	}
 
 	function openAddCityModal() {
-		citySearchValue = '';
-		selectedCity = null;
-
 		// Smart defaults: find first unassigned gap
 		const unassignedRanges = getUnassignedDateRanges();
 		if (unassignedRanges.length > 0) {
-			newCityStartDate = unassignedRanges[0].start;
-			newCityEndDate = unassignedRanges[0].end;
+			addCityDefaultStartDate = unassignedRanges[0].start;
+			addCityDefaultEndDate = unassignedRanges[0].end;
 		} else {
 			// No gaps - default to trip dates (user will need to adjust or overlap is expected)
-			newCityStartDate = trip?.startDate || '';
-			newCityEndDate = trip?.endDate || '';
+			addCityDefaultStartDate = trip?.startDate || '';
+			addCityDefaultEndDate = trip?.endDate || '';
 		}
 
 		showAddCityModal = true;
 	}
 
-	function addCity() {
-		if (!trip || !selectedCity || !newCityStartDate || !newCityEndDate) return;
-
-		tripStore.addCity(trip.id, {
-			name: selectedCity.name,
-			country: selectedCity.country,
-			location: selectedCity.location,
-			timezone: selectedCity.timezone,
-			startDate: newCityStartDate,
-			endDate: newCityEndDate
-		});
-
+	function handleAddCity(cityData: Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'>) {
+		if (!trip) return;
+		tripStore.addCity(trip.id, cityData);
 		showAddCityModal = false;
-		citySearchValue = '';
-		selectedCity = null;
 	}
-
-	// Check for date conflicts with existing cities (excluding allowed 1-day transitions)
-	const dateConflict = $derived.by(() => {
-		if (!trip || !newCityStartDate || !newCityEndDate) return null;
-
-		const newStart = new Date(newCityStartDate);
-		const newEnd = new Date(newCityEndDate);
-
-		for (const city of trip.cities) {
-			const cityStart = new Date(city.startDate);
-			const cityEnd = new Date(city.endDate);
-
-			// Check if ranges overlap
-			if (newStart <= cityEnd && newEnd >= cityStart) {
-				// Allow 1-day transition overlap (new city starts on old city's last day, or vice versa)
-				const isTransitionOverlap =
-					(newStart.getTime() === cityEnd.getTime() && newEnd > cityEnd) ||
-					(newEnd.getTime() === cityStart.getTime() && newStart < cityStart);
-
-				if (!isTransitionOverlap) {
-					return {
-						cityName: city.name,
-						start: city.startDate,
-						end: city.endDate
-					};
-				}
-			}
-		}
-
-		return null;
-	});
 
 	function handleAddItem(day: ItineraryDay) {
 		addItemDayId = day.id;
@@ -318,8 +273,8 @@
 	function handleAddActivityToDay(activity: Activity) {
 		if (!trip || !addItemDayId) return;
 
-		// Add the activity to the trip
-		tripStore.addActivity(trip.id, activity);
+		// Add the activity to the trip (with background enrichment for hours, etc.)
+		tripStore.addActivityWithEnrichment(trip.id, activity);
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
@@ -353,8 +308,8 @@
 	function handleAddFoodVenueToDay(venue: FoodVenue) {
 		if (!trip || !addItemDayId) return;
 
-		// Add the food venue to the trip
-		tripStore.addFoodVenue(trip.id, venue);
+		// Add the food venue to the trip (with background enrichment for hours, etc.)
+		tripStore.addFoodVenueWithEnrichment(trip.id, venue);
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
@@ -387,14 +342,8 @@
 		});
 	}
 
-	function handleAddStayToDay(stay: Stay) {
+	function handleAddStayToDay(stay: Stay, enrichedCityData?: import('$lib/types/travel').EnrichedCityData) {
 		if (!trip || !addItemDayId) return;
-
-		// Find the city for this day to add the stay to
-		const day = trip.itinerary.find((d) => d.id === addItemDayId);
-		if (!day || day.cityIds.length === 0) return;
-
-		const cityId = day.cityIds[0];
 
 		// Check if stay extends beyond trip end date
 		if (stay.checkOut > trip.endDate) {
@@ -428,8 +377,10 @@
 			if (!confirmed) return;
 		}
 
-		// Add the stay to the city
-		tripStore.addStay(trip.id, cityId, stay);
+		// Add the stay using city inference - this will create a city if needed
+		// or add to an existing city that matches by name or proximity
+		// Pass enriched city data if available for proper country/state info
+		tripStore.addStayWithCityInference(trip.id, stay, enrichedCityData);
 
 		// Get all dates for this stay
 		const stayDates = getDatesInRange(stay.checkIn, stay.checkOut);
@@ -499,6 +450,24 @@
 		if (!day || day.cityIds.length === 0) return undefined;
 		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
 		return city?.location;
+	});
+
+	// Get the city name for the current add item day (for Foursquare "near" parameter)
+	const addItemCityName = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return undefined;
+		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+		return city?.name;
+	});
+
+	// Get the city formatted name for immediate display (no flash)
+	const addItemCityFormatted = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return undefined;
+		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+		return city?.formatted;
 	});
 
 	// Get the selected day's date for default check-in
@@ -617,6 +586,44 @@
 		}
 	}
 
+	// Daily notes handlers
+	function handleAddDayNote(dayId: string, note: import('$lib/types/travel').DayNote) {
+		if (trip) {
+			tripStore.addDayNote(trip.id, dayId, note);
+		}
+	}
+
+	function handleUpdateDayNote(dayId: string, noteId: string, content: string) {
+		if (trip) {
+			tripStore.updateDayNote(trip.id, dayId, noteId, content);
+		}
+	}
+
+	function handleDeleteDayNote(dayId: string, noteId: string) {
+		if (trip) {
+			tripStore.deleteDayNote(trip.id, dayId, noteId);
+		}
+	}
+
+	// Stay time change handlers
+	function handleStayCheckInTimeChange(stayId: string, time: string) {
+		if (trip) {
+			tripStore.updateStayOverride(trip.id, stayId, { checkInTime: time || undefined });
+		}
+	}
+
+	function handleStayCheckOutTimeChange(stayId: string, time: string) {
+		if (trip) {
+			tripStore.updateStayOverride(trip.id, stayId, { checkOutTime: time || undefined });
+		}
+	}
+
+	function handleActivityEntryFeeChange(activityId: string, entryFee: number | undefined) {
+		if (trip) {
+			tripStore.setActivityEntryFee(trip.id, activityId, entryFee);
+		}
+	}
+
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
 
@@ -641,6 +648,9 @@
 
 	// Compute stay segments for by-stay coloring (using resolved scheme)
 	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments({ ...trip, colorScheme: resolvedColorScheme }) : []);
+
+	// Compute stay badges (which items are check-in / check-out)
+	const stayBadges = $derived<Map<string, StayBadgeState>>(trip ? computeStayBadges(trip) : new Map());
 
 	// Resolve trip settings (includes trip-specific overrides)
 	const resolvedSettings = $derived(trip ? settingsStore.resolveSettingsForTrip(trip) : null);
@@ -715,16 +725,12 @@
 		</header>
 
 		{#if trip.cities.length === 0}
-			<div class="empty-cities">
-				<Icon name="location" size={48} />
-				<h2>No destinations yet</h2>
-				<p>Add your first city to start planning your itinerary</p>
-				<Button onclick={openAddCityModal}>
-					<Icon name="add" size={18} />
-					Add City
-				</Button>
+			<div class="empty-cities-banner">
+				<Icon name="location" size={24} />
+				<span>Click on any day below to add your first accommodation. Cities will be created automatically from your stay's address.</span>
 			</div>
-		{:else}
+		{/if}
+		{#if trip.itinerary.length > 0}
 			{#if isEditing}
 				<div class="cities-manager">
 					<h3>Destinations</h3>
@@ -732,7 +738,7 @@
 						{#each trip.cities as city (city.id)}
 							<div class="city-item">
 								<div class="city-info">
-									<span class="city-name">{city.name}, {city.country}</span>
+									<span class="city-name">{city.formatted || `${city.name}, ${city.state || city.country}`}</span>
 									<span class="city-dates">{formatDate(city.startDate, { month: 'short', day: 'numeric' })} - {formatDate(city.endDate, { month: 'short', day: 'numeric' })}</span>
 								</div>
 								<div class="city-actions">
@@ -764,6 +770,7 @@
 						transportLegs={trip.transportLegs}
 						colorScheme={resolvedColorScheme}
 						{staySegments}
+						{stayBadges}
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date]?.data || []}
 						weatherLoading={weatherData[day.date]?.loading || false}
@@ -778,66 +785,31 @@
 						onMoveItem={(itemId) => handleMoveItem(day.id, itemId)}
 						onDuplicateItem={(itemId) => handleDuplicateItem(day.id, itemId)}
 						onTravelModeChange={(itemId, mode) => handleTravelModeChange(day.id, itemId, mode)}
+						onAddDayNote={(note) => handleAddDayNote(day.id, note)}
+						onUpdateDayNote={(noteId, content) => handleUpdateDayNote(day.id, noteId, content)}
+						onDeleteDayNote={(noteId) => handleDeleteDayNote(day.id, noteId)}
+						onStayCheckInTimeChange={handleStayCheckInTimeChange}
+						onStayCheckOutTimeChange={handleStayCheckOutTimeChange}
+						onActivityEntryFeeChange={handleActivityEntryFeeChange}
 					/>
 				{/each}
 			</div>
 		{/if}
 	</div>
 
-	<Modal isOpen={showAddCityModal} title="Add City" onclose={() => (showAddCityModal = false)}>
-		<form class="city-form" onsubmit={(e) => { e.preventDefault(); addCity(); }}>
-			<SearchAutocomplete
-				label="City"
-				placeholder="Search for a city..."
-				searchFn={fakeCityAdapter.search}
-				renderItem={(city) => ({ name: city.name, subtitle: city.country, icon: 'location' })}
-				getItemId={(city) => city.id}
-				onSelect={(city) => { selectedCity = city; }}
-				bind:value={citySearchValue}
-				bind:selectedItem={selectedCity}
-				required
-			/>
-			<div class="date-row">
-				<div class="form-field">
-					<label class="label" for="city-start">Start Date</label>
-					<input
-						type="date"
-						id="city-start"
-						class="input"
-						bind:value={newCityStartDate}
-						required
-					/>
-				</div>
-				<div class="form-field">
-					<label class="label" for="city-end">End Date</label>
-					<input
-						type="date"
-						id="city-end"
-						class="input"
-						bind:value={newCityEndDate}
-						min={newCityStartDate}
-						required
-					/>
-				</div>
-			</div>
-			{#if dateConflict}
-				<div class="date-conflict-warning">
-					<Icon name="close" size={16} />
-					<span>Dates overlap with <strong>{dateConflict.cityName}</strong> ({formatDate(dateConflict.start, { month: 'short', day: 'numeric' })} - {formatDate(dateConflict.end, { month: 'short', day: 'numeric' })})</span>
-				</div>
-			{/if}
-			<p class="date-hint">Dates outside current trip range will extend the trip. A 1-day overlap for transition days is allowed.</p>
-			<div class="form-actions">
-				<Button variant="secondary" onclick={() => (showAddCityModal = false)}>Cancel</Button>
-				<Button type="submit" disabled={!selectedCity || !!dateConflict}>Add City</Button>
-			</div>
-		</form>
-	</Modal>
+	<AddCityModal
+		isOpen={showAddCityModal}
+		existingCities={trip?.cities || []}
+		defaultStartDate={addCityDefaultStartDate}
+		defaultEndDate={addCityDefaultEndDate}
+		onAdd={handleAddCity}
+		onClose={() => (showAddCityModal = false)}
+	/>
 
 	<Modal isOpen={showEditCityModal} title="Edit City Dates" onclose={() => (showEditCityModal = false)}>
 		{#if editingCity}
 			<form class="city-form" onsubmit={(e) => { e.preventDefault(); saveCityDates(); }}>
-				<p class="city-name-display">{editingCity.name}, {editingCity.country}</p>
+				<p class="city-name-display">{editingCity.formatted || `${editingCity.name}, ${editingCity.state || editingCity.country}`}</p>
 				<div class="date-row">
 					<div class="form-field">
 						<label class="label" for="edit-city-start">Start Date</label>
@@ -881,6 +853,8 @@
 		onAddStay={handleAddStayToDay}
 		onAddTransport={handleAddTransportToDay}
 		cityLocation={addItemCityLocation}
+		cityName={addItemCityName}
+		cityFormatted={addItemCityFormatted}
 		selectedDate={addItemSelectedDate}
 		defaultCheckOutDate={addItemDefaultCheckOutDate}
 	/>
@@ -1019,27 +993,17 @@
 		flex-shrink: 0;
 	}
 
-	.empty-cities {
+	.empty-cities-banner {
 		display: flex;
-		flex-direction: column;
 		align-items: center;
-		justify-content: center;
-		text-align: center;
-		padding: var(--space-16) var(--space-4);
-		background: var(--surface-primary);
-		border: 1px dashed var(--border-color);
-		border-radius: var(--radius-lg);
-		color: var(--text-tertiary);
-
-		& h2 {
-			margin: var(--space-4) 0 var(--space-2);
-			color: var(--text-primary);
-		}
-
-		& p {
-			color: var(--text-secondary);
-			margin-bottom: var(--space-6);
-		}
+		gap: var(--space-3);
+		padding: var(--space-4) var(--space-5);
+		background: color-mix(in oklch, var(--color-info) 10%, transparent);
+		border: 1px solid color-mix(in oklch, var(--color-info) 30%, transparent);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		font-size: var(--text-sm);
+		margin-bottom: var(--space-4);
 	}
 
 	.cities-manager {
@@ -1130,22 +1094,6 @@
 		color: var(--text-tertiary);
 		margin: 0;
 		font-style: italic;
-	}
-
-	.date-conflict-warning {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		background: color-mix(in oklch, var(--color-error), transparent 90%);
-		border: 1px solid var(--color-error);
-		border-radius: var(--radius-md);
-		color: var(--color-error);
-		font-size: 0.875rem;
-
-		& strong {
-			font-weight: 600;
-		}
 	}
 
 	.itinerary-container {

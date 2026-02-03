@@ -3,7 +3,7 @@
  * GET /api/routing?fromLat=...&fromLon=...&toLat=...&toLon=...&mode=...
  */
 
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { getRoute, getAllRoutes, type TravelMode } from '$lib/server/adapters/routing';
 import { rateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
@@ -35,11 +35,17 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 	// Validate required parameters
 	if (isNaN(fromLat) || isNaN(fromLon)) {
-		error(400, 'Missing or invalid fromLat/fromLon parameters');
+		return json(
+			{ error: 'Missing or invalid fromLat/fromLon parameters' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'routing') }
+		);
 	}
 
 	if (isNaN(toLat) || isNaN(toLon)) {
-		error(400, 'Missing or invalid toLat/toLon parameters');
+		return json(
+			{ error: 'Missing or invalid toLat/toLon parameters' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'routing') }
+		);
 	}
 
 	// Build location objects
@@ -69,7 +75,10 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 		// Single mode request
 		if (!mode || !VALID_MODES.includes(mode)) {
-			error(400, `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}`);
+			return json(
+				{ error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}` },
+				{ status: 400, headers: rateLimit.getHeaders(ip, 'routing') }
+			);
 		}
 
 		const route = await getRoute(from, to, mode);
@@ -82,6 +91,9 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		);
 	} catch (err) {
 		console.error('Routing API error:', err);
-		error(500, 'Failed to calculate route');
+		return json(
+			{ error: 'Failed to calculate route' },
+			{ status: 500, headers: rateLimit.getHeaders(ip, 'routing') }
+		);
 	}
 };

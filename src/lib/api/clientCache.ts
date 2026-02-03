@@ -19,7 +19,15 @@ export const CLIENT_CACHE_TTL = {
 	WEATHER_HISTORICAL: 30 * 60 * 1000,  // 30 minutes
 	FLIGHT_ROUTE: 10 * 60 * 1000,        // 10 minutes
 	AIRLINE_SEARCH: 30 * 60 * 1000,      // 30 minutes
-	ROUTING: 30 * 60 * 1000              // 30 minutes
+	ROUTING: 30 * 60 * 1000,             // 30 minutes
+	// Geocoding & Cities (Geoapify)
+	CITY_SEARCH: 30 * 60 * 1000,         // 30 minutes (cities rarely change within session)
+	GEOCODING: 30 * 60 * 1000,           // 30 minutes (addresses don't move)
+	// Places (Foursquare)
+	PLACES_FOOD: 15 * 60 * 1000,         // 15 minutes
+	PLACES_ATTRACTIONS: 15 * 60 * 1000,  // 15 minutes
+	PLACES_LODGING: 15 * 60 * 1000,      // 15 minutes
+	PLACE_DETAILS: 30 * 60 * 1000        // 30 minutes (individual place details)
 } as const;
 
 export type ClientCacheType = keyof typeof CLIENT_CACHE_TTL;

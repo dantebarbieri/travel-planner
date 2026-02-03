@@ -10,7 +10,9 @@ import type {
 	NewDailyItem,
 	ColorScheme,
 	KindColors,
-	Location
+	Location,
+	EnrichedCityData,
+	DayNote
 } from '$lib/types/travel';
 import type { TripSettings, CustomColorScheme } from '$lib/types/settings';
 import { createOverride } from '$lib/types/settings';
@@ -25,6 +27,8 @@ import {
 	defaultPaletteColors
 } from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
+import { calculateHaversineDistance } from '$lib/services/geoService';
+import { enrichActivity, enrichFoodVenue } from '$lib/services/placeDetailsService';
 
 interface TripStoreState {
 	trips: Trip[];
@@ -84,6 +88,16 @@ function createTrip(data: {
 	endDate: string;
 	description?: string;
 }): Trip {
+	// Generate initial itinerary days from trip dates
+	const dates = getDatesInRange(data.startDate, data.endDate);
+	const initialItinerary: ItineraryDay[] = dates.map((date, index) => ({
+		id: generateDayId(),
+		date,
+		dayNumber: index + 1,
+		cityIds: [],
+		items: []
+	}));
+
 	const trip: Trip = {
 		id: generateTripId(),
 		name: data.name,
@@ -95,7 +109,7 @@ function createTrip(data: {
 		activities: [],
 		foodVenues: [],
 		transportLegs: [],
-		itinerary: [],
+		itinerary: initialItinerary,
 		colorScheme: getDefaultColorScheme(),
 		createdAt: new Date().toISOString(),
 		updatedAt: new Date().toISOString()
@@ -299,6 +313,30 @@ function updateStay(tripId: string, cityId: string, stayId: string, updates: Par
 	saveTrips();
 }
 
+function updateStayOverride(tripId: string, stayId: string, overrides: Partial<import('$lib/types/travel').StayUserOverrides>): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			cities: t.cities.map((c) => ({
+				...c,
+				stays: c.stays.map((s) => {
+					if (s.id !== stayId) return s;
+					return {
+						...s,
+						userOverrides: {
+							...s.userOverrides,
+							...overrides
+						}
+					} as Stay;
+				})
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 function removeStay(tripId: string, cityId: string, stayId: string): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
@@ -312,6 +350,111 @@ function removeStay(tripId: string, cityId: string, stayId: string): void {
 		return regenerateItinerary(updatedTrip);
 	});
 	saveTrips();
+}
+
+// ============ City Inference from Stays ============
+
+/**
+ * Infer city data from a stay's geocoded location.
+ * Used when adding a stay without an existing city.
+ */
+function inferCityFromStay(stay: Stay): Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'> {
+	const addr = stay.location.address;
+	return {
+		name: addr.city || addr.state || 'Unknown',
+		country: addr.country || 'Unknown',
+		location: stay.location.geo,
+		timezone: stay.location.timezone || 'UTC',
+		startDate: stay.checkIn,
+		endDate: stay.checkOut
+	};
+}
+
+/**
+ * Find an existing city in the trip that matches the stay's location.
+ * Matches by exact city name + country, or by proximity (within 25km).
+ */
+function findMatchingCity(trip: Trip, stay: Stay): City | null {
+	const stayCity = stay.location.address.city?.toLowerCase().trim();
+	const stayCountry = stay.location.address.country?.toLowerCase().trim();
+
+	for (const city of trip.cities) {
+		// Exact name + country match
+		if (
+			stayCity &&
+			stayCountry &&
+			city.name.toLowerCase() === stayCity &&
+			city.country.toLowerCase() === stayCountry
+		) {
+			return city;
+		}
+		// Proximity match (~25km) for suburbs/neighborhoods
+		const distance = calculateHaversineDistance(stay.location.geo, city.location);
+		if (distance < 25) {
+			return city;
+		}
+	}
+	return null;
+}
+
+/**
+ * Add a stay to a trip, automatically inferring or matching the city.
+ * This is the main entry point for the stay-first workflow.
+ *
+ * If a matching city exists (by name or proximity), the stay is added to it.
+ * Otherwise, a new city is created from the stay's location data.
+ *
+ * @param tripId - The trip to add the stay to
+ * @param stay - The stay to add
+ * @param enrichedCityData - Optional pre-enriched city data from Geoapify (for proper country names, etc.)
+ * @returns The cityId and whether a new city was created.
+ */
+function addStayWithCityInference(
+	tripId: string,
+	stay: Stay,
+	enrichedCityData?: EnrichedCityData
+): { cityId: string; isNewCity: boolean } {
+	const trip = state.trips.find((t) => t.id === tripId);
+	if (!trip) throw new Error('Trip not found');
+
+	const existingCity = findMatchingCity(trip, stay);
+
+	if (existingCity) {
+		// Add stay to existing city
+		addStay(tripId, existingCity.id, stay);
+
+		// Extend city dates if the stay goes beyond current range
+		const needsDateUpdate =
+			stay.checkIn < existingCity.startDate || stay.checkOut > existingCity.endDate;
+		if (needsDateUpdate) {
+			const newStartDate =
+				stay.checkIn < existingCity.startDate ? stay.checkIn : existingCity.startDate;
+			const newEndDate =
+				stay.checkOut > existingCity.endDate ? stay.checkOut : existingCity.endDate;
+			updateCity(tripId, existingCity.id, { startDate: newStartDate, endDate: newEndDate });
+		}
+
+		return { cityId: existingCity.id, isNewCity: false };
+	} else {
+		// Create new city - use enriched data if available, otherwise infer from stay
+		let cityData: Omit<City, 'id' | 'stays' | 'arrivalTransportId' | 'departureTransportId'>;
+		
+		if (enrichedCityData) {
+			// Use enriched data with stay dates
+			cityData = {
+				...enrichedCityData,
+				startDate: stay.checkIn,
+				endDate: stay.checkOut
+			};
+		} else {
+			// Fall back to inferring from stay's location
+			cityData = inferCityFromStay(stay);
+		}
+		
+		const newCity = addCity(tripId, cityData);
+		addStay(tripId, newCity.id, stay);
+		return { cityId: newCity.id, isNewCity: true };
+	}
 }
 
 // ============ Activity Management ============
@@ -392,6 +535,92 @@ function removeFoodVenue(tripId: string, venueId: string): void {
 		};
 	});
 	saveTrips();
+}
+
+// ============ Place Details Enrichment ============
+
+/**
+ * Add an activity and auto-fetch place details in the background.
+ * Details are merged into the activity once fetched.
+ */
+async function addActivityWithEnrichment(tripId: string, activity: Activity): Promise<void> {
+	// Add the activity immediately
+	addActivity(tripId, activity);
+
+	// Fetch and apply details in the background (don't block)
+	enrichActivity(activity).then(({ updates }) => updateActivity(tripId, activity.id, updates)).catch((err) => {
+		console.warn('[TripStore] Failed to enrich activity:', err);
+	});
+}
+
+/**
+ * Add a food venue and auto-fetch place details in the background.
+ * Details are merged into the venue once fetched.
+ */
+async function addFoodVenueWithEnrichment(tripId: string, venue: FoodVenue): Promise<void> {
+	// Add the venue immediately
+	addFoodVenue(tripId, venue);
+
+	// Fetch and apply details in the background (don't block)
+	enrichFoodVenue(venue).then(({ updates }) => updateFoodVenue(tripId, venue.id, updates)).catch((err) => {
+		console.warn('[TripStore] Failed to enrich food venue:', err);
+	});
+}
+
+/**
+ * Manually refresh place details for an activity.
+ */
+async function refreshActivityDetails(tripId: string, activityId: string): Promise<boolean> {
+	const trip = state.trips.find(t => t.id === tripId);
+	const activity = trip?.activities.find(a => a.id === activityId);
+	if (!activity) return false;
+
+	try {
+		const { updates, result } = await enrichActivity(activity);
+		if (result.success) {
+			updateActivity(tripId, activityId, updates);
+			return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Update an activity's entry fee via userOverrides.
+ */
+function setActivityEntryFee(tripId: string, activityId: string, entryFee: number | undefined): void {
+	const trip = state.trips.find(t => t.id === tripId);
+	const activity = trip?.activities.find(a => a.id === activityId);
+	if (!activity) return;
+
+	updateActivity(tripId, activityId, {
+		userOverrides: {
+			...activity.userOverrides,
+			entryFee
+		}
+	});
+}
+
+/**
+ * Manually refresh place details for a food venue.
+ */
+async function refreshFoodVenueDetails(tripId: string, venueId: string): Promise<boolean> {
+	const trip = state.trips.find(t => t.id === tripId);
+	const venue = trip?.foodVenues.find(v => v.id === venueId);
+	if (!venue) return false;
+
+	try {
+		const { updates, result } = await enrichFoodVenue(venue);
+		if (result.success) {
+			updateFoodVenue(tripId, venueId, updates);
+			return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
 }
 
 // ============ Transport Management ============
@@ -643,6 +872,64 @@ function updateDayTitle(tripId: string, dayId: string, title: string): void {
 		return {
 			...t,
 			itinerary: t.itinerary.map((day) => (day.id === dayId ? { ...day, title } : day)),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+// ============ Daily Notes Management ============
+
+function addDayNote(tripId: string, dayId: string, note: DayNote): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId) return day;
+				const existingNotes = day.dailyNotes || [];
+				return { ...day, dailyNotes: [...existingNotes, note] };
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function updateDayNote(tripId: string, dayId: string, noteId: string, content: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId || !day.dailyNotes) return day;
+				return {
+					...day,
+					dailyNotes: day.dailyNotes.map((note) =>
+						note.id === noteId
+							? { ...note, content, updatedAt: new Date().toISOString() }
+							: note
+					)
+				};
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function deleteDayNote(tripId: string, dayId: string, noteId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId || !day.dailyNotes) return day;
+				return {
+					...day,
+					dailyNotes: day.dailyNotes.filter((note) => note.id !== noteId)
+				};
+			}),
 			updatedAt: new Date().toISOString()
 		};
 	});
@@ -952,18 +1239,25 @@ export const tripStore = {
 
 	// Stay
 	addStay,
+	addStayWithCityInference,
 	updateStay,
+	updateStayOverride,
 	removeStay,
 
 	// Activity
 	addActivity,
+	addActivityWithEnrichment,
 	updateActivity,
+	setActivityEntryFee,
 	removeActivity,
+	refreshActivityDetails,
 
 	// Food
 	addFoodVenue,
+	addFoodVenueWithEnrichment,
 	updateFoodVenue,
 	removeFoodVenue,
+	refreshFoodVenueDetails,
 
 	// Transport
 	addTransportLeg,
@@ -982,6 +1276,11 @@ export const tripStore = {
 	reorderDayItems,
 	moveDayItem,
 	updateDayTitle,
+
+	// Daily Notes
+	addDayNote,
+	updateDayNote,
+	deleteDayNote,
 
 	// Color Scheme
 	updateColorScheme,

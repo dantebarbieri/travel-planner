@@ -1,8 +1,9 @@
 <script lang="ts">
-	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg } from '$lib/types/travel';
-	import { fakeAttractionAdapter } from '$lib/adapters/attractions/fakeAdapter';
-	import { fakeFoodAdapter } from '$lib/adapters/food/fakeAdapter';
-	import { fakeLodgingAdapter } from '$lib/adapters/lodging/fakeAdapter';
+	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg, EnrichedCityData, TransportMode, GroundTransitSubType } from '$lib/types/travel';
+	import { attractionAdapter } from '$lib/adapters/attractions';
+	import { foodAdapter } from '$lib/adapters/food';
+	import { lodgingAdapter } from '$lib/adapters/lodging';
+	import { cityAdapter, type CitySearchResult } from '$lib/adapters/cities';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -11,24 +12,38 @@
 	import SearchAutocomplete from '$lib/components/search/SearchAutocomplete.svelte';
 	import TransportKindModal from '$lib/components/modals/TransportKindModal.svelte';
 	import FlightSearchModal from '$lib/components/modals/FlightSearchModal.svelte';
-	import TrainBusSearchModal from '$lib/components/modals/TrainBusSearchModal.svelte';
+	import CarRentalModal from '$lib/components/modals/CarRentalModal.svelte';
+	import TransportEntryModal from '$lib/components/modals/TransportEntryModal.svelte';
 	import { generateActivityId, generateFoodVenueId, generateStayId } from '$lib/utils/ids';
+	import { geocodeAddress, type GeocodingResult } from '$lib/api/geocodingApi';
+	import { parseAddress, formatParsedAddress } from '$lib/utils/addressParser';
+	
+	type TransportSelection = 
+		| { type: 'flight' }
+		| { type: 'ground_transit'; subType: GroundTransitSubType }
+		| { type: 'car_rental' }
+		| { type: 'local'; mode: TransportMode };
 
 	interface Props {
 		isOpen: boolean;
 		onclose: () => void;
 		onAddActivity: (activity: Activity) => void;
 		onAddFoodVenue: (venue: FoodVenue) => void;
-		onAddStay?: (stay: Stay) => void;
+		/** Called when a stay is added. Includes optional enriched city data from Geoapify for proper city creation. */
+		onAddStay?: (stay: Stay, enrichedCityData?: EnrichedCityData) => void;
 		onAddTransport?: (leg: TransportLeg) => void;
 		cityLocation?: GeoLocation;
+		/** Pre-filled city name from day, e.g., "Paris, France" */
+		cityName?: string;
+		/** Pre-filled city formatted name (e.g., "Paris, Île-de-France, France") */
+		cityFormatted?: string;
 		/** The date of the selected day (for default check-in) */
 		selectedDate?: string;
 		/** The default check-out date (end of city, span, or trip) */
 		defaultCheckOutDate?: string;
 	}
 
-	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, selectedDate, defaultCheckOutDate }: Props = $props();
+	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, cityName, cityFormatted, selectedDate, defaultCheckOutDate }: Props = $props();
 
 	let selectedKind = $state<'activity' | 'food' | 'stay' | 'transport'>('activity');
 	let activitySearchQuery = $state('');
@@ -43,12 +58,18 @@
 	let stayCheckIn = $state('');
 	let stayCheckOut = $state('');
 	let stayType = $state<StayType>('hotel');
+	
+	// Enriched city data for stays (from Geoapify search)
+	let enrichedCityData = $state<EnrichedCityData | undefined>(undefined);
+	let isEnrichingCity = $state(false);
 
 	// Transport-specific state
 	let showTransportKindModal = $state(false);
 	let showFlightSearchModal = $state(false);
-	let showTrainBusSearchModal = $state(false);
-	let transportMode = $state<'train' | 'bus'>('train');
+	let showCarRentalModal = $state(false);
+	let showTransportEntryModal = $state(false);
+	let transportEntryMode = $state<TransportMode>('ground_transit');
+	let transportEntrySubType = $state<GroundTransitSubType | undefined>(undefined);
 
 	// Derived: whichever item is currently selected based on kind
 	const selectedItem = $derived.by(() => {
@@ -59,21 +80,22 @@
 		return null;
 	});
 
-	// City location for transport modals
-	const cityLocationForTransport = $derived.by(() => {
-		if (!cityLocation) return undefined;
-		return {
-			name: 'Search Location',
-			address: { street: '', city: '', country: '', formatted: '' },
-			geo: cityLocation
-		} as Location;
-	});
-
 	// For custom entries
 	let customName = $state('');
 	let customAddress = $state('');
 	let customNotes = $state('');
 	let showCustomForm = $state(false);
+
+	// Geocoding state
+	let isGeocoding = $state(false);
+	let geocodeResult = $state<GeocodingResult | null>(null);
+	let geocodeError = $state<string | null>(null);
+
+	// City/location state for "near" parameter (required for Foursquare searches)
+	let selectedNearCity = $state<CitySearchResult | null>(null);
+	let nearCitySearchValue = $state('');
+	let nearCityLocation = $state<GeoLocation | undefined>(undefined);
+	let nearCityName = $state<string | undefined>(undefined);
 
 	// Set default dates when modal opens or when switching to stay kind
 	function setDefaultStayDates() {
@@ -99,53 +121,134 @@
 			customAddress = '';
 			customNotes = '';
 			showCustomForm = false;
+			isGeocoding = false;
+			geocodeResult = null;
+			geocodeError = null;
 			showTransportKindModal = false;
 			showFlightSearchModal = false;
-			showTrainBusSearchModal = false;
+			// Reset city state
+			selectedNearCity = null;
+			nearCitySearchValue = '';
+			nearCityLocation = undefined;
+			nearCityName = undefined;
 		} else {
 			// Set default dates when modal opens
 			setDefaultStayDates();
+			// Initialize city state from props
+			if (cityLocation) {
+				nearCityLocation = cityLocation;
+				
+				// Use formatted name immediately if available (no flash)
+				const displayName = cityFormatted || cityName || '';
+				nearCitySearchValue = displayName;
+				nearCityName = displayName;
+				
+				// If we have a formatted name, create a pseudo-result to avoid API call
+				if (cityFormatted && cityName) {
+					selectedNearCity = {
+						id: '', // Not needed for search
+						name: cityName,
+						country: '', // Not critical for search
+						formatted: cityFormatted,
+						location: cityLocation,
+						timezone: '' // Not critical for search
+					};
+				} else if (cityName) {
+					// Fallback: do async search only if we don't have formatted name
+					searchCities(cityName).then((results) => {
+						if (results.length > 0) {
+							const city = results[0];
+							nearCityName = city.formatted || `${city.name}, ${city.state || city.country}`;
+							nearCitySearchValue = nearCityName;
+							selectedNearCity = city;
+						}
+					}).catch((error) => {
+						console.warn('[AddItemModal] City search failed:', error);
+					});
+				}
+			} else {
+				// No city - user must search
+				nearCityName = undefined;
+				nearCityLocation = undefined;
+				nearCitySearchValue = '';
+				selectedNearCity = null;
+			}
 		}
 	});
 
+	// Search function for cities (for "near" field)
+	async function searchCities(query: string): Promise<CitySearchResult[]> {
+		return cityAdapter.search(query, 10);
+	}
+
+	function selectNearCity(city: CitySearchResult) {
+		selectedNearCity = city;
+		// Use formatted address for better context, or fallback to state/country
+		nearCityName = city.formatted || `${city.name}, ${city.state || city.country}`;
+		nearCityLocation = city.location;
+		nearCitySearchValue = nearCityName;
+	}
+
+	function clearNearCity() {
+		selectedNearCity = null;
+		nearCityName = undefined;
+		nearCityLocation = undefined;
+		nearCitySearchValue = '';
+	}
+
 	// Search function for activities
 	async function searchActivities(query: string): Promise<Activity[]> {
-		const location: Location | undefined = cityLocation
-			? {
-					name: 'Search Location',
-					address: { street: '', city: '', country: '', formatted: '' },
-					geo: cityLocation
-				}
-			: undefined;
+		// Require city to be set for Foursquare searches
+		if (!nearCityLocation) return [];
 
-		return fakeAttractionAdapter.search({
+		const location: Location = {
+			name: nearCityName || 'Search Location',
+			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+			geo: nearCityLocation
+		};
+
+		return attractionAdapter.search({
 			query,
 			location,
+			near: nearCityName,
 			limit: 10
 		});
 	}
 
 	// Search function for food venues
 	async function searchFoodVenues(query: string): Promise<FoodVenue[]> {
-		const location: Location | undefined = cityLocation
-			? {
-					name: 'Search Location',
-					address: { street: '', city: '', country: '', formatted: '' },
-					geo: cityLocation
-				}
-			: undefined;
+		// Require city to be set for Foursquare searches
+		if (!nearCityLocation) return [];
 
-		return fakeFoodAdapter.search({
+		const location: Location = {
+			name: nearCityName || 'Search Location',
+			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+			geo: nearCityLocation
+		};
+
+		return foodAdapter.search({
 			query,
 			location,
+			near: nearCityName,
 			limit: 10
 		});
 	}
 
 	// Search function for stays
 	async function searchStays(query: string): Promise<Stay[]> {
-		return fakeLodgingAdapter.search({
+		// Require city to be set for Foursquare searches
+		if (!nearCityLocation) return [];
+
+		const location: Location = {
+			name: nearCityName || 'Search Location',
+			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+			geo: nearCityLocation
+		};
+
+		return lodgingAdapter.search({
 			query,
+			location,
+			near: nearCityName,
 			checkIn: stayCheckIn || undefined,
 			checkOut: stayCheckOut || undefined,
 			limit: 10
@@ -165,6 +268,71 @@
 	function selectStay(item: Stay) {
 		selectedStay = item;
 		showCustomForm = false;
+		// Enrich city data from the stay's location
+		enrichCityFromLocation(item.location);
+	}
+	
+	/**
+	 * Enrich city data by searching Geoapify for the city based on location.
+	 * This provides proper country names (e.g., "United States" instead of "US")
+	 * and additional metadata (state, formatted address, etc.)
+	 */
+	async function enrichCityFromLocation(location: Location) {
+		const cityName = location.address.city;
+		if (!cityName) {
+			enrichedCityData = undefined;
+			return;
+		}
+		
+		isEnrichingCity = true;
+		try {
+			// Search for the city using Geoapify
+			const results = await cityAdapter.search(cityName, 5);
+			
+			if (results.length > 0) {
+				// Find the best match - prefer one close to the location's coordinates
+				let bestMatch = results[0];
+				const locationLat = location.geo.latitude;
+				const locationLon = location.geo.longitude;
+				
+				for (const result of results) {
+					const resultLat = result.location.latitude;
+					const resultLon = result.location.longitude;
+					const bestLat = bestMatch.location.latitude;
+					const bestLon = bestMatch.location.longitude;
+					
+					// Simple distance comparison (not Haversine, just for rough proximity)
+					const resultDist = Math.abs(resultLat - locationLat) + Math.abs(resultLon - locationLon);
+					const bestDist = Math.abs(bestLat - locationLat) + Math.abs(bestLon - locationLon);
+					
+					if (resultDist < bestDist) {
+						bestMatch = result;
+					}
+				}
+				
+				// Create enriched city data from the search result
+				enrichedCityData = {
+					name: bestMatch.name,
+					country: bestMatch.country,
+					state: bestMatch.state,
+					county: bestMatch.county,
+					formatted: bestMatch.formatted,
+					location: bestMatch.location,
+					timezone: bestMatch.timezone,
+					// Dates will be set from the stay when actually creating the city
+					startDate: '',
+					endDate: ''
+				};
+			} else {
+				// No results - clear enriched data, will fall back to stay's location
+				enrichedCityData = undefined;
+			}
+		} catch (error) {
+			console.warn('[AddItemModal] Failed to enrich city data:', error);
+			enrichedCityData = undefined;
+		} finally {
+			isEnrichingCity = false;
+		}
 	}
 
 	function addSelectedItem() {
@@ -183,7 +351,7 @@
 				...selectedStay,
 				checkIn: stayCheckIn || selectedStay.checkIn,
 				checkOut: stayCheckOut || selectedStay.checkOut
-			});
+			}, enrichedCityData);
 		} else {
 			return;
 		}
@@ -194,16 +362,29 @@
 	function addCustomItem() {
 		if (!customName.trim()) return;
 
-		const customLocation: Location = {
-			name: customName,
-			address: {
-				street: customAddress,
-				city: '',
-				country: '',
-				formatted: customAddress || customName
-			},
-			geo: cityLocation || { latitude: 0, longitude: 0 }
-		};
+		// Use geocoded location if available, otherwise create a fallback with parsed address
+		let customLocation: Location;
+
+		if (geocodeResult?.location) {
+			customLocation = geocodeResult.location;
+		} else {
+			// Geocoding failed or wasn't performed - use fallback parsing
+			const parsed = parseAddress(customAddress);
+			const formattedAddr = formatParsedAddress(parsed);
+
+			customLocation = {
+				name: customName,
+				address: {
+					street: parsed.street || customAddress,
+					city: parsed.city || '',
+					state: parsed.state,
+					postalCode: parsed.postalCode,
+					country: parsed.country || '',
+					formatted: formattedAddr || customAddress || customName
+				},
+				geo: nearCityLocation || cityLocation || { latitude: 0, longitude: 0 }
+			};
+		}
 
 		if (selectedKind === 'activity') {
 			const activity: Activity = {
@@ -235,7 +416,24 @@
 				checkOut: stayCheckOut,
 				notes: customNotes || undefined
 			};
-			onAddStay(stay);
+			
+			// For custom stays, use the selected near city for enriched data if available
+			let customEnrichedCityData: EnrichedCityData | undefined;
+			if (selectedNearCity) {
+				customEnrichedCityData = {
+					name: selectedNearCity.name,
+					country: selectedNearCity.country,
+					state: selectedNearCity.state,
+					county: selectedNearCity.county,
+					formatted: selectedNearCity.formatted,
+					location: selectedNearCity.location,
+					timezone: selectedNearCity.timezone,
+					startDate: '',
+					endDate: ''
+				};
+			}
+			
+			onAddStay(stay, customEnrichedCityData);
 		}
 
 		onclose();
@@ -249,6 +447,45 @@
 		selectedFoodVenue = null;
 		selectedStay = null;
 		showCustomForm = false;
+		enrichedCityData = undefined;
+	}
+
+	async function handleAddressBlur() {
+		// Clear previous results if address is too short or empty
+		if (!customAddress.trim() || customAddress.length < 5) {
+			geocodeResult = null;
+			geocodeError = null;
+			return;
+		}
+
+		isGeocoding = true;
+		geocodeError = null;
+
+		try {
+			const result = await geocodeAddress(customAddress);
+			geocodeResult = result;
+			if (!result) {
+				// Parse the address to provide better feedback
+				const parsed = parseAddress(customAddress);
+				if (parsed.city) {
+					geocodeError = `Could not verify address. Using "${parsed.city}" as the city.`;
+				} else {
+					geocodeError = 'Address not found. Location features may be limited.';
+				}
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Geocoding failed';
+			// Try to parse even on error
+			const parsed = parseAddress(customAddress);
+			if (parsed.city) {
+				geocodeError = `${message}. Using "${parsed.city}" as the city.`;
+			} else {
+				geocodeError = `${message}. Location features may be limited.`;
+			}
+			geocodeResult = null;
+		} finally {
+			isGeocoding = false;
+		}
 	}
 
 	const kindOptions = [
@@ -281,24 +518,37 @@
 	};
 
 	// Transport handlers
-	function handleTransportKindSelect(kind: 'flight' | 'train' | 'bus') {
+	function handleTransportKindSelect(selection: TransportSelection) {
 		showTransportKindModal = false;
-		if (kind === 'flight') {
+		if (selection.type === 'flight') {
 			showFlightSearchModal = true;
-		} else {
-			transportMode = kind;
-			showTrainBusSearchModal = true;
+		} else if (selection.type === 'car_rental') {
+			showCarRentalModal = true;
+		} else if (selection.type === 'ground_transit') {
+			transportEntryMode = 'ground_transit';
+			transportEntrySubType = selection.subType;
+			showTransportEntryModal = true;
+		} else if (selection.type === 'local') {
+			transportEntryMode = selection.mode;
+			transportEntrySubType = undefined;
+			showTransportEntryModal = true;
 		}
 	}
 
-	function handleAddFlight(leg: TransportLeg) {
-		showFlightSearchModal = false;
+	function handleAddCarRental(leg: TransportLeg) {
+		showCarRentalModal = false;
 		onAddTransport?.(leg);
 		onclose();
 	}
 
-	function handleAddTrainBus(leg: TransportLeg) {
-		showTrainBusSearchModal = false;
+	function handleAddTransportEntry(leg: TransportLeg) {
+		showTransportEntryModal = false;
+		onAddTransport?.(leg);
+		onclose();
+	}
+
+	function handleAddFlight(leg: TransportLeg) {
+		showFlightSearchModal = false;
 		onAddTransport?.(leg);
 		onclose();
 	}
@@ -343,50 +593,97 @@
 			{/each}
 		</div>
 
+		<!-- City/Location Field (required for non-transport searches) -->
+		{#if selectedKind !== 'transport'}
+			<div class="near-city-field">
+				<span class="label" id="near-city-label">Search near <span class="required">*</span></span>
+				<div class="city-field">
+					<SearchAutocomplete
+						placeholder="Search for a city..."
+						searchFn={searchCities}
+						renderItem={(city) => ({
+							name: city.name,
+							subtitle: city.formatted || `${city.state ? `${city.state}, ` : ''}${city.country}`,
+							icon: 'location'
+						})}
+						getItemId={(city) => city.id}
+						onSelect={selectNearCity}
+						bind:value={nearCitySearchValue}
+						bind:selectedItem={selectedNearCity}
+					/>
+					{#if nearCityLocation}
+						<button
+							type="button"
+							class="clear-city-btn"
+							onclick={clearNearCity}
+							title="Clear city to search elsewhere"
+						>
+							<Icon name="close" size={16} />
+						</button>
+					{/if}
+				</div>
+				{#if !nearCityLocation}
+					<span class="field-hint">Select a city to enable search</span>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Search -->
 		<div class="search-section">
 			{#if selectedKind === 'activity'}
-				<SearchAutocomplete
-					placeholder="Search attractions, tours, museums..."
-					searchFn={searchActivities}
-					renderItem={(item) => ({
-						name: item.name,
-						subtitle: item.location.address.formatted,
-						icon: 'attraction'
-					})}
-					getItemId={(item) => item.id}
-					onSelect={selectActivity}
-					bind:value={activitySearchQuery}
-					bind:selectedItem={selectedActivity}
-				/>
+				{#if nearCityLocation}
+					<SearchAutocomplete
+						placeholder="Search attractions, tours, museums..."
+						searchFn={searchActivities}
+						renderItem={(item) => ({
+							name: item.name,
+							subtitle: item.location.address.formatted,
+							icon: 'attraction'
+						})}
+						getItemId={(item) => item.id}
+						onSelect={selectActivity}
+						bind:value={activitySearchQuery}
+						bind:selectedItem={selectedActivity}
+					/>
+				{:else}
+					<div class="search-disabled">Select a city above to search for activities</div>
+				{/if}
 			{:else if selectedKind === 'food'}
-				<SearchAutocomplete
-					placeholder="Search restaurants, cafes, bars..."
-					searchFn={searchFoodVenues}
-					renderItem={(item) => ({
-						name: item.name,
-						subtitle: `${item.venueType} • ${item.location.address.formatted}`,
-						icon: 'restaurant'
-					})}
-					getItemId={(item) => item.id}
-					onSelect={selectFoodVenue}
-					bind:value={foodSearchQuery}
-					bind:selectedItem={selectedFoodVenue}
-				/>
+				{#if nearCityLocation}
+					<SearchAutocomplete
+						placeholder="Search restaurants, cafes, bars..."
+						searchFn={searchFoodVenues}
+						renderItem={(item) => ({
+							name: item.name,
+							subtitle: `${item.venueType} • ${item.location.address.formatted}`,
+							icon: 'restaurant'
+						})}
+						getItemId={(item) => item.id}
+						onSelect={selectFoodVenue}
+						bind:value={foodSearchQuery}
+						bind:selectedItem={selectedFoodVenue}
+					/>
+				{:else}
+					<div class="search-disabled">Select a city above to search for food venues</div>
+				{/if}
 			{:else if selectedKind === 'stay'}
-				<SearchAutocomplete
-					placeholder="Search hotels, airbnbs, hostels..."
-					searchFn={searchStays}
-					renderItem={(item) => ({
-						name: item.name,
-						subtitle: `${item.type} • ${item.location.address.formatted}`,
-						icon: 'hotel'
-					})}
-					getItemId={(item) => item.id}
-					onSelect={selectStay}
-					bind:value={staySearchQuery}
-					bind:selectedItem={selectedStay}
-				/>
+				{#if nearCityLocation}
+					<SearchAutocomplete
+						placeholder="Search hotels, airbnbs, hostels..."
+						searchFn={searchStays}
+						renderItem={(item) => ({
+							name: item.name,
+							subtitle: `${item.type} • ${item.location.address.formatted}`,
+							icon: 'hotel'
+						})}
+						getItemId={(item) => item.id}
+						onSelect={selectStay}
+						bind:value={staySearchQuery}
+						bind:selectedItem={selectedStay}
+					/>
+				{:else}
+					<div class="search-disabled">Select a city above to search for stays</div>
+				{/if}
 			{:else if selectedKind === 'transport'}
 				<div class="transport-prompt">
 					<p>Select a transport type to add flights, trains, or intercity buses to your itinerary.</p>
@@ -408,7 +705,21 @@
 			<!-- Custom Entry Form -->
 			<div class="custom-form">
 				<Input label="Name" placeholder="Enter name" bind:value={customName} required />
-				<Input label="Address (optional)" placeholder="Enter address" bind:value={customAddress} />
+				<div class="address-field">
+					<Input
+						label="Address (optional)"
+						placeholder="Enter address"
+						bind:value={customAddress}
+						onblur={handleAddressBlur}
+					/>
+					{#if isGeocoding}
+						<span class="geocoding-status loading">Looking up address...</span>
+					{:else if geocodeResult}
+						<span class="geocoding-status success">✓ {geocodeResult.location.address.formatted}</span>
+					{:else if geocodeError}
+						<span class="geocoding-status error">{geocodeError}</span>
+					{/if}
+				</div>
 
 				{#if selectedKind === 'stay'}
 					<div class="stay-type-selector">
@@ -518,12 +829,19 @@
 	defaultDate={selectedDate}
 />
 
-<TrainBusSearchModal
-	isOpen={showTrainBusSearchModal}
-	onclose={() => (showTrainBusSearchModal = false)}
-	onAddTransport={handleAddTrainBus}
-	mode={transportMode}
-	cityLocation={cityLocationForTransport}
+<CarRentalModal
+	isOpen={showCarRentalModal}
+	onclose={() => (showCarRentalModal = false)}
+	onAdd={handleAddCarRental}
+	defaultDate={selectedDate}
+/>
+
+<TransportEntryModal
+	isOpen={showTransportEntryModal}
+	onclose={() => (showTransportEntryModal = false)}
+	onAdd={handleAddTransportEntry}
+	mode={transportEntryMode}
+	subType={transportEntrySubType}
 	defaultDate={selectedDate}
 />
 
@@ -668,10 +986,12 @@
 		border: 1px solid var(--border-color);
 		border-radius: var(--radius-md);
 		font-size: 0.875rem;
+		color: var(--text-primary);
 		cursor: pointer;
 		transition:
 			border-color var(--transition-fast),
-			background-color var(--transition-fast);
+			background-color var(--transition-fast),
+			color var(--transition-fast);
 
 		&:hover {
 			border-color: var(--color-primary);
@@ -680,6 +1000,7 @@
 		&.selected {
 			border-color: var(--color-primary);
 			background: color-mix(in oklch, var(--color-primary), transparent 90%);
+			color: var(--text-primary);
 		}
 	}
 
@@ -710,5 +1031,83 @@
 			font-size: 0.875rem;
 			color: var(--text-secondary);
 		}
+	}
+
+	.address-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.geocoding-status {
+		font-size: 0.75rem;
+		padding-left: var(--space-1);
+	}
+
+	.geocoding-status.loading {
+		color: var(--text-secondary);
+	}
+
+	.geocoding-status.success {
+		color: var(--color-success);
+	}
+
+	.geocoding-status.error {
+		color: var(--color-warning);
+	}
+
+	.near-city-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-bottom: var(--space-3);
+		border-bottom: 1px solid var(--border-color);
+	}
+
+	.city-field {
+		display: flex;
+		gap: var(--space-2);
+		align-items: flex-start;
+	}
+
+	.city-field :global(.search-autocomplete) {
+		flex: 1;
+	}
+
+	.clear-city-btn {
+		padding: var(--space-2);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+
+		&:hover {
+			background: var(--surface-hover);
+			color: var(--text-primary);
+		}
+	}
+
+	.required {
+		color: var(--color-error);
+	}
+
+	.field-hint {
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+	}
+
+	.search-disabled {
+		padding: var(--space-4);
+		background: var(--surface-secondary);
+		border: 1px dashed var(--border-color);
+		border-radius: var(--radius-md);
+		text-align: center;
+		color: var(--text-secondary);
+		font-size: 0.875rem;
 	}
 </style>

@@ -10,11 +10,14 @@
 		WeatherCondition,
 		DailyItem,
 		TravelMode,
-		StaySegment
+		StaySegment,
+		DayNote
 	} from '$lib/types/travel';
 	import type { DayUnitResolution } from '$lib/utils/units';
+	import type { StayBadgeState } from '$lib/utils/stayUtils';
 	import DayHeader from './DayHeader.svelte';
 	import ItemList from './ItemList.svelte';
+	import DayNotes from './DayNotes.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { getSegmentForDay, getDayBackgroundColor } from '$lib/utils/colors';
@@ -30,6 +33,8 @@
 		colorScheme: ColorScheme;
 		/** Pre-computed stay segments for by-stay coloring */
 		staySegments?: StaySegment[];
+		/** Pre-computed stay badges (check-in/check-out) */
+		stayBadges?: Map<string, StayBadgeState>;
 		/** Whether this day has a city but no lodging booked */
 		hasMissingLodging?: boolean;
 		weatherList?: WeatherCondition[];
@@ -47,6 +52,15 @@
 		onMoveItem?: (itemId: string) => void;
 		onDuplicateItem?: (itemId: string) => void;
 		onTravelModeChange?: (itemId: string, mode: TravelMode) => void;
+		// Daily notes handlers
+		onAddDayNote?: (note: DayNote) => void;
+		onUpdateDayNote?: (noteId: string, content: string) => void;
+		onDeleteDayNote?: (noteId: string) => void;
+		// Stay time handlers
+		onStayCheckInTimeChange?: (stayId: string, time: string) => void;
+		onStayCheckOutTimeChange?: (stayId: string, time: string) => void;
+		// Activity handlers
+		onActivityEntryFeeChange?: (activityId: string, entryFee: number | undefined) => void;
 	}
 
 	let {
@@ -58,6 +72,7 @@
 		transportLegs,
 		colorScheme,
 		staySegments = [],
+		stayBadges,
 		hasMissingLodging = false,
 		weatherList = [],
 		weatherLoading = false,
@@ -72,7 +87,13 @@
 		onRemoveEntireTransport,
 		onMoveItem,
 		onDuplicateItem,
-		onTravelModeChange
+		onTravelModeChange,
+		onAddDayNote,
+		onUpdateDayNote,
+		onDeleteDayNote,
+		onStayCheckInTimeChange,
+		onStayCheckOutTimeChange,
+		onActivityEntryFeeChange
 	}: Props = $props();
 
 	// Check if this day is today or in the past
@@ -176,9 +197,11 @@
 				{foodVenues}
 				{transportLegs}
 				{colorScheme}
+				{stayBadges}
 				cityId={primaryCityId}
 				segmentId={daySegment?.id}
 				distanceUnit={unitResolution?.distanceUnit}
+				scheduledDate={day.date}
 				{isEditing}
 				{onReorder}
 				{onItemClick}
@@ -188,6 +211,9 @@
 				{onMoveItem}
 				{onDuplicateItem}
 				{onTravelModeChange}
+				{onStayCheckInTimeChange}
+				{onStayCheckOutTimeChange}
+				{onActivityEntryFeeChange}
 			/>
 		{:else}
 			<div class="empty-state">
@@ -200,6 +226,17 @@
 				{/if}
 			</div>
 		{/if}
+	</div>
+
+	<!-- Day Notes Section -->
+	<div class="day-notes-section">
+		<DayNotes
+			notes={day.dailyNotes || []}
+			{isEditing}
+			onAdd={onAddDayNote}
+			onUpdate={onUpdateDayNote}
+			onDelete={onDeleteDayNote}
+		/>
 	</div>
 
 	{#if isEditing && onAddItem}
@@ -276,6 +313,10 @@
 		margin: 0;
 	}
 
+	.day-notes-section {
+		padding: 0 var(--space-4) var(--space-4);
+	}
+
 	.day-footer {
 		padding: var(--space-2) var(--space-4);
 		border-top: 1px solid var(--border-color);
@@ -285,6 +326,10 @@
 	@container day (min-width: 600px) {
 		.day-content {
 			padding: var(--space-6);
+		}
+
+		.day-notes-section {
+			padding: 0 var(--space-6) var(--space-4);
 		}
 	}
 </style>

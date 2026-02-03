@@ -3,17 +3,34 @@
 	import { formatTime } from '$lib/utils/dates';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import BusinessHours from '$lib/components/places/BusinessHours.svelte';
+	import TagList from '$lib/components/places/TagList.svelte';
+	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
+	import { openSafeUrl } from '$lib/utils/url';
 
 	interface Props {
 		venue: FoodVenue;
 		mealSlot?: MealType;
+		/** The date this meal is scheduled for (YYYY-MM-DD) - used for showing hours */
+		scheduledDate?: string;
+		/** Notes specific to this item on this day */
+		itemNotes?: string;
 		isEditing?: boolean;
 		onclick?: () => void;
+		onNotesChange?: (notes: string) => void;
 	}
 
-	let { venue, mealSlot, isEditing = false, onclick }: Props = $props();
+	let { 
+		venue, 
+		mealSlot, 
+		scheduledDate,
+		itemNotes = '',
+		isEditing = false, 
+		onclick,
+		onNotesChange
+	}: Props = $props();
 
 	// Get resolved map app from settings
 	const mapApp = $derived(settingsStore.getConcreteMapApp(settingsStore.userSettings.preferredMapApp));
@@ -49,9 +66,14 @@
 		return labels[venue.venueType] || 'Restaurant';
 	});
 
+	// Get effective price level (user override or API data)
+	const effectivePriceLevel = $derived(
+		venue.userOverrides?.priceLevel || venue.priceLevel
+	);
+
 	const priceLevel = $derived.by(() => {
-		if (!venue.priceLevel) return null;
-		return '$'.repeat(venue.priceLevel);
+		if (!effectivePriceLevel) return null;
+		return '$'.repeat(effectivePriceLevel);
 	});
 
 	const timeDisplay = $derived.by(() => {
@@ -59,15 +81,42 @@
 		return formatTime(venue.scheduledTime, use24h);
 	});
 
+	// Check if has user overrides
+	const hasOverrides = $derived(
+		venue.userOverrides && Object.keys(venue.userOverrides).length > 0
+	);
+
+	// Get effective opening hours
+	const effectiveHours = $derived(
+		venue.userOverrides?.openingHours || venue.openingHours
+	);
+
+	// Get effective tags
+	const effectiveTags = $derived(
+		venue.userOverrides?.tags || venue.tags || []
+	);
+
 	function openInMaps() {
 		window.open(getMapsUrl(venue.location, mapApp), '_blank');
 	}
 
 	function openMenu() {
 		if (venue.menuUrl) {
-			window.open(venue.menuUrl, '_blank');
+			openSafeUrl(venue.menuUrl, '_blank');
 		}
 	}
+
+	// Title click handler - open website if available
+	function handleTitleClick() {
+		const url = venue.website || venue.apiPageUrl;
+		if (url) {
+			openSafeUrl(url, '_blank');
+		} else if (onclick) {
+			onclick();
+		}
+	}
+
+	const hasTitleLink = $derived(!!venue.website || !!venue.apiPageUrl || !!onclick);
 </script>
 
 <div class="item-card" data-kind="food">
@@ -83,12 +132,26 @@
 			{#if venue.reservationRequired}
 				<Badge variant="warning" size="sm">Reservation</Badge>
 			{/if}
+			{#if hasOverrides}
+				<Badge variant="info" size="sm" title="Some fields edited by you">Edited</Badge>
+			{/if}
 		</div>
 	</div>
 
 	<div class="card-content">
-		<button type="button" class="card-title-btn" onclick={onclick} disabled={!onclick}>
-			<h3 class="card-title">{venue.name}</h3>
+		<button 
+			type="button" 
+			class="card-title-btn" 
+			onclick={handleTitleClick} 
+			disabled={!hasTitleLink}
+			title={venue.website ? 'Open website' : venue.apiPageUrl ? 'View on map' : undefined}
+		>
+			<h3 class="card-title">
+				{venue.name}
+				{#if venue.website || venue.apiPageUrl}
+					<Icon name="externalLink" size={12} />
+				{/if}
+			</h3>
 		</button>
 
 		{#if venue.cuisineTypes && venue.cuisineTypes.length > 0}
@@ -117,9 +180,24 @@
 					<span class="estimated-cost">~${venue.estimatedCost}</span>
 				{/if}
 				{#if venue.rating}
-					<span class="rating">★ {venue.rating}</span>
+					<span class="rating">★ {venue.rating.toFixed(1)}</span>
 				{/if}
 			</div>
+
+			{#if effectiveHours && scheduledDate}
+				<BusinessHours hours={effectiveHours} date={scheduledDate} />
+			{/if}
+
+			{#if effectiveTags.length > 0}
+				<TagList tags={effectiveTags} />
+			{/if}
+
+			{#if venue.reservationConfirmation}
+				<div class="confirmation">
+					<Icon name="ticket" size={12} />
+					Reservation: <strong>{venue.reservationConfirmation}</strong>
+				</div>
+			{/if}
 
 			<div class="action-links">
 				{#if venue.menuUrl}
@@ -134,6 +212,13 @@
 				{/if}
 			</div>
 		</div>
+
+		<ItemNotes 
+			notes={itemNotes} 
+			placeholder="Add notes (what to order, dietary needs...)"
+			{isEditing}
+			onSave={onNotesChange}
+		/>
 	</div>
 </div>
 
@@ -195,6 +280,9 @@
 	}
 
 	.card-title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
 		font-size: 1rem;
 		font-weight: 600;
 		margin: 0;
@@ -256,6 +344,17 @@
 	.rating {
 		color: var(--color-warning);
 		font-weight: 500;
+	}
+
+	.confirmation {
+		display: flex;
+		align-items: center;
+		gap: var(--space-1);
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		padding: var(--space-1) var(--space-2);
+		background: var(--surface-secondary);
+		border-radius: var(--radius-sm);
 	}
 
 	.action-links {
