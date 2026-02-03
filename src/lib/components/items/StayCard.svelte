@@ -6,6 +6,7 @@
 	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
+	import { openSafeUrl } from '$lib/utils/url';
 
 	interface Props {
 		stay: Stay;
@@ -94,7 +95,7 @@
 		}
 
 		if (url) {
-			window.open(url, '_blank');
+			openSafeUrl(url, '_blank');
 		} else if (onclick) {
 			onclick();
 		}

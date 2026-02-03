@@ -13,9 +13,10 @@ import type {
 	PlaceTag,
 	FoodTag
 } from '$lib/types/travel';
-import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey, CACHE_TTL } from '$lib/server/db/cache';
+import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
+import { warnIfUnsafeUrl } from '$lib/utils/url';
 
 // Google Places API (New) endpoints
 const GOOGLE_PLACES_DETAILS_URL = 'https://places.googleapis.com/v1/places';
@@ -486,6 +487,9 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 		}
 
 		const place: GooglePlace = await response.json();
+
+		// Validate external URLs at ingestion
+		warnIfUnsafeUrl(place.websiteUri, 'Google Places PlaceDetails.website');
 
 		const details: PlaceDetails = {
 			placeId: place.id,

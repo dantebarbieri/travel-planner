@@ -9,6 +9,7 @@
 	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
+	import { openSafeUrl } from '$lib/utils/url';
 
 	interface Props {
 		activity: Activity;
@@ -140,19 +141,11 @@
 		window.open(getMapsUrl(activity.location, mapApp), '_blank');
 	}
 
-	function openWebsite() {
-		// Prefer official website, fallback to API page (Google Maps, Foursquare)
-		const url = activity.website || activity.apiPageUrl;
-		if (url) {
-			window.open(url, '_blank');
-		}
-	}
-
 	// Title click handler - open website if available
 	function handleTitleClick() {
 		const url = activity.website || activity.apiPageUrl;
 		if (url) {
-			window.open(url, '_blank');
+			openSafeUrl(url, '_blank');
 		} else if (onclick) {
 			onclick();
 		}

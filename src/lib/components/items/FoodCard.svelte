@@ -8,6 +8,7 @@
 	import ItemNotes from './ItemNotes.svelte';
 	import { getMapsUrl } from '$lib/services/mapService';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
+	import { openSafeUrl } from '$lib/utils/url';
 
 	interface Props {
 		venue: FoodVenue;
@@ -101,7 +102,7 @@
 
 	function openMenu() {
 		if (venue.menuUrl) {
-			window.open(venue.menuUrl, '_blank');
+			openSafeUrl(venue.menuUrl, '_blank');
 		}
 	}
 
@@ -109,7 +110,7 @@
 	function handleTitleClick() {
 		const url = venue.website || venue.apiPageUrl;
 		if (url) {
-			window.open(url, '_blank');
+			openSafeUrl(url, '_blank');
 		} else if (onclick) {
 			onclick();
 		}

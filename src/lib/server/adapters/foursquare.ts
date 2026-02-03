@@ -21,6 +21,7 @@ import type {
 import { cache, foodPlacesCacheKey, attractionPlacesCacheKey, placeDetailsCacheKey, lodgingPlacesCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
+import { warnIfUnsafeUrl } from '$lib/utils/url';
 
 // API endpoints (new Foursquare Places API - migrated from v3)
 const FOURSQUARE_SEARCH_URL = 'https://places-api.foursquare.com/places/search';
@@ -309,6 +310,9 @@ function foursquarePlaceToFoodVenue(place: FoursquarePlace): FoodVenue {
 	const category = place.categories?.[0];
 	const categoryId = category?.fsq_category_id || '';
 
+	// Validate external URLs at ingestion
+	warnIfUnsafeUrl(place.website, 'Foursquare FoodVenue.website');
+
 	return {
 		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
@@ -331,6 +335,9 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 	// Extract all category names for display as tags
 	const categoryTags = place.categories?.map(c => c.name).filter(Boolean) || [];
 
+	// Validate external URLs at ingestion
+	warnIfUnsafeUrl(place.website, 'Foursquare Activity.website');
+
 	return {
 		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
@@ -350,6 +357,9 @@ function foursquarePlaceToStay(place: FoursquarePlace): Stay {
 	const category = place.categories?.[0];
 	const categoryId = category?.fsq_category_id || '';
 	const stayType = LODGING_CATEGORY_MAP[categoryId] || 'hotel';
+
+	// Validate external URLs at ingestion
+	warnIfUnsafeUrl(place.website, 'Foursquare Stay.website');
 
 	// Build the base stay object with required fields
 	const baseStay = {
