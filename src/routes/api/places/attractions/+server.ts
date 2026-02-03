@@ -5,7 +5,7 @@
  * Search for attractions (museums, landmarks, parks, etc.) near a location.
  */
 
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { searchAttractions, FoursquareError } from '$lib/server/adapters/foursquare';
 import { rateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
@@ -35,22 +35,34 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const lonParam = url.searchParams.get('lon');
 
 	if (!latParam || !lonParam) {
-		error(400, 'Missing required parameters: lat and lon');
+		return json(
+			{ error: 'Missing required parameters: lat and lon' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 
 	const lat = parseFloat(latParam);
 	const lon = parseFloat(lonParam);
 
 	if (isNaN(lat) || isNaN(lon)) {
-		error(400, 'Invalid lat/lon parameters');
+		return json(
+			{ error: 'Invalid lat/lon parameters' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 
 	if (lat < -90 || lat > 90) {
-		error(400, 'Latitude must be between -90 and 90');
+		return json(
+			{ error: 'Latitude must be between -90 and 90' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 
 	if (lon < -180 || lon > 180) {
-		error(400, 'Longitude must be between -180 and 180');
+		return json(
+			{ error: 'Longitude must be between -180 and 180' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 
 	// Parse optional parameters
@@ -61,12 +73,18 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 	const limit = limitParam ? parseInt(limitParam, 10) : 20;
 	if (isNaN(limit) || limit < 1 || limit > 50) {
-		error(400, 'Limit must be a number between 1 and 50');
+		return json(
+			{ error: 'Limit must be a number between 1 and 50' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 
 	const radius = radiusParam ? parseInt(radiusParam, 10) : 10000;
 	if (isNaN(radius) || radius < 100 || radius > 50000) {
-		error(400, 'Radius must be a number between 100 and 50000 (meters)');
+		return json(
+			{ error: 'Radius must be a number between 100 and 50000 (meters)' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 
 	// Parse category filter (comma-separated: "museum,outdoor")
@@ -107,14 +125,23 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 			if (err.code === 'MISSING_API_KEY') {
 				console.error('Foursquare API key not configured');
-				error(500, 'Places service not configured');
+				return json(
+					{ error: 'Places service not configured' },
+					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+				);
 			}
 
 			console.error('Attractions places API error:', err.message);
-			error(500, 'Places service error');
+			return json(
+				{ error: 'Places service error' },
+				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+			);
 		}
 
 		console.error('Attractions places API error:', err);
-		error(500, 'Failed to search attractions');
+		return json(
+			{ error: 'Failed to search attractions' },
+			{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+		);
 	}
 };

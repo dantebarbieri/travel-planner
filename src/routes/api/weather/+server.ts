@@ -3,7 +3,7 @@
  * GET /api/weather?lat=...&lon=...&dates=...
  */
 
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { getWeather } from '$lib/server/adapters/weather';
 import { rateLimit } from '$lib/server/rateLimit';
 import { isValidTimezone } from '$lib/utils/dates';
@@ -35,21 +35,33 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 	// Validate required parameters
 	if (isNaN(lat) || isNaN(lon)) {
-		error(400, 'Missing or invalid lat/lon parameters');
+		return json(
+			{ error: 'Missing or invalid lat/lon parameters' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'weather') }
+		);
 	}
 
 	if (!datesParam) {
-		error(400, 'Missing dates parameter');
+		return json(
+			{ error: 'Missing dates parameter' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'weather') }
+		);
 	}
 
 	const dates = datesParam.split(',').filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
 	if (dates.length === 0) {
-		error(400, 'No valid dates provided (expected YYYY-MM-DD format)');
+		return json(
+			{ error: 'No valid dates provided (expected YYYY-MM-DD format)' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'weather') }
+		);
 	}
 
 	// Validate timezone if provided
 	if (timezone && !isValidTimezone(timezone)) {
-		error(400, `Invalid timezone: '${timezone}'. Expected IANA timezone name (e.g., 'America/New_York', 'Europe/London')`);
+		return json(
+			{ error: `Invalid timezone: '${timezone}'. Expected IANA timezone name (e.g., 'America/New_York', 'Europe/London')` },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'weather') }
+		);
 	}
 
 	// Build location object
@@ -76,6 +88,9 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		});
 	} catch (err) {
 		console.error('Weather API error:', err);
-		error(500, 'Failed to fetch weather data');
+		return json(
+			{ error: 'Failed to fetch weather data' },
+			{ status: 500, headers: rateLimit.getHeaders(ip, 'weather') }
+		);
 	}
 };
