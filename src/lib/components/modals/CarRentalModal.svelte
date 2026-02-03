@@ -25,13 +25,16 @@
 	let { isOpen, onclose, onAdd, defaultDate = '', defaultLocation }: Props = $props();
 
 	// Form state
+	// svelte-ignore state_referenced_locally
 	let pickupDate = $state(defaultDate);
 	let pickupTime = $state('10:00');
 	let returnDate = $state('');
 	let returnTime = $state('10:00');
 
 	// Location state
+	// svelte-ignore state_referenced_locally
 	let pickupLocationName = $state(defaultLocation?.name || '');
+	// svelte-ignore state_referenced_locally
 	let pickupLocationAddress = $state(defaultLocation?.address.formatted || '');
 	let returnLocationName = $state('');
 	let returnLocationAddress = $state('');
@@ -105,7 +108,8 @@
 				city: '',
 				country: '',
 				formatted: pickupLocationAddress
-			}
+			},
+			geo: { latitude: 0, longitude: 0 }
 		};
 	}
 
@@ -120,7 +124,8 @@
 				city: '',
 				country: '',
 				formatted: returnLocationAddress
-			}
+			},
+			geo: { latitude: 0, longitude: 0 }
 		};
 	}
 

@@ -386,14 +386,6 @@
 		}
 	}
 
-	.check-time {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-	}
-
 	.confirmation {
 		display: flex;
 		align-items: center;
