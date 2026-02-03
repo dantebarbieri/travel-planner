@@ -32,7 +32,9 @@ export const CACHE_TTL = {
 	PLACES_FOOD: 7 * 24 * 60 * 60 * 1000,      // 7 days (restaurants may change)
 	PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000,  // 14 days (attractions more stable)
 	PLACES_LODGING: 7 * 24 * 60 * 60 * 1000,   // 7 days (hotels may change)
-	PLACE_DETAILS: 14 * 24 * 60 * 60 * 1000    // 14 days (individual place details)
+	PLACE_DETAILS: 14 * 24 * 60 * 60 * 1000,   // 14 days (individual place details)
+	// Google Places
+	GOOGLE_PLACE_ID_SEARCH: 30 * 24 * 60 * 60 * 1000  // 30 days (place ID lookups rarely change)
 } as const;
 
 export type CacheType = keyof typeof CACHE_TTL;
@@ -451,6 +453,16 @@ export function placeDetailsCacheKey(fsqId: string): string {
 	return `places:details:${fsqId}`;
 }
 
+/**
+ * Generate a cache key for Google Place ID lookup by name and location.
+ */
+export function googlePlaceIdCacheKey(name: string, lat: number, lon: number): string {
+	// Round to 3 decimal places (~100m precision)
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	return `google:placeid:${name.toLowerCase().trim()}:${roundedLat}:${roundedLon}`;
+}
+
 // Export as a cache service object
 export const cache = {
 	get,
@@ -478,6 +490,7 @@ export const cache = {
 	attractionPlacesCacheKey,
 	lodgingPlacesCacheKey,
 	placeDetailsCacheKey,
+	googlePlaceIdCacheKey,
 	// TTL constants
 	TTL: CACHE_TTL
 };

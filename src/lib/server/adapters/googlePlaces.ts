@@ -13,7 +13,7 @@ import type {
 	PlaceTag,
 	FoodTag
 } from '$lib/types/travel';
-import { cache, placeDetailsCacheKey, CACHE_TTL } from '$lib/server/db/cache';
+import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey, CACHE_TTL } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 
@@ -346,6 +346,7 @@ export interface PlaceDetails {
 /**
  * Search for a place by name and location to get its Google Place ID.
  * Returns the place ID if found, null otherwise.
+ * Results are cached for 30 days since place IDs rarely change.
  */
 export async function findPlaceId(
 	name: string,
@@ -354,6 +355,13 @@ export async function findPlaceId(
 ): Promise<string | null> {
 	if (!isConfigured()) {
 		return null;
+	}
+
+	// Check cache first
+	const cacheKey = googlePlaceIdCacheKey(name, lat, lon);
+	const cached = cache.get<string | null>(cacheKey);
+	if (cached !== null) {
+		return cached;
 	}
 
 	try {
@@ -392,10 +400,19 @@ export async function findPlaceId(
 		const data = await response.json();
 
 		if (!data.places || data.places.length === 0) {
+			// Cache the "not found" result to avoid repeated lookups
+			cache.set(cacheKey, '', 'GOOGLE_PLACE_ID_SEARCH');
 			return null;
 		}
 
-		return data.places[0].id || null;
+		const placeId = data.places[0].id || null;
+		
+		// Cache the result
+		if (placeId) {
+			cache.set(cacheKey, placeId, 'GOOGLE_PLACE_ID_SEARCH');
+		}
+
+		return placeId;
 	} catch (error) {
 		const gpError = classifyError(error);
 		// Don't log if it's just missing API key - that's expected
