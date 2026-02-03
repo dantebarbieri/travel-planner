@@ -126,17 +126,6 @@
 		activity.userOverrides?.openingHours || activity.openingHours
 	);
 
-	// Debug: Log business hours data flow
-	$effect(() => {
-		console.log(`[ActivityCard] ${activity.name}:`, {
-			scheduledDate,
-			hasOpeningHours: !!activity.openingHours,
-			openingHours: activity.openingHours,
-			effectiveHours,
-			willRender: !!(effectiveHours && scheduledDate)
-		});
-	});
-
 	// Get effective tags
 	const effectiveTags = $derived(
 		activity.userOverrides?.tags || activity.tags || []

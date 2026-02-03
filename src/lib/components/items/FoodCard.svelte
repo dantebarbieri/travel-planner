@@ -90,17 +90,6 @@
 		venue.userOverrides?.openingHours || venue.openingHours
 	);
 
-	// Debug: Log business hours data flow
-	$effect(() => {
-		console.log(`[FoodCard] ${venue.name}:`, {
-			scheduledDate,
-			hasOpeningHours: !!venue.openingHours,
-			openingHours: venue.openingHours,
-			effectiveHours,
-			willRender: !!(effectiveHours && scheduledDate)
-		});
-	});
-
 	// Get effective tags
 	const effectiveTags = $derived(
 		venue.userOverrides?.tags || venue.tags || []
