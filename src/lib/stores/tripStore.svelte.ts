@@ -548,11 +548,7 @@ async function addActivityWithEnrichment(tripId: string, activity: Activity): Pr
 	addActivity(tripId, activity);
 
 	// Fetch and apply details in the background (don't block)
-	enrichActivity(activity).then(({ updates }) => {
-		if (Object.keys(updates).length > 1) { // More than just lastFetched
-			updateActivity(tripId, activity.id, updates);
-		}
-	}).catch((err) => {
+	enrichActivity(activity).then(({ updates }) => updateActivity(tripId, activity.id, updates)).catch((err) => {
 		console.warn('[TripStore] Failed to enrich activity:', err);
 	});
 }
@@ -566,11 +562,7 @@ async function addFoodVenueWithEnrichment(tripId: string, venue: FoodVenue): Pro
 	addFoodVenue(tripId, venue);
 
 	// Fetch and apply details in the background (don't block)
-	enrichFoodVenue(venue).then(({ updates }) => {
-		if (Object.keys(updates).length > 1) { // More than just lastFetched
-			updateFoodVenue(tripId, venue.id, updates);
-		}
-	}).catch((err) => {
+	enrichFoodVenue(venue).then(({ updates }) => updateFoodVenue(tripId, venue.id, updates)).catch((err) => {
 		console.warn('[TripStore] Failed to enrich food venue:', err);
 	});
 }
