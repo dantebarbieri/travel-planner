@@ -51,22 +51,36 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		const lat = parseFloat(latParam);
 		const lon = parseFloat(lonParam);
 
+		console.log('[PlaceDetails API] Attempting name search:', {
+			name,
+			lat,
+			lon,
+			googleConfigured: googlePlacesAdapter.isConfigured()
+		});
+
 		if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
 			// Try Google Places search by name
 			if (googlePlacesAdapter.isConfigured()) {
 				try {
 					details = await googlePlacesAdapter.getPlaceDetailsByNameAndLocation(name, lat, lon);
+					console.log('[PlaceDetails API] Google result:', {
+						found: !!details,
+						hasHours: !!details?.openingHours
+					});
 				} catch (err) {
 					if (err instanceof GooglePlacesError && err.code !== 'MISSING_API_KEY') {
 						console.warn('Google Places name search failed:', err.message);
 					}
 				}
+			} else {
+				console.log('[PlaceDetails API] Google Places not configured, skipping');
 			}
 		}
 	}
 
 	// Fallback to Foursquare if we have a Foursquare ID
 	if (!details && foursquarePlaceId) {
+		console.log('[PlaceDetails API] Trying Foursquare fallback for:', foursquarePlaceId);
 		try {
 			// Extract FSQ ID from our prefixed format (e.g., "fsq-abc123" -> "abc123")
 			const fsqId = foursquarePlaceId.startsWith('fsq-')

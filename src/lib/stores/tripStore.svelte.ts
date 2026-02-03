@@ -547,9 +547,20 @@ async function addActivityWithEnrichment(tripId: string, activity: Activity): Pr
 	// Add the activity immediately
 	addActivity(tripId, activity);
 
+	console.log('[TripStore] Starting enrichment for activity:', activity.name);
+
 	// Fetch and apply details in the background (don't block)
-	enrichActivity(activity).then(({ updates }) => {
+	enrichActivity(activity).then(({ updates, result }) => {
+		console.log('[TripStore] Enrichment completed:', {
+			name: activity.name,
+			success: result.success,
+			source: result.source,
+			updatedFields: result.updatedFields,
+			hasOpeningHours: !!updates.openingHours
+		});
+		
 		if (Object.keys(updates).length > 1) { // More than just lastFetched
+			console.log('[TripStore] Applying updates to activity:', activity.id);
 			updateActivity(tripId, activity.id, updates);
 		}
 	}).catch((err) => {
@@ -565,9 +576,20 @@ async function addFoodVenueWithEnrichment(tripId: string, venue: FoodVenue): Pro
 	// Add the venue immediately
 	addFoodVenue(tripId, venue);
 
+	console.log('[TripStore] Starting enrichment for food venue:', venue.name);
+
 	// Fetch and apply details in the background (don't block)
-	enrichFoodVenue(venue).then(({ updates }) => {
+	enrichFoodVenue(venue).then(({ updates, result }) => {
+		console.log('[TripStore] Enrichment completed:', {
+			name: venue.name,
+			success: result.success,
+			source: result.source,
+			updatedFields: result.updatedFields,
+			hasOpeningHours: !!updates.openingHours
+		});
+		
 		if (Object.keys(updates).length > 1) { // More than just lastFetched
+			console.log('[TripStore] Applying updates to food venue:', venue.id);
 			updateFoodVenue(tripId, venue.id, updates);
 		}
 	}).catch((err) => {

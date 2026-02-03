@@ -172,11 +172,25 @@ export async function enrichActivity(activity: Activity): Promise<{
 	try {
 		// Try to get details using available identifiers
 		const fsqId = extractFoursquareId(activity.id);
+		console.log('[PlaceDetailsService] Enriching activity:', {
+			name: activity.name,
+			fsqId,
+			lat: activity.location.geo.latitude,
+			lon: activity.location.geo.longitude
+		});
+		
 		const details = await fetchPlaceDetails({
 			foursquarePlaceId: fsqId,
 			name: activity.name,
 			lat: activity.location.geo.latitude,
 			lon: activity.location.geo.longitude
+		});
+
+		console.log('[PlaceDetailsService] Got details:', {
+			found: !!details,
+			source: details?.source,
+			hasOpeningHours: !!details?.openingHours,
+			openingHours: details?.openingHours
 		});
 
 		if (!details) {
@@ -192,6 +206,11 @@ export async function enrichActivity(activity: Activity): Promise<{
 
 		const updates = mergeActivityDetails(activity, details);
 		const updatedFields = Object.keys(updates).filter(k => k !== 'lastFetched');
+		
+		console.log('[PlaceDetailsService] Applied updates:', {
+			updatedFields,
+			hasOpeningHoursInUpdates: 'openingHours' in updates
+		});
 
 		return {
 			updates,

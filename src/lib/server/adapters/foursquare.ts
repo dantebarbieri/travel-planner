@@ -29,24 +29,6 @@ const FOURSQUARE_DETAILS_URL = 'https://places-api.foursquare.com/places';
 // Required version header for new API
 const FOURSQUARE_API_VERSION = '2025-06-17';
 
-// Fields to request from the API (hours, rating, etc. must be explicitly requested)
-const FOURSQUARE_SEARCH_FIELDS = [
-	'fsq_place_id',
-	'name',
-	'categories',
-	'location',
-	'latitude',
-	'longitude',
-	'rating',
-	'price',
-	'hours',
-	'tel',
-	'website',
-	'photos',
-	'description',
-	'tips'
-].join(',');
-
 // =============================================================================
 // Foursquare Category IDs
 // =============================================================================
@@ -419,7 +401,6 @@ export async function searchFoodVenues(
 		const params = new URLSearchParams({
 			ll: `${lat},${lon}`,
 			categories: FOOD_CATEGORIES.join(','),
-			fields: FOURSQUARE_SEARCH_FIELDS,
 			limit: (options.limit ?? 20).toString(),
 			radius: (options.radius ?? 5000).toString()
 		});
@@ -447,6 +428,19 @@ export async function searchFoodVenues(
 		}
 
 		const data: FoursquareSearchResponse = await response.json();
+
+		// DEBUG: Log raw response to see if hours are included
+		if (data.results && data.results.length > 0) {
+			const sample = data.results[0];
+			console.log('[Foursquare] Food search raw response sample:', {
+				name: sample.name,
+				hasHours: !!sample.hours,
+				hours: sample.hours,
+				hasRating: !!sample.rating,
+				rating: sample.rating,
+				keys: Object.keys(sample)
+			});
+		}
 
 		if (!data.results || data.results.length === 0) {
 			cache.set(cacheKey, [], 'PLACES_FOOD');
@@ -501,7 +495,6 @@ export async function searchAttractions(
 		const params = new URLSearchParams({
 			ll: `${lat},${lon}`,
 			categories: ATTRACTION_CATEGORIES.join(','),
-			fields: FOURSQUARE_SEARCH_FIELDS,
 			limit: (options.limit ?? 20).toString(),
 			radius: (options.radius ?? 10000).toString() // Larger radius for attractions
 		});
@@ -529,6 +522,19 @@ export async function searchAttractions(
 		}
 
 		const data: FoursquareSearchResponse = await response.json();
+
+		// DEBUG: Log raw response to see if hours are included
+		if (data.results && data.results.length > 0) {
+			const sample = data.results[0];
+			console.log('[Foursquare] Attraction search raw response sample:', {
+				name: sample.name,
+				hasHours: !!sample.hours,
+				hours: sample.hours,
+				hasRating: !!sample.rating,
+				rating: sample.rating,
+				keys: Object.keys(sample)
+			});
+		}
 
 		if (!data.results || data.results.length === 0) {
 			cache.set(cacheKey, [], 'PLACES_ATTRACTIONS');
@@ -593,7 +599,6 @@ export async function searchLodging(
 
 		const params = new URLSearchParams({
 			query: options.query,
-			fields: FOURSQUARE_SEARCH_FIELDS,
 			limit: (options.limit ?? 20).toString()
 		});
 

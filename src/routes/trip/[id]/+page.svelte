@@ -273,8 +273,8 @@
 	function handleAddActivityToDay(activity: Activity) {
 		if (!trip || !addItemDayId) return;
 
-		// Add the activity to the trip
-		tripStore.addActivity(trip.id, activity);
+		// Add the activity to the trip (with background enrichment for hours, etc.)
+		tripStore.addActivityWithEnrichment(trip.id, activity);
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
@@ -308,8 +308,8 @@
 	function handleAddFoodVenueToDay(venue: FoodVenue) {
 		if (!trip || !addItemDayId) return;
 
-		// Add the food venue to the trip
-		tripStore.addFoodVenue(trip.id, venue);
+		// Add the food venue to the trip (with background enrichment for hours, etc.)
+		tripStore.addFoodVenueWithEnrichment(trip.id, venue);
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
