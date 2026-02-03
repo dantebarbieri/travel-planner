@@ -11,7 +11,8 @@ import type {
 	ColorScheme,
 	KindColors,
 	Location,
-	EnrichedCityData
+	EnrichedCityData,
+	DayNote
 } from '$lib/types/travel';
 import type { TripSettings, CustomColorScheme } from '$lib/types/settings';
 import { createOverride } from '$lib/types/settings';
@@ -27,6 +28,7 @@ import {
 } from '$lib/utils/colors';
 import { getDatesInRange, getDayNumber } from '$lib/utils/dates';
 import { calculateHaversineDistance } from '$lib/services/geoService';
+import { enrichActivity, enrichFoodVenue } from '$lib/services/placeDetailsService';
 
 interface TripStoreState {
 	trips: Trip[];
@@ -311,6 +313,30 @@ function updateStay(tripId: string, cityId: string, stayId: string, updates: Par
 	saveTrips();
 }
 
+function updateStayOverride(tripId: string, stayId: string, overrides: Partial<import('$lib/types/travel').StayUserOverrides>): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			cities: t.cities.map((c) => ({
+				...c,
+				stays: c.stays.map((s) => {
+					if (s.id !== stayId) return s;
+					return {
+						...s,
+						userOverrides: {
+							...s.userOverrides,
+							...overrides
+						}
+					} as Stay;
+				})
+			})),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
 function removeStay(tripId: string, cityId: string, stayId: string): void {
 	state.trips = state.trips.map((t) => {
 		if (t.id !== tripId) return t;
@@ -509,6 +535,92 @@ function removeFoodVenue(tripId: string, venueId: string): void {
 		};
 	});
 	saveTrips();
+}
+
+// ============ Place Details Enrichment ============
+
+/**
+ * Add an activity and auto-fetch place details in the background.
+ * Details are merged into the activity once fetched.
+ */
+async function addActivityWithEnrichment(tripId: string, activity: Activity): Promise<void> {
+	// Add the activity immediately
+	addActivity(tripId, activity);
+
+	// Fetch and apply details in the background (don't block)
+	enrichActivity(activity).then(({ updates }) => updateActivity(tripId, activity.id, updates)).catch((err) => {
+		console.warn('[TripStore] Failed to enrich activity:', err);
+	});
+}
+
+/**
+ * Add a food venue and auto-fetch place details in the background.
+ * Details are merged into the venue once fetched.
+ */
+async function addFoodVenueWithEnrichment(tripId: string, venue: FoodVenue): Promise<void> {
+	// Add the venue immediately
+	addFoodVenue(tripId, venue);
+
+	// Fetch and apply details in the background (don't block)
+	enrichFoodVenue(venue).then(({ updates }) => updateFoodVenue(tripId, venue.id, updates)).catch((err) => {
+		console.warn('[TripStore] Failed to enrich food venue:', err);
+	});
+}
+
+/**
+ * Manually refresh place details for an activity.
+ */
+async function refreshActivityDetails(tripId: string, activityId: string): Promise<boolean> {
+	const trip = state.trips.find(t => t.id === tripId);
+	const activity = trip?.activities.find(a => a.id === activityId);
+	if (!activity) return false;
+
+	try {
+		const { updates, result } = await enrichActivity(activity);
+		if (result.success) {
+			updateActivity(tripId, activityId, updates);
+			return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Update an activity's entry fee via userOverrides.
+ */
+function setActivityEntryFee(tripId: string, activityId: string, entryFee: number | undefined): void {
+	const trip = state.trips.find(t => t.id === tripId);
+	const activity = trip?.activities.find(a => a.id === activityId);
+	if (!activity) return;
+
+	updateActivity(tripId, activityId, {
+		userOverrides: {
+			...activity.userOverrides,
+			entryFee
+		}
+	});
+}
+
+/**
+ * Manually refresh place details for a food venue.
+ */
+async function refreshFoodVenueDetails(tripId: string, venueId: string): Promise<boolean> {
+	const trip = state.trips.find(t => t.id === tripId);
+	const venue = trip?.foodVenues.find(v => v.id === venueId);
+	if (!venue) return false;
+
+	try {
+		const { updates, result } = await enrichFoodVenue(venue);
+		if (result.success) {
+			updateFoodVenue(tripId, venueId, updates);
+			return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
 }
 
 // ============ Transport Management ============
@@ -760,6 +872,64 @@ function updateDayTitle(tripId: string, dayId: string, title: string): void {
 		return {
 			...t,
 			itinerary: t.itinerary.map((day) => (day.id === dayId ? { ...day, title } : day)),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+// ============ Daily Notes Management ============
+
+function addDayNote(tripId: string, dayId: string, note: DayNote): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId) return day;
+				const existingNotes = day.dailyNotes || [];
+				return { ...day, dailyNotes: [...existingNotes, note] };
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function updateDayNote(tripId: string, dayId: string, noteId: string, content: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId || !day.dailyNotes) return day;
+				return {
+					...day,
+					dailyNotes: day.dailyNotes.map((note) =>
+						note.id === noteId
+							? { ...note, content, updatedAt: new Date().toISOString() }
+							: note
+					)
+				};
+			}),
+			updatedAt: new Date().toISOString()
+		};
+	});
+	saveTrips();
+}
+
+function deleteDayNote(tripId: string, dayId: string, noteId: string): void {
+	state.trips = state.trips.map((t) => {
+		if (t.id !== tripId) return t;
+		return {
+			...t,
+			itinerary: t.itinerary.map((day) => {
+				if (day.id !== dayId || !day.dailyNotes) return day;
+				return {
+					...day,
+					dailyNotes: day.dailyNotes.filter((note) => note.id !== noteId)
+				};
+			}),
 			updatedAt: new Date().toISOString()
 		};
 	});
@@ -1071,17 +1241,23 @@ export const tripStore = {
 	addStay,
 	addStayWithCityInference,
 	updateStay,
+	updateStayOverride,
 	removeStay,
 
 	// Activity
 	addActivity,
+	addActivityWithEnrichment,
 	updateActivity,
+	setActivityEntryFee,
 	removeActivity,
+	refreshActivityDetails,
 
 	// Food
 	addFoodVenue,
+	addFoodVenueWithEnrichment,
 	updateFoodVenue,
 	removeFoodVenue,
+	refreshFoodVenueDetails,
 
 	// Transport
 	addTransportLeg,
@@ -1100,6 +1276,11 @@ export const tripStore = {
 	reorderDayItems,
 	moveDayItem,
 	updateDayTitle,
+
+	// Daily Notes
+	addDayNote,
+	updateDayNote,
+	deleteDayNote,
 
 	// Color Scheme
 	updateColorScheme,

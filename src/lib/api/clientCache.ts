@@ -26,7 +26,8 @@ export const CLIENT_CACHE_TTL = {
 	// Places (Foursquare)
 	PLACES_FOOD: 15 * 60 * 1000,         // 15 minutes
 	PLACES_ATTRACTIONS: 15 * 60 * 1000,  // 15 minutes
-	PLACES_LODGING: 15 * 60 * 1000       // 15 minutes
+	PLACES_LODGING: 15 * 60 * 1000,      // 15 minutes
+	PLACE_DETAILS: 30 * 60 * 1000        // 30 minutes (individual place details)
 } as const;
 
 export type ClientCacheType = keyof typeof CLIENT_CACHE_TTL;

@@ -31,31 +31,49 @@
 	const modeIcon = $derived.by(() => {
 		const iconMap: Record<string, string> = {
 			flight: 'flight',
-			train: 'transit',
-			bus: 'transit',
+			ground_transit: 'transit',
 			car: 'car',
 			taxi: 'taxi',
 			rideshare: 'taxi',
 			ferry: 'transit',
-			subway: 'transit',
 			walking: 'walking',
-			biking: 'bike'
+			biking: 'bike',
+			car_rental: 'car',
+			// Legacy modes (for backwards compatibility)
+			train: 'transit',
+			bus: 'transit',
+			subway: 'transit'
 		};
 		return iconMap[leg.mode] || 'car';
 	});
 
 	const modeLabel = $derived.by(() => {
+		// For ground_transit, use the sub-type label
+		if (leg.mode === 'ground_transit' && leg.groundTransitSubType) {
+			const subTypeLabels: Record<string, string> = {
+				train: 'Train',
+				bus: 'Bus',
+				metro: 'Metro',
+				tram: 'Tram',
+				coach: 'Coach'
+			};
+			return subTypeLabels[leg.groundTransitSubType] || 'Transit';
+		}
+		
 		const labels: Record<string, string> = {
 			flight: 'Flight',
-			train: 'Train',
-			bus: 'Bus',
+			ground_transit: 'Transit',
 			car: 'Drive',
 			taxi: 'Taxi',
 			rideshare: 'Rideshare',
 			ferry: 'Ferry',
-			subway: 'Subway',
 			walking: 'Walk',
-			biking: 'Bike'
+			biking: 'Bike',
+			car_rental: 'Rental Car',
+			// Legacy modes (for backwards compatibility)
+			train: 'Train',
+			bus: 'Bus',
+			subway: 'Subway'
 		};
 		return labels[leg.mode] || 'Transport';
 	});
@@ -67,7 +85,8 @@
 	});
 
 	const isFlight = $derived(leg.mode === 'flight');
-	const isLongDistance = $derived(['flight', 'train', 'bus', 'ferry'].includes(leg.mode));
+	const isCarRental = $derived(leg.mode === 'car_rental');
+	const isLongDistance = $derived(['flight', 'ground_transit', 'ferry'].includes(leg.mode) || ['train', 'bus'].includes(leg.mode));
 
 	// Timezone info for departure
 	const departureTimezone = $derived(leg.origin.timezone || 'UTC');
@@ -121,29 +140,149 @@
 	function openDirections() {
 		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving', mapApp), '_blank');
 	}
+
+	// Display helpers for car rental
+	const vehicleTypeLabel = $derived.by(() => {
+		if (!leg.vehicleType) return null;
+		const labels: Record<string, string> = {
+			economy: 'Economy',
+			compact: 'Compact',
+			midsize: 'Midsize',
+			fullsize: 'Full Size',
+			sedan: 'Sedan',
+			suv: 'SUV',
+			minivan: 'Minivan',
+			sports_car: 'Sports Car',
+			convertible: 'Convertible',
+			truck: 'Truck',
+			luxury: 'Luxury',
+			van: 'Van'
+		};
+		return labels[leg.vehicleType] || leg.vehicleType;
+	});
+
+	const rentalDays = $derived.by(() => {
+		if (!leg.departureDate || !leg.arrivalDate) return null;
+		const start = new Date(leg.departureDate);
+		const end = new Date(leg.arrivalDate);
+		const diffTime = Math.abs(end.getTime() - start.getTime());
+		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+		return diffDays || 1;
+	});
+
+	const totalCost = $derived.by(() => {
+		if (!leg.dailyRate || !rentalDays) return null;
+		return leg.dailyRate * rentalDays;
+	});
 </script>
 
-<div class="item-card" data-kind={isFlight ? 'flight' : 'transport'}>
+<div class="item-card" data-kind={isFlight ? 'flight' : isCarRental ? 'rental' : 'transport'}>
 	<div class="card-header">
 		<div class="card-icon">
 			<Icon name={modeIcon} size={18} />
 		</div>
 		<div class="card-badges">
-			{#if isDeparture}
+			{#if isDeparture && !isCarRental}
 				<Badge variant="warning" size="sm">Departure</Badge>
 			{/if}
-			{#if isArrival}
+			{#if isArrival && !isCarRental}
 				<Badge variant="success" size="sm">Arrival</Badge>
 			{/if}
+			{#if isCarRental && isDeparture}
+				<Badge variant="info" size="sm">Pickup</Badge>
+			{/if}
+			{#if isCarRental && isArrival}
+				<Badge variant="success" size="sm">Return</Badge>
+			{/if}
 			<Badge size="sm">{modeLabel}</Badge>
-			{#if leg.carrier}
+			{#if leg.carrier && !isCarRental}
 				<Badge variant="info" size="sm">{leg.carrier}</Badge>
+			{/if}
+			{#if isCarRental && leg.rentalCompany}
+				<Badge variant="info" size="sm">{leg.rentalCompany.name}</Badge>
 			{/if}
 		</div>
 	</div>
 
 	<div class="card-content">
-		{#if isDeparture || isArrival}
+		{#if isCarRental}
+			<!-- Car Rental view -->
+			<div class="rental-info">
+				{#if isDeparture}
+					<div class="rental-location">
+						<span class="rental-label">Pickup</span>
+						<span class="rental-name">{leg.pickupLocation?.name || leg.origin.name}</span>
+						{#if leg.departureTime}
+							<span class="rental-time">{formatTime(leg.departureTime, use24h)}</span>
+						{/if}
+					</div>
+				{:else if isArrival}
+					<div class="rental-location">
+						<span class="rental-label">Return</span>
+						<span class="rental-name">{leg.returnLocation?.name || leg.destination.name}</span>
+						{#if leg.arrivalTime}
+							<span class="rental-time">{formatTime(leg.arrivalTime, use24h)}</span>
+						{/if}
+					</div>
+				{:else}
+					<div class="rental-location">
+						<span class="rental-label">Pickup</span>
+						<span class="rental-name">{leg.pickupLocation?.name || leg.origin.name}</span>
+					</div>
+					<div class="rental-arrow">→</div>
+					<div class="rental-location">
+						<span class="rental-label">Return</span>
+						<span class="rental-name">{leg.returnLocation?.name || leg.destination.name}</span>
+					</div>
+				{/if}
+
+				{#if vehicleTypeLabel || leg.vehicleTags}
+					<div class="rental-vehicle">
+						{#if vehicleTypeLabel}
+							<Badge size="sm">{vehicleTypeLabel}</Badge>
+						{/if}
+						{#if leg.vehicleTags?.isElectric}
+							<Badge size="sm" variant="success">EV</Badge>
+						{/if}
+						{#if leg.vehicleTags?.isHybrid}
+							<Badge size="sm" variant="success">Hybrid</Badge>
+						{/if}
+						{#if leg.vehicleTags?.transmission === 'automatic'}
+							<Badge size="sm">Auto</Badge>
+						{/if}
+						{#if leg.vehicleTags?.transmission === 'manual'}
+							<Badge size="sm">Manual</Badge>
+						{/if}
+						{#if leg.vehicleTags?.seatCount}
+							<Badge size="sm">{leg.vehicleTags.seatCount} seats</Badge>
+						{/if}
+						{#if leg.vehicleTags?.baggageCapacity}
+							<Badge size="sm">{leg.vehicleTags.baggageCapacity} bags</Badge>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			{#if leg.bookingReference || leg.dailyRate}
+				<div class="rental-details">
+					{#if leg.bookingReference}
+						<div class="detail-item">
+							<span class="detail-label">Confirmation</span>
+							<span class="detail-value booking-ref">{leg.bookingReference}</span>
+						</div>
+					{/if}
+					{#if leg.dailyRate && rentalDays}
+						<div class="detail-item">
+							<span class="detail-label">Cost</span>
+							<span class="detail-value">
+								{#if leg.currency === 'EUR'}€{:else if leg.currency === 'JPY'}¥{:else}${/if}{leg.dailyRate}/day × {rentalDays} days = 
+								<strong>{#if leg.currency === 'EUR'}€{:else if leg.currency === 'JPY'}¥{:else}${/if}{totalCost}</strong>
+							</span>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		{:else if isDeparture || isArrival}
 			<!-- Focused view: emphasize the relevant airport -->
 			<div class="focused-route">
 				{#if isDeparture}
@@ -222,10 +361,13 @@
 				{#if isFlight && leg.flightNumber}
 					<span class="flight-number">{leg.flightNumber}</span>
 				{/if}
+				{#if leg.mode === 'ground_transit' && leg.transitNumber}
+					<span class="transit-number">{leg.transitNumber}</span>
+				{/if}
 				{#if leg.distance}
 					<span class="distance">{formatDistance(leg.distance, distanceUnit)}</span>
 				{/if}
-				{#if priceDisplay}
+				{#if priceDisplay && !isCarRental}
 					<span class="price">{priceDisplay}</span>
 				{/if}
 			</div>
@@ -405,7 +547,8 @@
 		font-size: 0.875rem;
 	}
 
-	.flight-number {
+	.flight-number,
+	.transit-number {
 		font-weight: 600;
 		color: var(--text-primary);
 	}
@@ -514,5 +657,88 @@
 	.secondary-name {
 		font-size: 0.8125rem;
 		color: var(--text-secondary);
+	}
+
+	/* Car Rental Styles */
+	.item-card[data-kind='rental'] {
+		--item-color: oklch(55% 0.15 200);
+	}
+
+	.rental-info {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.rental-location {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.rental-label {
+		font-size: 0.625rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-tertiary);
+	}
+
+	.rental-name {
+		font-weight: 600;
+		font-size: 0.9375rem;
+		color: var(--text-primary);
+	}
+
+	.rental-time {
+		font-size: 0.8125rem;
+		color: var(--text-secondary);
+	}
+
+	.rental-arrow {
+		font-size: 1rem;
+		color: var(--text-tertiary);
+		padding: var(--space-1) 0;
+	}
+
+	.rental-vehicle {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		padding-top: var(--space-2);
+	}
+
+	.rental-details {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-top: var(--space-2);
+		border-top: 1px solid var(--border-color);
+	}
+
+	.detail-item {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.detail-label {
+		font-size: 0.625rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-tertiary);
+	}
+
+	.detail-value {
+		font-size: 0.8125rem;
+		color: var(--text-secondary);
+	}
+
+	.detail-value.booking-ref {
+		font-family: var(--font-mono, monospace);
+		font-weight: 600;
+		color: var(--text-primary);
+		letter-spacing: 0.05em;
 	}
 </style>

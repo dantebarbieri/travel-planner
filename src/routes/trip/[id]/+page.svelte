@@ -11,6 +11,7 @@
 	import { isStayItem } from '$lib/types/travel';
 	import { cityAdapter, type CitySearchResult } from '$lib/adapters/cities';
 	import { computeStaySegments, dayHasMissingLodging, defaultKindColors, defaultPaletteColors } from '$lib/utils/colors';
+	import { computeStayBadges, type StayBadgeState } from '$lib/utils/stayUtils';
 	import type { ColorScheme } from '$lib/types/travel';
 	import ItineraryDayComponent from '$lib/components/itinerary/ItineraryDay.svelte';
 	import AddItemModal from '$lib/components/modals/AddItemModal.svelte';
@@ -272,8 +273,8 @@
 	function handleAddActivityToDay(activity: Activity) {
 		if (!trip || !addItemDayId) return;
 
-		// Add the activity to the trip
-		tripStore.addActivity(trip.id, activity);
+		// Add the activity to the trip (with background enrichment for hours, etc.)
+		tripStore.addActivityWithEnrichment(trip.id, activity);
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
@@ -307,8 +308,8 @@
 	function handleAddFoodVenueToDay(venue: FoodVenue) {
 		if (!trip || !addItemDayId) return;
 
-		// Add the food venue to the trip
-		tripStore.addFoodVenue(trip.id, venue);
+		// Add the food venue to the trip (with background enrichment for hours, etc.)
+		tripStore.addFoodVenueWithEnrichment(trip.id, venue);
 
 		// Find the day and check if it has stay bookends (intermediate day)
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
@@ -452,13 +453,21 @@
 	});
 
 	// Get the city name for the current add item day (for Foursquare "near" parameter)
-	// Pass just the city name - the modal will search to get the full formatted address
 	const addItemCityName = $derived.by(() => {
 		if (!trip || !addItemDayId) return undefined;
 		const day = trip.itinerary.find((d) => d.id === addItemDayId);
 		if (!day || day.cityIds.length === 0) return undefined;
 		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
 		return city?.name;
+	});
+
+	// Get the city formatted name for immediate display (no flash)
+	const addItemCityFormatted = $derived.by(() => {
+		if (!trip || !addItemDayId) return undefined;
+		const day = trip.itinerary.find((d) => d.id === addItemDayId);
+		if (!day || day.cityIds.length === 0) return undefined;
+		const city = trip.cities.find((c) => c.id === day.cityIds[0]);
+		return city?.formatted;
 	});
 
 	// Get the selected day's date for default check-in
@@ -577,6 +586,44 @@
 		}
 	}
 
+	// Daily notes handlers
+	function handleAddDayNote(dayId: string, note: import('$lib/types/travel').DayNote) {
+		if (trip) {
+			tripStore.addDayNote(trip.id, dayId, note);
+		}
+	}
+
+	function handleUpdateDayNote(dayId: string, noteId: string, content: string) {
+		if (trip) {
+			tripStore.updateDayNote(trip.id, dayId, noteId, content);
+		}
+	}
+
+	function handleDeleteDayNote(dayId: string, noteId: string) {
+		if (trip) {
+			tripStore.deleteDayNote(trip.id, dayId, noteId);
+		}
+	}
+
+	// Stay time change handlers
+	function handleStayCheckInTimeChange(stayId: string, time: string) {
+		if (trip) {
+			tripStore.updateStayOverride(trip.id, stayId, { checkInTime: time || undefined });
+		}
+	}
+
+	function handleStayCheckOutTimeChange(stayId: string, time: string) {
+		if (trip) {
+			tripStore.updateStayOverride(trip.id, stayId, { checkOutTime: time || undefined });
+		}
+	}
+
+	function handleActivityEntryFeeChange(activityId: string, entryFee: number | undefined) {
+		if (trip) {
+			tripStore.setActivityEntryFee(trip.id, activityId, entryFee);
+		}
+	}
+
 	const duration = $derived(trip ? daysBetween(trip.startDate, trip.endDate) + 1 : 0);
 	const allStays = $derived(trip?.cities.flatMap((c) => c.stays) || []);
 
@@ -601,6 +648,9 @@
 
 	// Compute stay segments for by-stay coloring (using resolved scheme)
 	const staySegments = $derived<StaySegment[]>(trip ? computeStaySegments({ ...trip, colorScheme: resolvedColorScheme }) : []);
+
+	// Compute stay badges (which items are check-in / check-out)
+	const stayBadges = $derived<Map<string, StayBadgeState>>(trip ? computeStayBadges(trip) : new Map());
 
 	// Resolve trip settings (includes trip-specific overrides)
 	const resolvedSettings = $derived(trip ? settingsStore.resolveSettingsForTrip(trip) : null);
@@ -720,6 +770,7 @@
 						transportLegs={trip.transportLegs}
 						colorScheme={resolvedColorScheme}
 						{staySegments}
+						{stayBadges}
 						hasMissingLodging={checkDayMissingLodging(day)}
 						weatherList={weatherData[day.date]?.data || []}
 						weatherLoading={weatherData[day.date]?.loading || false}
@@ -734,6 +785,12 @@
 						onMoveItem={(itemId) => handleMoveItem(day.id, itemId)}
 						onDuplicateItem={(itemId) => handleDuplicateItem(day.id, itemId)}
 						onTravelModeChange={(itemId, mode) => handleTravelModeChange(day.id, itemId, mode)}
+						onAddDayNote={(note) => handleAddDayNote(day.id, note)}
+						onUpdateDayNote={(noteId, content) => handleUpdateDayNote(day.id, noteId, content)}
+						onDeleteDayNote={(noteId) => handleDeleteDayNote(day.id, noteId)}
+						onStayCheckInTimeChange={handleStayCheckInTimeChange}
+						onStayCheckOutTimeChange={handleStayCheckOutTimeChange}
+						onActivityEntryFeeChange={handleActivityEntryFeeChange}
 					/>
 				{/each}
 			</div>
@@ -797,6 +854,7 @@
 		onAddTransport={handleAddTransportToDay}
 		cityLocation={addItemCityLocation}
 		cityName={addItemCityName}
+		cityFormatted={addItemCityFormatted}
 		selectedDate={addItemSelectedDate}
 		defaultCheckOutDate={addItemDefaultCheckOutDate}
 	/>

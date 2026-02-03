@@ -328,6 +328,9 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 	const category = place.categories?.[0];
 	const categoryId = category?.fsq_category_id || '';
 
+	// Extract all category names for display as tags
+	const categoryTags = place.categories?.map(c => c.name).filter(Boolean) || [];
+
 	return {
 		id: `fsq-${place.fsq_place_id}`,
 		name: place.name,
@@ -338,7 +341,8 @@ function foursquarePlaceToActivity(place: FoursquarePlace): Activity {
 		website: place.website,
 		phone: place.tel,
 		openingHours: foursquareHoursToOperatingHours(place.hours),
-		images: place.photos?.slice(0, 5).map(p => `${p.prefix}original${p.suffix}`)
+		images: place.photos?.slice(0, 5).map(p => `${p.prefix}original${p.suffix}`),
+		categoryTags: categoryTags.length > 0 ? categoryTags : undefined
 	};
 }
 
@@ -425,6 +429,19 @@ export async function searchFoodVenues(
 
 		const data: FoursquareSearchResponse = await response.json();
 
+		// DEBUG: Log raw response to see if hours are included
+		if (data.results && data.results.length > 0) {
+			const sample = data.results[0];
+			console.log('[Foursquare] Food search raw response sample:', {
+				name: sample.name,
+				hasHours: !!sample.hours,
+				hours: sample.hours,
+				hasRating: !!sample.rating,
+				rating: sample.rating,
+				keys: Object.keys(sample)
+			});
+		}
+
 		if (!data.results || data.results.length === 0) {
 			cache.set(cacheKey, [], 'PLACES_FOOD');
 			return [];
@@ -505,6 +522,19 @@ export async function searchAttractions(
 		}
 
 		const data: FoursquareSearchResponse = await response.json();
+
+		// DEBUG: Log raw response to see if hours are included
+		if (data.results && data.results.length > 0) {
+			const sample = data.results[0];
+			console.log('[Foursquare] Attraction search raw response sample:', {
+				name: sample.name,
+				hasHours: !!sample.hours,
+				hours: sample.hours,
+				hasRating: !!sample.rating,
+				rating: sample.rating,
+				keys: Object.keys(sample)
+			});
+		}
 
 		if (!data.results || data.results.length === 0) {
 			cache.set(cacheKey, [], 'PLACES_ATTRACTIONS');
