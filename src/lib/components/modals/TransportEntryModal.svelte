@@ -20,6 +20,7 @@
 	let { isOpen, onclose, onAdd, mode, subType, defaultDate = '' }: Props = $props();
 
 	// Form state
+	// svelte-ignore state_referenced_locally
 	let departureDate = $state(defaultDate);
 	let departureTime = $state('');
 	let arrivalDate = $state('');
@@ -81,7 +82,8 @@
 				city: '',
 				country: '',
 				formatted: address
-			}
+			},
+			geo: { latitude: 0, longitude: 0 }
 		};
 	}
 

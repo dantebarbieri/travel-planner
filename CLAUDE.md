@@ -57,8 +57,10 @@ Browser                           Server (SvelteKit)
 - `$lib/server/adapters/` - Server-side API adapters:
   - `geoapify.ts` - Geocoding, city search, timezone lookup
   - `foursquare.ts` - Food and attraction search
+  - `googlePlaces.ts` - Place details (hours, pricing, amenities)
   - `weather.ts` - Weather data from Open-Meteo
-  - `flights.ts` - Flight data from AeroDataBox
+  - `aerodatabox.ts` - AeroDataBox API client
+  - `flights.ts` - Flight search orchestration
   - `routing.ts` - Travel times from OSRM
 - `$lib/api/` - Client-side API wrappers with in-memory caching
 
@@ -68,62 +70,97 @@ Browser                           Server (SvelteKit)
 |----------|-------------|
 | `GET /api/weather` | Weather data (forecast, historical, predictions) |
 | `GET /api/flights/search` | Flight route lookup |
-| `GET /api/flights/airlines` | Airline search |
+| `GET /api/flights/airlines` | Airline search by code |
 | `GET /api/routing` | Travel time/distance calculation |
 | `GET /api/geocoding` | Forward/reverse geocoding (address ↔ coordinates) |
 | `GET /api/cities` | City search with autocomplete and timezone |
 | `GET /api/places/food` | Food venue search (restaurants, cafes, bars) |
 | `GET /api/places/attractions` | Attraction search (museums, landmarks, parks) |
+| `GET /api/places/lodging` | Lodging search (hotels, hostels, etc.) |
+| `GET /api/places/details` | Place details (hours, pricing, amenities) |
 
 ### Environment Variables
 
 External APIs require the following environment variables:
 
-| Variable | API | Required | Get Key At |
-|----------|-----|----------|------------|
-| `GEOAPIFY_API_KEY` | Geocoding, City Search | Yes | https://myprojects.geoapify.com/ |
-| `FOURSQUARE_API_KEY` | Food, Attractions | Yes | https://foursquare.com/developers/ |
-| `GOOGLE_PLACES_API_KEY` | Place Details (fallback) | No | https://console.cloud.google.com/ |
-| `TIMEZONEDB_API_KEY` | Timezone (fallback) | No | https://timezonedb.com/ |
-| `AERODATABOX_API_KEY` | Flights | Yes | https://rapidapi.com/aedbx-aedbx/api/aerodatabox |
+| Variable | API | Required | Free Tier | Get Key At |
+|----------|-----|----------|-----------|------------|
+| `GEOAPIFY_API_KEY` | Geocoding, City Search, Timezone | Yes | 3,000 req/day | https://myprojects.geoapify.com/ |
+| `FOURSQUARE_API_KEY` | Food, Attractions, Lodging | Yes | $200/mo (~20k calls) | https://foursquare.com/developers/ |
+| `GOOGLE_PLACES_API_KEY` | Place Details (hours, pricing) | No | $200/mo (~5k calls) | https://console.cloud.google.com/ |
+| `TIMEZONEDB_API_KEY` | Timezone (fallback) | No | 1 req/sec unlimited | https://timezonedb.com/ |
+| `AERODATABOX_API_KEY` | Flights | Yes* | 600 units/mo | https://rapidapi.com/aedbx-aedbx/api/aerodatabox |
 
-All APIs have free tiers sufficient for development and moderate usage. Without API keys, adapters return empty results.
+\* Flight search works without key but with limited data. All other APIs return empty results without keys.
 
 ## Project Structure
 
 ```
 src/
 ├── routes/
-│   ├── +layout.svelte          # Root layout, localStorage init
+│   ├── +layout.svelte           # Root layout, localStorage init
 │   ├── +page.svelte             # Home - trip list
-│   └── trip/[id]/
-│       └── +page.svelte         # Trip itinerary view
+│   ├── trip/[id]/
+│   │   └── +page.svelte         # Trip itinerary view
+│   └── api/                     # Server API endpoints
+│       ├── cities/+server.ts
+│       ├── geocoding/+server.ts
+│       ├── weather/+server.ts
+│       ├── routing/+server.ts
+│       ├── flights/
+│       │   ├── search/+server.ts
+│       │   └── airlines/+server.ts
+│       └── places/
+│           ├── food/+server.ts
+│           ├── attractions/+server.ts
+│           ├── lodging/+server.ts
+│           └── details/+server.ts
 ├── lib/
 │   ├── types/
-│   │   └── travel.ts            # All TypeScript interfaces
+│   │   ├── travel.ts            # Core travel interfaces (Trip, City, Stay, etc.)
+│   │   └── settings.ts          # Settings interfaces (UserSettings, TripSettings)
 │   ├── stores/
-│   │   └── tripStore.svelte.ts  # Main trip state (Svelte 5 runes)
-│   ├── adapters/
-│   │   ├── cities/index.ts            # City search (Geoapify API)
-│   │   ├── lodging/index.ts           # Returns empty (users create custom stays)
-│   │   ├── food/index.ts              # Food venues (Foursquare API)
-│   │   ├── attractions/index.ts       # Attractions (Foursquare API)
-│   │   ├── weather/index.ts           # Weather forecasts (Open-Meteo API)
+│   │   ├── tripStore.svelte.ts      # Main trip state (Svelte 5 runes)
+│   │   └── settingsStore.svelte.ts  # User/trip settings state
+│   ├── adapters/                # Client-side data adapters
+│   │   ├── airports/
+│   │   │   └── airportAdapter.ts    # Airport code lookup
+│   │   ├── cities/index.ts          # City search (via /api/cities)
+│   │   ├── lodging/index.ts         # Manual entry with geocoding
+│   │   ├── food/index.ts            # Food venues (via /api/places/food)
+│   │   ├── attractions/index.ts     # Attractions (via /api/places/attractions)
+│   │   ├── weather/index.ts         # Weather forecasts (via /api/weather)
 │   │   └── transport/
-│   │       ├── estimateAdapter.ts     # Haversine-based estimates (isEstimate: true)
-│   │       └── flightAdapter.ts       # Flight search (AeroDataBox API)
-│   ├── api/
-│   │   ├── clientCache.ts             # Client-side caching utilities
-│   │   ├── flightApi.ts               # Flight API client
-│   │   ├── routingApi.ts              # Routing API client
-│   │   ├── weatherApi.ts              # Weather API client
-│   │   ├── geocodingApi.ts            # City search, address geocoding
-│   │   └── placesApi.ts               # Food and attraction search
+│   │       ├── estimateAdapter.ts   # Haversine-based estimates (isEstimate: true)
+│   │       └── flightAdapter.ts     # Flight search (via /api/flights)
+│   ├── api/                     # Client-side API wrappers with caching
+│   │   ├── clientCache.ts           # In-memory cache utilities
+│   │   ├── flightApi.ts             # Flight API client
+│   │   ├── routingApi.ts            # Routing/travel time client
+│   │   ├── weatherApi.ts            # Weather API client
+│   │   ├── geocodingApi.ts          # Geocoding + city search client
+│   │   ├── placesApi.ts             # Food & attraction search client
+│   │   └── placeDetailsApi.ts       # Place details (hours, pricing) client
+│   ├── server/                  # Server-only code (SvelteKit enforced)
+│   │   ├── rateLimit.ts             # IP-based rate limiting
+│   │   ├── db/
+│   │   │   └── cache.ts             # SQLite cache with TTL
+│   │   ├── adapters/                # External API adapters
+│   │   │   ├── geoapify.ts          # Geocoding, city search, timezone
+│   │   │   ├── foursquare.ts        # Food & attraction search
+│   │   │   ├── googlePlaces.ts      # Place details (hours, pricing)
+│   │   │   ├── weather.ts           # Open-Meteo weather data
+│   │   │   ├── aerodatabox.ts       # AeroDataBox flight lookup
+│   │   │   ├── flights.ts           # Flight search orchestration
+│   │   │   └── routing.ts           # OSRM travel times
+│   │   └── data/                    # Static data files
 │   ├── services/
-│   │   ├── storageService.ts    # localStorage persistence
-│   │   ├── documentService.ts   # PDF/DOCX export
-│   │   ├── geoService.ts        # Distance calculations
-│   │   └── mapService.ts        # Google/Apple Maps links
+│   │   ├── storageService.ts        # localStorage persistence
+│   │   ├── documentService.ts       # PDF/DOCX export
+│   │   ├── geoService.ts            # Distance calculations
+│   │   ├── mapService.ts            # Google/Apple Maps links
+│   │   ├── routingService.ts        # Travel time orchestration
+│   │   └── placeDetailsService.ts   # Place details orchestration
 │   ├── components/
 │   │   ├── ui/                  # Reusable UI primitives
 │   │   │   ├── Modal.svelte
@@ -136,9 +173,12 @@ src/
 │   │   │   └── ContextMenuItem.svelte
 │   │   ├── modals/              # Feature modals
 │   │   │   ├── AddItemModal.svelte
+│   │   │   ├── AddCityModal.svelte
 │   │   │   ├── MoveItemModal.svelte
 │   │   │   ├── TransportKindModal.svelte
-│   │   │   └── FlightSearchModal.svelte
+│   │   │   ├── TransportEntryModal.svelte
+│   │   │   ├── FlightSearchModal.svelte
+│   │   │   └── CarRentalModal.svelte
 │   │   ├── itinerary/           # Day display components
 │   │   │   ├── ItineraryDay.svelte
 │   │   │   ├── DayHeader.svelte
@@ -148,6 +188,15 @@ src/
 │   │   │   ├── ActivityCard.svelte
 │   │   │   ├── FoodCard.svelte
 │   │   │   └── TransportCard.svelte
+│   │   ├── settings/            # Settings UI
+│   │   │   ├── UserSettingsModal.svelte
+│   │   │   ├── TripSettingsModal.svelte
+│   │   │   ├── controls/        # Setting control components
+│   │   │   └── sections/        # Settings section components
+│   │   ├── places/              # Place details display
+│   │   │   ├── BusinessHours.svelte
+│   │   │   ├── CategoryTagList.svelte
+│   │   │   └── TagList.svelte
 │   │   ├── travel/              # Travel time/distance display
 │   │   │   └── TravelMargin.svelte
 │   │   ├── search/              # Autocomplete search
@@ -157,7 +206,12 @@ src/
 │   └── utils/
 │       ├── ids.ts               # ID generation
 │       ├── dates.ts             # Date formatting, timezone handling
-│       └── colors.ts            # Color utilities, stay segments
+│       ├── colors.ts            # Color utilities, stay segments
+│       ├── units.ts             # Unit conversions (temp, distance)
+│       ├── stayUtils.ts         # Stay helper functions
+│       ├── addressParser.ts     # Address parsing utilities
+│       ├── retry.ts             # Retry logic for API calls
+│       └── url.ts               # URL utilities
 └── app.css                      # Global styles, CSS variables
 ```
 
@@ -193,19 +247,21 @@ interface LodgingAdapter {
 }
 ```
 
-Most adapters now use real APIs exclusively. Server-side adapters (`$lib/server/adapters/`) handle external API calls with SQLite caching, while client-side wrappers (`$lib/api/`) provide in-memory caching and request deduplication.
+Most adapters use real APIs exclusively. Server-side adapters (`$lib/server/adapters/`) handle external API calls with SQLite caching, while client-side wrappers (`$lib/api/`) provide in-memory caching and request deduplication.
 
 **Adapter Status:**
 
 | Adapter | Data Source | Notes |
 |---------|-------------|-------|
-| Cities | Geoapify API | Real geocoding data |
+| Cities | Geoapify API | Real geocoding data with timezone |
 | Food | Foursquare API | Real venue data |
 | Attractions | Foursquare API | Real attraction data |
-| Lodging | None | Users create custom stays with geocoding |
+| Lodging | Foursquare API | Search available; users can also create custom stays |
+| Airports | Static data | Airport code lookup from bundled data |
 | Transport | OSRM (real) / Haversine (estimate) | `isEstimate: true` for fallback |
-| Weather | Open-Meteo API | Real forecast data |
-| Flights | AeroDataBox API | Real flight data |
+| Weather | Open-Meteo API | Real forecast data (16-day + historical) |
+| Flights | AeroDataBox API | Real flight data via RapidAPI |
+| Place Details | Google Places API | Hours, pricing, amenities (optional) |
 
 When a data source is unavailable, adapters return empty results rather than fake data.
 
@@ -394,6 +450,102 @@ interface StaySegment {
 - `getDayBackgroundColor()` for visual day grouping
 - `computeStaySegments()` for segment calculation
 
+## Settings System
+
+The app uses a two-tier settings system with inheritance:
+
+### User Settings (`UserSettings`)
+
+Global defaults stored in localStorage via `settingsStore`:
+
+```typescript
+interface UserSettings {
+  // Appearance
+  theme: 'light' | 'dark' | 'system';
+
+  // Units & Localization
+  temperatureUnit: 'celsius' | 'fahrenheit' | 'trip-location';
+  distanceUnit: 'km' | 'miles' | 'trip-location';
+  timeFormat: '12h' | '24h';
+
+  // Map & Navigation
+  preferredMapApp: 'google' | 'apple' | 'system';
+
+  // Transport preferences
+  disabledTransportModes: ('biking' | 'walking' | 'rideshare' | 'ferry')[];
+
+  // Color customization
+  defaultColorMode: 'by-kind' | 'by-stay';
+  customColorSchemes: CustomColorScheme[];
+  defaultColorSchemeId?: string;
+
+  // Home location
+  homeCity?: Location;
+
+  // Persistence
+  autoSaveEnabled: boolean;
+  autoSaveIntervalMs: number;
+}
+```
+
+### Trip Settings (`TripSettings`)
+
+Per-trip overrides using `MaybeOverridden<T>` wrapper:
+
+```typescript
+interface TripSettings {
+  temperatureUnit?: MaybeOverridden<TemperatureUnit>;
+  distanceUnit?: MaybeOverridden<DistanceUnit>;
+  timeFormat?: MaybeOverridden<TimeFormat>;
+  disabledTransportModes?: MaybeOverridden<DisableableTransportMode[]>;
+  colorModeOverridden?: boolean;
+  colorSchemeOverridden?: boolean;
+}
+
+// Override wrapper
+interface OverriddenSetting<T> {
+  value: T;
+  isOverridden: true;
+}
+```
+
+### Settings Resolution
+
+Use `getSettingValue()` to resolve with inheritance:
+
+```typescript
+import { getSettingValue } from '$lib/types/settings';
+
+// Returns trip override if set, otherwise user default
+const tempUnit = getSettingValue(trip.settings?.temperatureUnit, userSettings.temperatureUnit);
+```
+
+### Location-Based Units
+
+When set to `'trip-location'`, units automatically adapt to the destination country:
+
+```typescript
+import { resolveLocationBasedTemperature, resolveLocationBasedDistance } from '$lib/types/settings';
+
+// Returns 'fahrenheit' for USA, 'celsius' for most other countries
+const unit = resolveLocationBasedTemperature(city.country);
+```
+
+### Settings Store (`settingsStore.svelte.ts`)
+
+```typescript
+import { settingsStore } from '$lib/stores/settingsStore.svelte';
+
+// Read settings
+const theme = settingsStore.settings.theme;
+
+// Update settings
+settingsStore.updateSettings({ theme: 'dark' });
+
+// Reset to defaults
+settingsStore.resetToDefaults();
+```
+
 ## Transport Search
 
 ### Flight Search
@@ -482,55 +634,51 @@ Verify `Location.timezone` is set correctly for origin/destination. Use IANA tim
 
 ## Future Improvements
 
-### Near-term (Planned)
+### Implemented ✅
 
-1. **User Settings** (type defined, needs UI)
+1. **User Settings**
    - Home city preference
-   - Default color scheme
-   - Preferred map app (Google/Apple)
-   - Temperature unit (celsius/fahrenheit)
-   - Distance unit (km/miles)
+   - Default color scheme with custom palettes
+   - Preferred map app (Google/Apple/System)
+   - Temperature unit (celsius/fahrenheit/trip-location)
+   - Distance unit (km/miles/trip-location)
    - Time format (12h/24h)
    - Auto-save settings (enabled, interval)
-   - **Bike preferences** (e.g., prefer bike-friendly routes, bike rental defaults)
+   - Transport mode preferences (disable specific modes)
 
 2. **Trip Settings** (per-trip overrides)
-   - Custom color palettes for the trip
    - Override user settings for specific trips
-   - Default travel mode preferences
-   - Budget tracking preferences
-
-### Implemented
+   - Custom color scheme per trip
+   - Location-based unit resolution
 
 3. **Real API Adapters**
-
-   The following real APIs are used:
 
    | Function | API | Documentation |
    |----------|-----|---------------|
    | City Search | Geoapify Geocoding | [apidocs.geoapify.com](https://apidocs.geoapify.com/docs/geocoding/) |
    | Geocoding | Geoapify Geocoding | Forward/reverse address lookup |
+   | Timezone | Geoapify + TimezoneDB | IANA timezone from coordinates |
    | Food Venues | Foursquare Places | [docs.foursquare.com](https://docs.foursquare.com/) |
    | Attractions | Foursquare Places | 120M+ POIs globally |
-   | Timezone | Geoapify + TimezoneDB | IANA timezone from coordinates |
+   | Lodging Search | Foursquare Places | Hotels, hostels, etc. |
+   | Place Details | Google Places | Hours, pricing, amenities |
    | Weather | Open-Meteo | Forecast and historical data |
    | Flights | AeroDataBox | Flight lookup by number |
    | Routing | OSRM | Travel time/distance |
 
-   **Note**: Lodging uses manual entry with address auto-geocoding rather than hotel APIs (which require business partnerships).
+### Near-term (Planned)
 
-### Medium-term
-
-4. **Google Maps Integration**
-   - Accurate travel time calculations
-   - Route visualization
-   - Place autocomplete
-
-5. **Enhanced Features**
+4. **Enhanced Features**
    - Packing list management
    - Budget tracking and spending
    - Photo/memory attachments
    - Notes and journal entries
+   - Bike-friendly route preferences
+
+5. **Google Maps Integration**
+   - Accurate travel time calculations
+   - Route visualization
+   - Place autocomplete
 
 ### Long-term
 
