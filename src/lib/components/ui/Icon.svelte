@@ -8,9 +8,17 @@
 
 	let { name, size = 20, class: className = '', animate = false }: Props = $props();
 
+	// Icon aliases (icons that should use the same SVG as another icon)
+	const iconAliases: Record<string, string> = {
+		cash: 'dollar' // Cash and dollar use the same icon
+	};
+
+	// Resolve icon name (check for aliases)
+	const resolvedName = $derived(iconAliases[name] || name);
+
 	// Weather icons that support animation
 	const weatherIcons = ['clear', 'mostlyClear', 'rain', 'drizzle', 'snow', 'storm'];
-	const isWeatherIcon = $derived(weatherIcons.includes(name));
+	const isWeatherIcon = $derived(weatherIcons.includes(resolvedName));
 
 	const icons: Record<string, string> = {
 		// Travel modes
@@ -84,7 +92,6 @@
 		family: 'M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63C19.68 7.55 18.92 7 18.06 7h-.12c-.86 0-1.62.55-1.9 1.37L13.5 16H16v6h4zM6 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm3 6.5h2L8.46 7.63C8.18 6.55 7.42 6 6.56 6h-.12c-.86 0-1.62.55-1.9 1.37L2 14h2.5l1.5-4.5z',
 		pet: 'M4.5 9.5m-2.5 0a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0 -5 0M9 5.5m-2.5 0a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0 -5 0M15 5.5m-2.5 0a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0 -5 0M19.5 9.5m-2.5 0a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0 -5 0M17.34 14.86c-.87-1.02-1.6-1.89-2.48-2.91-.46-.54-1.05-1.08-1.75-1.32-.11-.04-.22-.07-.33-.09-.25-.04-.52-.04-.78-.04s-.53 0-.79.05c-.11.02-.22.05-.33.09-.7.24-1.28.78-1.75 1.32-.87 1.02-1.6 1.89-2.48 2.91-1.31 1.31-2.92 2.76-2.62 4.79.29 1.02 1.02 2.03 2.33 2.32.73.15 3.06-.44 5.54-.44h.18c2.48 0 4.81.58 5.54.44 1.31-.29 2.04-1.31 2.33-2.32.31-2.04-1.3-3.49-2.61-4.8z',
 		card: 'M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z',
-		cash: 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
 		bag: 'M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h12v12z',
 		delivery: 'M19 7c0-1.1-.9-2-2-2h-3v2h3v2.65L13.52 14H10V9H6c-2.21 0-4 1.79-4 4v3h2c0 1.66 1.34 3 3 3s3-1.34 3-3h4.48L19 10.35V7zM7 17c-.55 0-1-.45-1-1h2c0 .55-.45 1-1 1z M17 12V7h1.5L21 9.5V12h-4zm.5 6c-1.38 0-2.5-1.12-2.5-2.5h2c0 .28.22.5.5.5s.5-.22.5-.5h2c0 1.38-1.12 2.5-2.5 2.5z',
 		leaf: 'M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.46c.48-.17.98-.26 1.34-.26C19 19.28 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z'
@@ -93,21 +100,21 @@
 
 <svg
 	class="icon {className}"
-	class:weather-clear={animate && name === 'clear'}
-	class:weather-mostly-clear={animate && name === 'mostlyClear'}
-	class:weather-rain={animate && name === 'rain'}
-	class:weather-drizzle={animate && name === 'drizzle'}
-	class:weather-snow={animate && name === 'snow'}
-	class:weather-storm={animate && name === 'storm'}
-	class:loading-spinner={name === 'loading'}
+	class:weather-clear={animate && resolvedName === 'clear'}
+	class:weather-mostly-clear={animate && resolvedName === 'mostlyClear'}
+	class:weather-rain={animate && resolvedName === 'rain'}
+	class:weather-drizzle={animate && resolvedName === 'drizzle'}
+	class:weather-snow={animate && resolvedName === 'snow'}
+	class:weather-storm={animate && resolvedName === 'storm'}
+	class:loading-spinner={resolvedName === 'loading'}
 	width={size}
 	height={size}
 	viewBox="0 0 24 24"
 	fill="currentColor"
 	aria-hidden="true"
 >
-	{#if icons[name]}
-		<path d={icons[name]} />
+	{#if icons[resolvedName]}
+		<path d={icons[resolvedName]} />
 	{:else}
 		<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
 	{/if}
