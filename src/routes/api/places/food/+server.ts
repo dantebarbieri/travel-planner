@@ -7,8 +7,10 @@
 
 import { json } from '@sveltejs/kit';
 import { searchFoodVenues, FoursquareError } from '$lib/server/adapters/foursquare';
+import { searchFoodVenues as googleSearchFoodVenues, GooglePlacesError, isConfigured as isGoogleConfigured } from '$lib/server/adapters/googlePlaces';
 import { rateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
+import type { PlaceSource } from '$lib/types/travel';
 
 export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
 	// Rate limiting
@@ -64,6 +66,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const limitParam = url.searchParams.get('limit');
 	const radiusParam = url.searchParams.get('radius');
 	const priceLevelParam = url.searchParams.get('priceLevel');
+	const source = (url.searchParams.get('source') || 'foursquare') as PlaceSource;
 
 	const limit = limitParam ? parseInt(limitParam, 10) : 20;
 	if (isNaN(limit) || limit < 1 || limit > 50) {
@@ -91,6 +94,27 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	}
 
 	try {
+		if (source === 'google') {
+			if (!isGoogleConfigured()) {
+				return json(
+					{ error: 'Google Places API not configured' },
+					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+				);
+			}
+
+			const venues = await googleSearchFoodVenues(lat, lon, {
+				query,
+				limit,
+				radius
+			});
+
+			return json(
+				{ venues },
+				{ headers: rateLimit.getHeaders(ip, 'places') }
+			);
+		}
+
+		// Default: Foursquare
 		const venues = await searchFoodVenues(lat, lon, {
 			query,
 			limit,
@@ -103,6 +127,24 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			{ headers: rateLimit.getHeaders(ip, 'places') }
 		);
 	} catch (err) {
+		if (err instanceof GooglePlacesError) {
+			if (err.code === 'RATE_LIMITED') {
+				return new Response(JSON.stringify({ error: 'External API rate limit exceeded' }), {
+					status: 503,
+					headers: {
+						'Content-Type': 'application/json',
+						'Retry-After': '60',
+						...rateLimit.getHeaders(ip, 'places')
+					}
+				});
+			}
+			console.error('Google Places food API error:', err.message);
+			return json(
+				{ error: 'Google Places service error' },
+				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+			);
+		}
+
 		if (err instanceof FoursquareError) {
 			if (err.code === 'RATE_LIMITED') {
 				return new Response(JSON.stringify({ error: 'External API rate limit exceeded' }), {

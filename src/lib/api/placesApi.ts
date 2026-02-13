@@ -3,27 +3,29 @@
  * Calls the server's /api/places/* endpoints with client-side caching.
  */
 
-import type { Location, FoodVenue, Activity, ActivityCategory, Stay } from '$lib/types/travel';
+import type { Location, FoodVenue, Activity, ActivityCategory, Stay, PlaceSource } from '$lib/types/travel';
 import { clientCache } from './clientCache';
 
 // =============================================================================
 // Cache Key Generators
 // =============================================================================
 
-function foodCacheKey(lat: number, lon: number, query?: string): string {
+function foodCacheKey(lat: number, lon: number, query?: string, source: PlaceSource = 'foursquare'): string {
 	// Round to 3 decimal places (~100m precision)
 	const roundedLat = Math.round(lat * 1000) / 1000;
 	const roundedLon = Math.round(lon * 1000) / 1000;
 	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
-	return `places:food:${roundedLat}:${roundedLon}${queryPart}`;
+	const srcPrefix = source === 'google' ? 'google:' : '';
+	return `${srcPrefix}places:food:${roundedLat}:${roundedLon}${queryPart}`;
 }
 
-function attractionsCacheKey(lat: number, lon: number, query?: string): string {
+function attractionsCacheKey(lat: number, lon: number, query?: string, source: PlaceSource = 'foursquare'): string {
 	// Round to 3 decimal places (~100m precision)
 	const roundedLat = Math.round(lat * 1000) / 1000;
 	const roundedLon = Math.round(lon * 1000) / 1000;
 	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
-	return `places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
+	const srcPrefix = source === 'google' ? 'google:' : '';
+	return `${srcPrefix}places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
 }
 
 function lodgingCacheKey(query: string, lat?: number, lon?: number, near?: string): string {
@@ -53,6 +55,7 @@ export interface FoodSearchOptions {
 	limit?: number;
 	radius?: number;
 	priceLevel?: number[];
+	source?: PlaceSource;
 }
 
 /**
@@ -63,7 +66,9 @@ export async function searchFoodVenues(
 	options: FoodSearchOptions = {}
 ): Promise<FoodVenue[]> {
 	const { latitude, longitude } = location.geo;
-	const cacheKey = foodCacheKey(latitude, longitude, options.query);
+	const source = options.source || 'foursquare';
+	const cacheKey = foodCacheKey(latitude, longitude, options.query, source);
+	const cacheType = source === 'google' ? 'GOOGLE_PLACES_FOOD' : 'PLACES_FOOD';
 
 	return clientCache.dedupeRequest(
 		cacheKey,
@@ -83,6 +88,9 @@ export async function searchFoodVenues(
 			if (options.priceLevel && options.priceLevel.length > 0) {
 				params.set('priceLevel', options.priceLevel.join(','));
 			}
+			if (source !== 'foursquare') {
+				params.set('source', source);
+			}
 
 			const response = await fetch(`/api/places/food?${params}`);
 
@@ -96,7 +104,7 @@ export async function searchFoodVenues(
 			const data: FoodSearchResponse = await response.json();
 			return data.venues;
 		},
-		'PLACES_FOOD'
+		cacheType
 	);
 }
 
@@ -113,6 +121,7 @@ export interface AttractionSearchOptions {
 	limit?: number;
 	radius?: number;
 	categories?: ActivityCategory[];
+	source?: PlaceSource;
 }
 
 /**
@@ -123,7 +132,9 @@ export async function searchAttractions(
 	options: AttractionSearchOptions = {}
 ): Promise<Activity[]> {
 	const { latitude, longitude } = location.geo;
-	const cacheKey = attractionsCacheKey(latitude, longitude, options.query);
+	const source = options.source || 'foursquare';
+	const cacheKey = attractionsCacheKey(latitude, longitude, options.query, source);
+	const cacheType = source === 'google' ? 'GOOGLE_PLACES_ATTRACTIONS' : 'PLACES_ATTRACTIONS';
 
 	return clientCache.dedupeRequest(
 		cacheKey,
@@ -143,6 +154,9 @@ export async function searchAttractions(
 			if (options.categories && options.categories.length > 0) {
 				params.set('categories', options.categories.join(','));
 			}
+			if (source !== 'foursquare') {
+				params.set('source', source);
+			}
 
 			const response = await fetch(`/api/places/attractions?${params}`);
 
@@ -156,7 +170,7 @@ export async function searchAttractions(
 			const data: AttractionSearchResponse = await response.json();
 			return data.activities;
 		},
-		'PLACES_ATTRACTIONS'
+		cacheType
 	);
 }
 

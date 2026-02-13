@@ -23,7 +23,8 @@ export const foodAdapter: FoodAdapter = {
 			return await searchFoodVenuesApi(params.location, {
 				query: params.query,
 				limit: params.limit,
-				priceLevel: params.priceLevel
+				priceLevel: params.priceLevel,
+				source: params.source
 			});
 		} catch (error) {
 			console.warn(`[FoodAdapter] API error:`, error);

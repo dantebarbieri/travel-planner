@@ -600,12 +600,17 @@ export type { UserSettings } from './settings';
 
 // ============ Adapter Interfaces ============
 
+/** Which places API to use for search */
+export type PlaceSource = 'foursquare' | 'google';
+
 export interface SearchParams {
 	query?: string;
 	location?: Location;
 	radius?: number;
 	limit?: number;
 	near?: string; // City name for Foursquare "near" parameter
+	/** Data source for place search (default: 'foursquare') */
+	source?: PlaceSource;
 }
 
 export interface LodgingSearchParams extends SearchParams {

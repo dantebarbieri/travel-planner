@@ -23,7 +23,8 @@ export const attractionAdapter: AttractionAdapter = {
 			return await searchAttractionsApi(params.location, {
 				query: params.query,
 				limit: params.limit,
-				categories: params.categories
+				categories: params.categories,
+				source: params.source
 			});
 		} catch (error) {
 			console.warn(`[AttractionAdapter] API error:`, error);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg, EnrichedCityData, TransportMode, GroundTransitSubType } from '$lib/types/travel';
+	import type { Activity, FoodVenue, Stay, StayType, DailyItemKind, Location, GeoLocation, TransportLeg, EnrichedCityData, TransportMode, GroundTransitSubType, PlaceSource } from '$lib/types/travel';
 	import { attractionAdapter } from '$lib/adapters/attractions';
 	import { foodAdapter } from '$lib/adapters/food';
 	import { lodgingAdapter } from '$lib/adapters/lodging';
@@ -46,6 +46,7 @@
 	let { isOpen, onclose, onAddActivity, onAddFoodVenue, onAddStay, onAddTransport, cityLocation, cityName, cityFormatted, selectedDate, defaultCheckOutDate }: Props = $props();
 
 	let selectedKind = $state<'activity' | 'food' | 'stay' | 'transport'>('activity');
+	let placeSource = $state<PlaceSource>('foursquare');
 	let activitySearchQuery = $state('');
 	let foodSearchQuery = $state('');
 	let staySearchQuery = $state('');
@@ -107,6 +108,7 @@
 		if (!isOpen) {
 			// Reset state when modal closes
 			selectedKind = 'activity';
+			placeSource = 'foursquare';
 			activitySearchQuery = '';
 			foodSearchQuery = '';
 			staySearchQuery = '';
@@ -211,7 +213,8 @@
 			query,
 			location,
 			near: nearCityName,
-			limit: 10
+			limit: 10,
+			source: placeSource
 		});
 	}
 
@@ -230,7 +233,8 @@
 			query,
 			location,
 			near: nearCityName,
-			limit: 10
+			limit: 10,
+			source: placeSource
 		});
 	}
 
@@ -624,6 +628,38 @@
 				</div>
 				{#if !nearCityLocation}
 					<span class="field-hint">Select a city to enable search</span>
+				{/if}
+			</div>
+		{/if}
+
+		<!-- Data Source Selector (activity and food only) -->
+		{#if selectedKind === 'activity' || selectedKind === 'food'}
+			<div class="source-selector">
+				<span class="label" id="source-label">Data source</span>
+				<div class="source-options" role="radiogroup" aria-labelledby="source-label">
+					<label class="source-option" class:selected={placeSource === 'foursquare'}>
+						<input
+							type="radio"
+							name="place-source"
+							value="foursquare"
+							bind:group={placeSource}
+							onchange={() => { selectedActivity = null; selectedFoodVenue = null; activitySearchQuery = ''; foodSearchQuery = ''; }}
+						/>
+						<span class="source-option-text">Foursquare</span>
+					</label>
+					<label class="source-option" class:selected={placeSource === 'google'}>
+						<input
+							type="radio"
+							name="place-source"
+							value="google"
+							bind:group={placeSource}
+							onchange={() => { selectedActivity = null; selectedFoodVenue = null; activitySearchQuery = ''; foodSearchQuery = ''; }}
+						/>
+						<span class="source-option-text">Google Places</span>
+					</label>
+				</div>
+				{#if placeSource === 'google'}
+					<span class="field-hint source-hint">Google Places provides richer data but has higher API costs</span>
 				{/if}
 			</div>
 		{/if}
@@ -1109,5 +1145,71 @@
 		text-align: center;
 		color: var(--text-secondary);
 		font-size: 0.875rem;
+	}
+
+	.source-selector {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.source-options {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.source-option {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		background: var(--surface-secondary);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
+		color: var(--text-primary);
+		cursor: pointer;
+		transition:
+			border-color var(--transition-fast),
+			background-color var(--transition-fast);
+
+		& input[type='radio'] {
+			appearance: none;
+			width: 14px;
+			height: 14px;
+			border: 2px solid var(--border-color-strong);
+			border-radius: var(--radius-full);
+			margin: 0;
+			flex-shrink: 0;
+			transition:
+				border-color var(--transition-fast),
+				background-color var(--transition-fast);
+		}
+
+		& input[type='radio']:checked {
+			border-color: var(--color-primary);
+			background: var(--color-primary);
+			box-shadow: inset 0 0 0 2px var(--surface-primary);
+		}
+
+		&:hover {
+			border-color: var(--color-primary);
+		}
+
+		&.selected {
+			border-color: var(--color-primary);
+			background: color-mix(in oklch, var(--color-primary), transparent 95%);
+		}
+	}
+
+	.source-option-text {
+		color: var(--text-primary);
+		font-weight: 500;
+	}
+
+	.source-hint {
+		color: var(--text-tertiary);
 	}
 </style>
