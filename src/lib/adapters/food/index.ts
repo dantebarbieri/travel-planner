@@ -14,13 +14,14 @@ import { searchFoodVenues as searchFoodVenuesApi } from '$lib/api/placesApi';
  */
 export const foodAdapter: FoodAdapter = {
 	async search(params: FoodSearchParams): Promise<FoodVenue[]> {
-		if (!params.location) {
+		const isGoogle = params.source === 'google';
+		if (!isGoogle && !params.location) {
 			console.log('[FoodAdapter] No location provided');
 			return [];
 		}
 
 		try {
-			return await searchFoodVenuesApi(params.location, {
+			return await searchFoodVenuesApi(isGoogle ? (params.location ?? null) : params.location!, {
 				query: params.query,
 				limit: params.limit,
 				priceLevel: params.priceLevel,

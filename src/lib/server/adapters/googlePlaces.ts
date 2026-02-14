@@ -16,7 +16,9 @@ import type {
 	FoodVenueType,
 	Activity,
 	ActivityCategory,
-	Location
+	Location,
+	Stay,
+	StayType
 } from '$lib/types/travel';
 import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey, googleFoodPlacesCacheKey, googleAttractionPlacesCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
@@ -706,21 +708,23 @@ export async function searchFoodVenues(
 
 	try {
 		const apiKey = getApiKey();
-		const textQuery = options.query
-			? `${options.query} restaurant food`
-			: 'restaurants';
+		// Use user query as-is; only fall back to broad term when no query given
+		const textQuery = options.query || 'restaurants';
 
 		const requestBody: Record<string, unknown> = {
 			textQuery,
-			locationBias: {
+			maxResultCount: Math.min(options.limit ?? 20, 20)
+		};
+
+		// Only add location bias if coordinates are provided (non-zero)
+		if (lat !== 0 || lon !== 0) {
+			requestBody.locationBias = {
 				circle: {
 					center: { latitude: lat, longitude: lon },
 					radius: options.radius ?? 5000
 				}
-			},
-			maxResultCount: Math.min(options.limit ?? 20, 20),
-			includedType: 'restaurant'
-		};
+			};
+		}
 
 		const fieldMask = [
 			'places.id',
@@ -841,21 +845,21 @@ export async function searchAttractions(
 
 	try {
 		const apiKey = getApiKey();
-		const textQuery = options.query
-			? `${options.query} attraction landmark`
-			: 'tourist attractions landmarks';
+		const textQuery = options.query || 'tourist attractions landmarks';
 
 		const requestBody: Record<string, unknown> = {
 			textQuery,
-			locationBias: {
+			maxResultCount: Math.min(options.limit ?? 20, 20)
+		};
+
+		if (lat !== 0 || lon !== 0) {
+			requestBody.locationBias = {
 				circle: {
 					center: { latitude: lat, longitude: lon },
 					radius: options.radius ?? 10000
 				}
-			},
-			maxResultCount: Math.min(options.limit ?? 20, 20),
-			includedType: 'tourist_attraction'
-		};
+			};
+		}
 
 		const fieldMask = [
 			'places.id',
@@ -942,6 +946,157 @@ export async function searchAttractions(
 }
 
 // =============================================================================
+// Google Place → Stay Conversion
+// =============================================================================
+
+const GOOGLE_LODGING_TYPE_MAP: Record<string, StayType> = {
+	'lodging': 'hotel',
+	'hotel': 'hotel',
+	'motel': 'hotel',
+	'resort_hotel': 'hotel',
+	'extended_stay_hotel': 'hotel',
+	'bed_and_breakfast': 'custom',
+	'hostel': 'hostel',
+	'guest_house': 'custom',
+	'campground': 'custom',
+	'camping_cabin': 'custom',
+	'cottage': 'airbnb',
+	'farmstay': 'airbnb',
+	'private_guest_room': 'airbnb',
+};
+
+function googlePlaceToStay(place: GooglePlace): Stay {
+	let stayType: StayType = 'hotel';
+	for (const t of place.types || []) {
+		if (GOOGLE_LODGING_TYPE_MAP[t]) {
+			stayType = GOOGLE_LODGING_TYPE_MAP[t];
+			break;
+		}
+	}
+
+	warnIfUnsafeUrl(place.websiteUri, 'Google Places Stay.website');
+
+	return {
+		id: `gp-${place.id}`,
+		type: stayType,
+		name: place.displayName?.text || '',
+		location: googlePlaceToLocation(place),
+		checkIn: '',
+		checkOut: '',
+		website: place.websiteUri,
+		phone: place.nationalPhoneNumber,
+		images: [],
+		notes: place.rating ? `Rating: ${place.rating.toFixed(1)}/5` : undefined,
+	} as Stay;
+}
+
+// =============================================================================
+// Text Search for Lodging
+// =============================================================================
+
+export interface GoogleLodgingSearchOptions {
+	query?: string;
+	limit?: number;
+	radius?: number;
+	lat?: number;
+	lon?: number;
+	near?: string;
+}
+
+/**
+ * Search for lodging using Google Places Text Search.
+ */
+export async function searchLodging(
+	options: GoogleLodgingSearchOptions = {}
+): Promise<Stay[]> {
+	if (!isConfigured()) {
+		return [];
+	}
+
+	if (!options.query) {
+		return [];
+	}
+
+	const lat = options.lat ?? 0;
+	const lon = options.lon ?? 0;
+	const cacheKey = `google:lodging:${options.query.toLowerCase().trim()}:${Math.round(lat * 1000)}:${Math.round(lon * 1000)}`;
+	const cached = cache.get<Stay[]>(cacheKey);
+	if (cached) {
+		return cached;
+	}
+
+	try {
+		const apiKey = getApiKey();
+		const textQuery = options.query;
+
+		const requestBody: Record<string, unknown> = {
+			textQuery,
+			maxResultCount: Math.min(options.limit ?? 20, 20)
+		};
+
+		if (lat !== 0 || lon !== 0) {
+			requestBody.locationBias = {
+				circle: {
+					center: { latitude: lat, longitude: lon },
+					radius: options.radius ?? 10000
+				}
+			};
+		}
+
+		const fieldMask = [
+			'places.id',
+			'places.displayName',
+			'places.formattedAddress',
+			'places.location',
+			'places.rating',
+			'places.userRatingCount',
+			'places.priceLevel',
+			'places.regularOpeningHours',
+			'places.websiteUri',
+			'places.nationalPhoneNumber',
+			'places.googleMapsUri',
+			'places.types'
+		].join(',');
+
+		const response = await fetchWithRetry(GOOGLE_PLACES_SEARCH_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Goog-Api-Key': apiKey,
+				'X-Goog-FieldMask': fieldMask
+			},
+			body: JSON.stringify(requestBody)
+		}, {
+			maxAttempts: 2,
+			onRetry: (attempt, delayMs) => {
+				console.log(`[GooglePlaces] Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
+			}
+		});
+
+		if (!response.ok) {
+			throw new HttpError(response.status, `Google Places API error: ${response.status}`);
+		}
+
+		const data = await response.json();
+
+		if (!data.places || data.places.length === 0) {
+			cache.set(cacheKey, [], 'GOOGLE_PLACES_FOOD');
+			return [];
+		}
+
+		const stays = (data.places as GooglePlace[]).map(googlePlaceToStay);
+		cache.set(cacheKey, stays, 'GOOGLE_PLACES_FOOD');
+		return stays;
+	} catch (error) {
+		const gpError = classifyError(error);
+		if (gpError.code !== 'MISSING_API_KEY') {
+			console.error(`[GooglePlaces] Lodging search failed:`, gpError.message);
+		}
+		throw gpError;
+	}
+}
+
+// =============================================================================
 // Export
 // =============================================================================
 
@@ -951,5 +1106,6 @@ export const googlePlacesAdapter = {
 	getPlaceDetails,
 	getPlaceDetailsByNameAndLocation,
 	searchFoodVenues,
-	searchAttractions
+	searchAttractions,
+	searchLodging
 };

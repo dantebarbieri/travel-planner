@@ -60,12 +60,14 @@ export interface FoodSearchOptions {
 
 /**
  * Search for food venues near a location.
+ * Location is required for Foursquare, optional for Google Places.
  */
 export async function searchFoodVenues(
-	location: Location,
+	location: Location | null,
 	options: FoodSearchOptions = {}
 ): Promise<FoodVenue[]> {
-	const { latitude, longitude } = location.geo;
+	const latitude = location?.geo.latitude ?? 0;
+	const longitude = location?.geo.longitude ?? 0;
 	const source = options.source || 'foursquare';
 	const cacheKey = foodCacheKey(latitude, longitude, options.query, source);
 	const cacheType = source === 'google' ? 'GOOGLE_PLACES_FOOD' : 'PLACES_FOOD';
@@ -74,10 +76,14 @@ export async function searchFoodVenues(
 		cacheKey,
 		async () => {
 			const params = new URLSearchParams({
-				lat: latitude.toString(),
-				lon: longitude.toString(),
 				limit: (options.limit ?? 20).toString()
 			});
+
+			// lat/lon required for Foursquare, optional location bias for Google
+			if (location) {
+				params.set('lat', latitude.toString());
+				params.set('lon', longitude.toString());
+			}
 
 			if (options.query) {
 				params.set('query', options.query);
@@ -126,12 +132,14 @@ export interface AttractionSearchOptions {
 
 /**
  * Search for attractions near a location.
+ * Location is required for Foursquare, optional for Google Places.
  */
 export async function searchAttractions(
-	location: Location,
+	location: Location | null,
 	options: AttractionSearchOptions = {}
 ): Promise<Activity[]> {
-	const { latitude, longitude } = location.geo;
+	const latitude = location?.geo.latitude ?? 0;
+	const longitude = location?.geo.longitude ?? 0;
 	const source = options.source || 'foursquare';
 	const cacheKey = attractionsCacheKey(latitude, longitude, options.query, source);
 	const cacheType = source === 'google' ? 'GOOGLE_PLACES_ATTRACTIONS' : 'PLACES_ATTRACTIONS';
@@ -140,10 +148,13 @@ export async function searchAttractions(
 		cacheKey,
 		async () => {
 			const params = new URLSearchParams({
-				lat: latitude.toString(),
-				lon: longitude.toString(),
 				limit: (options.limit ?? 20).toString()
 			});
+
+			if (location) {
+				params.set('lat', latitude.toString());
+				params.set('lon', longitude.toString());
+			}
 
 			if (options.query) {
 				params.set('query', options.query);
@@ -189,6 +200,7 @@ export interface LodgingSearchOptions {
 	lat?: number;   // Optional: for location-biased search
 	lon?: number;   // Optional: for location-biased search
 	near?: string;  // City name for Foursquare "near" parameter
+	source?: PlaceSource;
 }
 
 /**
@@ -202,7 +214,10 @@ export async function searchLodging(
 		return [];
 	}
 
-	const cacheKey = lodgingCacheKey(options.query, options.lat, options.lon, options.near);
+	const source = options.source || 'foursquare';
+	const srcPrefix = source === 'google' ? 'google:' : '';
+	const cacheKey = `${srcPrefix}${lodgingCacheKey(options.query, options.lat, options.lon, options.near)}`;
+	const cacheType = source === 'google' ? 'GOOGLE_PLACES_FOOD' as const : 'PLACES_LODGING' as const;
 
 	return clientCache.dedupeRequest(
 		cacheKey,
@@ -223,6 +238,9 @@ export async function searchLodging(
 			if (options.near) {
 				params.set('near', options.near);
 			}
+			if (source !== 'foursquare') {
+				params.set('source', source);
+			}
 
 			const response = await fetch(`/api/places/lodging?${params}`);
 
@@ -236,7 +254,7 @@ export async function searchLodging(
 			const data: LodgingSearchResponse = await response.json();
 			return data.stays;
 		},
-		'PLACES_LODGING'
+		cacheType
 	);
 }
 

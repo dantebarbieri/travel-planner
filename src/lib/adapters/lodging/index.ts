@@ -35,7 +35,8 @@ export const lodgingAdapter: LodgingAdapter = {
 				limit: params.limit,
 				lat: useLocation ? lat : undefined,
 				lon: useLocation ? lon : undefined,
-				near: params.near
+				near: params.near,
+				source: params.source
 			});
 
 			// If check-in/check-out dates provided, add them to results

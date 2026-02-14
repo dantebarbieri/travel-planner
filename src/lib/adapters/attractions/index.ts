@@ -14,13 +14,14 @@ import { searchAttractions as searchAttractionsApi } from '$lib/api/placesApi';
  */
 export const attractionAdapter: AttractionAdapter = {
 	async search(params: ActivitySearchParams): Promise<Activity[]> {
-		if (!params.location) {
+		const isGoogle = params.source === 'google';
+		if (!isGoogle && !params.location) {
 			console.log('[AttractionAdapter] No location provided');
 			return [];
 		}
 
 		try {
-			return await searchAttractionsApi(params.location, {
+			return await searchAttractionsApi(isGoogle ? (params.location ?? null) : params.location!, {
 				query: params.query,
 				limit: params.limit,
 				categories: params.categories,

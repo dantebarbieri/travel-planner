@@ -200,14 +200,16 @@
 
 	// Search function for activities
 	async function searchActivities(query: string): Promise<Activity[]> {
-		// Require city to be set for Foursquare searches
-		if (!nearCityLocation) return [];
+		// Require city for Foursquare; Google can search without location
+		if (!nearCityLocation && placeSource !== 'google') return [];
 
-		const location: Location = {
-			name: nearCityName || 'Search Location',
-			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
-			geo: nearCityLocation
-		};
+		const location: Location | undefined = nearCityLocation
+			? {
+				name: nearCityName || 'Search Location',
+				address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+				geo: nearCityLocation
+			}
+			: undefined;
 
 		return attractionAdapter.search({
 			query,
@@ -220,14 +222,16 @@
 
 	// Search function for food venues
 	async function searchFoodVenues(query: string): Promise<FoodVenue[]> {
-		// Require city to be set for Foursquare searches
-		if (!nearCityLocation) return [];
+		// Require city for Foursquare; Google can search without location
+		if (!nearCityLocation && placeSource !== 'google') return [];
 
-		const location: Location = {
-			name: nearCityName || 'Search Location',
-			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
-			geo: nearCityLocation
-		};
+		const location: Location | undefined = nearCityLocation
+			? {
+				name: nearCityName || 'Search Location',
+				address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+				geo: nearCityLocation
+			}
+			: undefined;
 
 		return foodAdapter.search({
 			query,
@@ -240,14 +244,16 @@
 
 	// Search function for stays
 	async function searchStays(query: string): Promise<Stay[]> {
-		// Require city to be set for Foursquare searches
-		if (!nearCityLocation) return [];
+		// Require city for Foursquare; Google can search without location
+		if (!nearCityLocation && placeSource !== 'google') return [];
 
-		const location: Location = {
-			name: nearCityName || 'Search Location',
-			address: { street: '', city: '', country: '', formatted: nearCityName || '' },
-			geo: nearCityLocation
-		};
+		const location: Location | undefined = nearCityLocation
+			? {
+				name: nearCityName || 'Search Location',
+				address: { street: '', city: '', country: '', formatted: nearCityName || '' },
+				geo: nearCityLocation
+			}
+			: undefined;
 
 		return lodgingAdapter.search({
 			query,
@@ -255,7 +261,8 @@
 			near: nearCityName,
 			checkIn: stayCheckIn || undefined,
 			checkOut: stayCheckOut || undefined,
-			limit: 10
+			limit: 10,
+			source: placeSource
 		});
 	}
 
@@ -597,10 +604,12 @@
 			{/each}
 		</div>
 
-		<!-- City/Location Field (required for non-transport searches) -->
+		<!-- City/Location Field (required for Foursquare, optional for Google) -->
 		{#if selectedKind !== 'transport'}
+			{@const isGoogle = placeSource === 'google'}
+			{@const cityRequired = !isGoogle}
 			<div class="near-city-field">
-				<span class="label" id="near-city-label">Search near <span class="required">*</span></span>
+				<span class="label" id="near-city-label">Search near {#if cityRequired}<span class="required">*</span>{:else}<span class="optional">(optional)</span>{/if}</span>
 				<div class="city-field">
 					<SearchAutocomplete
 						placeholder="Search for a city..."
@@ -626,14 +635,16 @@
 						</button>
 					{/if}
 				</div>
-				{#if !nearCityLocation}
+				{#if !nearCityLocation && cityRequired}
 					<span class="field-hint">Select a city to enable search</span>
+				{:else if !nearCityLocation && isGoogle}
+					<span class="field-hint">City is optional with Google Places — results will be global</span>
 				{/if}
 			</div>
 		{/if}
 
-		<!-- Data Source Selector (activity and food only) -->
-		{#if selectedKind === 'activity' || selectedKind === 'food'}
+		<!-- Data Source Selector (activity, food, and stay) -->
+		{#if selectedKind === 'activity' || selectedKind === 'food' || selectedKind === 'stay'}
 			<div class="source-selector">
 				<span class="label" id="source-label">Data source</span>
 				<div class="source-options" role="radiogroup" aria-labelledby="source-label">
@@ -643,7 +654,7 @@
 							name="place-source"
 							value="foursquare"
 							bind:group={placeSource}
-							onchange={() => { selectedActivity = null; selectedFoodVenue = null; activitySearchQuery = ''; foodSearchQuery = ''; }}
+							onchange={() => { selectedActivity = null; selectedFoodVenue = null; selectedStay = null; activitySearchQuery = ''; foodSearchQuery = ''; staySearchQuery = ''; }}
 						/>
 						<span class="source-option-text">Foursquare</span>
 					</label>
@@ -653,7 +664,7 @@
 							name="place-source"
 							value="google"
 							bind:group={placeSource}
-							onchange={() => { selectedActivity = null; selectedFoodVenue = null; activitySearchQuery = ''; foodSearchQuery = ''; }}
+							onchange={() => { selectedActivity = null; selectedFoodVenue = null; selectedStay = null; activitySearchQuery = ''; foodSearchQuery = ''; staySearchQuery = ''; }}
 						/>
 						<span class="source-option-text">Google Places</span>
 					</label>
@@ -667,7 +678,7 @@
 		<!-- Search -->
 		<div class="search-section">
 			{#if selectedKind === 'activity'}
-				{#if nearCityLocation}
+				{#if nearCityLocation || placeSource === 'google'}
 					<SearchAutocomplete
 						placeholder="Search attractions, tours, museums..."
 						searchFn={searchActivities}
@@ -685,7 +696,7 @@
 					<div class="search-disabled">Select a city above to search for activities</div>
 				{/if}
 			{:else if selectedKind === 'food'}
-				{#if nearCityLocation}
+				{#if nearCityLocation || placeSource === 'google'}
 					<SearchAutocomplete
 						placeholder="Search restaurants, cafes, bars..."
 						searchFn={searchFoodVenues}
@@ -703,7 +714,7 @@
 					<div class="search-disabled">Select a city above to search for food venues</div>
 				{/if}
 			{:else if selectedKind === 'stay'}
-				{#if nearCityLocation}
+				{#if nearCityLocation || placeSource === 'google'}
 					<SearchAutocomplete
 						placeholder="Search hotels, airbnbs, hostels..."
 						searchFn={searchStays}
@@ -1130,6 +1141,12 @@
 
 	.required {
 		color: var(--color-error);
+	}
+
+	.optional {
+		color: var(--text-tertiary);
+		font-weight: 400;
+		font-size: 0.75rem;
 	}
 
 	.field-hint {
