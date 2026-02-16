@@ -9,11 +9,17 @@
 
 import type {
 	OperatingHours,
-	DayHours,
 	PlaceTag,
-	FoodTag
+	FoodTag,
+	FoodVenue,
+	FoodVenueType,
+	Activity,
+	ActivityCategory,
+	Location,
+	Stay,
+	StayType
 } from '$lib/types/travel';
-import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey } from '$lib/server/db/cache';
+import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey, googleFoodPlacesCacheKey, googleAttractionPlacesCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 import { warnIfUnsafeUrl } from '$lib/utils/url';
@@ -553,6 +559,541 @@ export async function getPlaceDetailsByNameAndLocation(
 }
 
 // =============================================================================
+// Google Place → FoodVenue / Activity Conversion
+// =============================================================================
+
+// Google types → FoodVenueType mapping
+const GOOGLE_FOOD_TYPE_MAP: Record<string, FoodVenueType> = {
+	'restaurant': 'restaurant',
+	'cafe': 'cafe',
+	'coffee_shop': 'cafe',
+	'bar': 'bar',
+	'bakery': 'bakery',
+	'meal_delivery': 'fast_food',
+	'meal_takeaway': 'fast_food',
+	'fine_dining_restaurant': 'fine_dining',
+	'fast_food_restaurant': 'fast_food',
+	'food': 'restaurant',
+};
+
+// Google types → ActivityCategory mapping
+const GOOGLE_ATTRACTION_TYPE_MAP: Record<string, ActivityCategory> = {
+	'museum': 'museum',
+	'art_gallery': 'museum',
+	'park': 'outdoor',
+	'tourist_attraction': 'sightseeing',
+	'amusement_park': 'entertainment',
+	'zoo': 'outdoor',
+	'aquarium': 'outdoor',
+	'church': 'sightseeing',
+	'hindu_temple': 'sightseeing',
+	'mosque': 'sightseeing',
+	'synagogue': 'sightseeing',
+	'stadium': 'sports',
+	'shopping_mall': 'shopping',
+	'spa': 'wellness',
+	'night_club': 'nightlife',
+	'performing_arts_theater': 'entertainment',
+	'movie_theater': 'entertainment',
+};
+
+function googlePlaceToLocation(place: GooglePlace): Location {
+	return {
+		name: place.displayName?.text || '',
+		address: {
+			street: '',
+			city: '',
+			country: '',
+			formatted: place.formattedAddress || place.displayName?.text || ''
+		},
+		geo: {
+			latitude: place.location?.latitude || 0,
+			longitude: place.location?.longitude || 0
+		},
+		placeId: place.id
+	};
+}
+
+function googlePlaceToFoodVenue(place: GooglePlace): FoodVenue {
+	// Determine venue type from Google types
+	let venueType: FoodVenueType = 'restaurant';
+	const cuisineTypes: string[] = [];
+	for (const t of place.types || []) {
+		if (GOOGLE_FOOD_TYPE_MAP[t]) {
+			venueType = GOOGLE_FOOD_TYPE_MAP[t];
+		}
+		// Use readable type names as cuisine tags
+		if (!['point_of_interest', 'establishment', 'food'].includes(t)) {
+			cuisineTypes.push(t.replace(/_/g, ' '));
+		}
+	}
+
+	warnIfUnsafeUrl(place.websiteUri, 'Google Places FoodVenue.website');
+
+	return {
+		id: `gp-${place.id}`,
+		name: place.displayName?.text || '',
+		venueType,
+		cuisineTypes: cuisineTypes.length > 0 ? cuisineTypes : undefined,
+		location: googlePlaceToLocation(place),
+		priceLevel: googlePriceLevelToNumber(place.priceLevel),
+		rating: place.rating,
+		reviewCount: place.userRatingCount,
+		website: place.websiteUri,
+		phone: place.nationalPhoneNumber,
+		openingHours: googleHoursToOperatingHours(place.regularOpeningHours || place.currentOpeningHours),
+		tags: extractFoodTags(place),
+	};
+}
+
+function googlePlaceToActivity(place: GooglePlace): Activity {
+	// Determine category from Google types
+	let category: ActivityCategory = 'sightseeing';
+	const categoryTags: string[] = [];
+	for (const t of place.types || []) {
+		if (GOOGLE_ATTRACTION_TYPE_MAP[t]) {
+			category = GOOGLE_ATTRACTION_TYPE_MAP[t];
+		}
+		if (!['point_of_interest', 'establishment'].includes(t)) {
+			categoryTags.push(t.replace(/_/g, ' '));
+		}
+	}
+
+	warnIfUnsafeUrl(place.websiteUri, 'Google Places Activity.website');
+
+	return {
+		id: `gp-${place.id}`,
+		name: place.displayName?.text || '',
+		category,
+		location: googlePlaceToLocation(place),
+		rating: place.rating,
+		reviewCount: place.userRatingCount,
+		priceLevel: googlePriceLevelToNumber(place.priceLevel),
+		website: place.websiteUri,
+		phone: place.nationalPhoneNumber,
+		openingHours: googleHoursToOperatingHours(place.regularOpeningHours || place.currentOpeningHours),
+		tags: extractPlaceTags(place),
+		categoryTags: categoryTags.length > 0 ? categoryTags : undefined,
+	};
+}
+
+// =============================================================================
+// Text Search for Food Venues
+// =============================================================================
+
+export interface GoogleFoodSearchOptions {
+	query?: string;
+	limit?: number;
+	radius?: number;
+}
+
+/**
+ * Search for food venues near a location using Google Places Text Search.
+ */
+export async function searchFoodVenues(
+	lat: number,
+	lon: number,
+	options: GoogleFoodSearchOptions = {}
+): Promise<FoodVenue[]> {
+	if (!isConfigured()) {
+		return [];
+	}
+
+	const cacheKey = googleFoodPlacesCacheKey(lat, lon, options.query);
+	const cached = cache.get<FoodVenue[]>(cacheKey);
+	if (cached) {
+		return cached;
+	}
+
+	try {
+		const apiKey = getApiKey();
+		// Use user query as-is; only fall back to broad term when no query given
+		const textQuery = options.query || 'restaurants';
+
+		const requestBody: Record<string, unknown> = {
+			textQuery,
+			maxResultCount: Math.min(options.limit ?? 20, 20)
+		};
+
+		// Only add location bias if coordinates are provided (non-zero)
+		if (lat !== 0 || lon !== 0) {
+			requestBody.locationBias = {
+				circle: {
+					center: { latitude: lat, longitude: lon },
+					radius: options.radius ?? 5000
+				}
+			};
+		}
+
+		const fieldMask = [
+			'places.id',
+			'places.displayName',
+			'places.formattedAddress',
+			'places.location',
+			'places.rating',
+			'places.userRatingCount',
+			'places.priceLevel',
+			'places.regularOpeningHours',
+			'places.currentOpeningHours',
+			'places.websiteUri',
+			'places.nationalPhoneNumber',
+			'places.googleMapsUri',
+			'places.types',
+			'places.takeout',
+			'places.delivery',
+			'places.reservable',
+			'places.servesVegetarianFood',
+			'places.outdoorSeating',
+			'places.paymentOptions',
+			'places.accessibilityOptions',
+			'places.parkingOptions'
+		].join(',');
+
+		const response = await fetchWithRetry(GOOGLE_PLACES_SEARCH_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Goog-Api-Key': apiKey,
+				'X-Goog-FieldMask': fieldMask
+			},
+			body: JSON.stringify(requestBody)
+		}, {
+			maxAttempts: 2,
+			onRetry: (attempt, delayMs) => {
+				console.log(`[GooglePlaces] Food search retry ${attempt}, waiting ${delayMs}ms...`);
+			}
+		});
+
+		if (!response.ok) {
+			throw new HttpError(response.status, `Google Places API error: ${response.status}`);
+		}
+
+		const data = await response.json();
+
+		if (!data.places || data.places.length === 0) {
+			cache.set(cacheKey, [], 'GOOGLE_PLACES_FOOD');
+			return [];
+		}
+
+		const venues = (data.places as GooglePlace[]).map(googlePlaceToFoodVenue);
+
+		// Also cache individual place details to avoid extra API calls later
+		for (const place of data.places as GooglePlace[]) {
+			const detailsCacheKey = `google:${placeDetailsCacheKey(place.id)}`;
+			if (!cache.has(detailsCacheKey)) {
+				const details: PlaceDetails = {
+					placeId: place.id,
+					name: place.displayName?.text || '',
+					address: place.formattedAddress,
+					location: place.location,
+					openingHours: googleHoursToOperatingHours(place.regularOpeningHours || place.currentOpeningHours),
+					priceLevel: googlePriceLevelToNumber(place.priceLevel),
+					rating: place.rating,
+					reviewCount: place.userRatingCount,
+					website: place.websiteUri,
+					phone: place.nationalPhoneNumber,
+					googleMapsUrl: place.googleMapsUri,
+					placeTags: extractPlaceTags(place),
+					foodTags: extractFoodTags(place),
+					isOpenNow: place.currentOpeningHours?.openNow,
+					source: 'google'
+				};
+				cache.set(detailsCacheKey, details, 'PLACE_DETAILS');
+			}
+		}
+
+		cache.set(cacheKey, venues, 'GOOGLE_PLACES_FOOD');
+		return venues;
+	} catch (error) {
+		const gpError = classifyError(error);
+		if (gpError.code !== 'MISSING_API_KEY') {
+			console.error(`[GooglePlaces] Food search failed for (${lat}, ${lon}):`, gpError.message);
+		}
+		throw gpError;
+	}
+}
+
+// =============================================================================
+// Text Search for Attractions
+// =============================================================================
+
+export interface GoogleAttractionSearchOptions {
+	query?: string;
+	limit?: number;
+	radius?: number;
+}
+
+/**
+ * Search for attractions near a location using Google Places Text Search.
+ */
+export async function searchAttractions(
+	lat: number,
+	lon: number,
+	options: GoogleAttractionSearchOptions = {}
+): Promise<Activity[]> {
+	if (!isConfigured()) {
+		return [];
+	}
+
+	const cacheKey = googleAttractionPlacesCacheKey(lat, lon, options.query);
+	const cached = cache.get<Activity[]>(cacheKey);
+	if (cached) {
+		return cached;
+	}
+
+	try {
+		const apiKey = getApiKey();
+		const textQuery = options.query || 'tourist attractions landmarks';
+
+		const requestBody: Record<string, unknown> = {
+			textQuery,
+			maxResultCount: Math.min(options.limit ?? 20, 20)
+		};
+
+		if (lat !== 0 || lon !== 0) {
+			requestBody.locationBias = {
+				circle: {
+					center: { latitude: lat, longitude: lon },
+					radius: options.radius ?? 10000
+				}
+			};
+		}
+
+		const fieldMask = [
+			'places.id',
+			'places.displayName',
+			'places.formattedAddress',
+			'places.location',
+			'places.rating',
+			'places.userRatingCount',
+			'places.priceLevel',
+			'places.regularOpeningHours',
+			'places.currentOpeningHours',
+			'places.websiteUri',
+			'places.nationalPhoneNumber',
+			'places.googleMapsUri',
+			'places.types',
+			'places.accessibilityOptions',
+			'places.paymentOptions',
+			'places.parkingOptions',
+			'places.reservable'
+		].join(',');
+
+		const response = await fetchWithRetry(GOOGLE_PLACES_SEARCH_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Goog-Api-Key': apiKey,
+				'X-Goog-FieldMask': fieldMask
+			},
+			body: JSON.stringify(requestBody)
+		}, {
+			maxAttempts: 2,
+			onRetry: (attempt, delayMs) => {
+				console.log(`[GooglePlaces] Attraction search retry ${attempt}, waiting ${delayMs}ms...`);
+			}
+		});
+
+		if (!response.ok) {
+			throw new HttpError(response.status, `Google Places API error: ${response.status}`);
+		}
+
+		const data = await response.json();
+
+		if (!data.places || data.places.length === 0) {
+			cache.set(cacheKey, [], 'GOOGLE_PLACES_ATTRACTIONS');
+			return [];
+		}
+
+		const activities = (data.places as GooglePlace[]).map(googlePlaceToActivity);
+
+		// Also cache individual place details
+		for (const place of data.places as GooglePlace[]) {
+			const detailsCacheKey = `google:${placeDetailsCacheKey(place.id)}`;
+			if (!cache.has(detailsCacheKey)) {
+				const details: PlaceDetails = {
+					placeId: place.id,
+					name: place.displayName?.text || '',
+					address: place.formattedAddress,
+					location: place.location,
+					openingHours: googleHoursToOperatingHours(place.regularOpeningHours || place.currentOpeningHours),
+					priceLevel: googlePriceLevelToNumber(place.priceLevel),
+					rating: place.rating,
+					reviewCount: place.userRatingCount,
+					website: place.websiteUri,
+					phone: place.nationalPhoneNumber,
+					googleMapsUrl: place.googleMapsUri,
+					placeTags: extractPlaceTags(place),
+					foodTags: [],
+					isOpenNow: place.currentOpeningHours?.openNow,
+					source: 'google'
+				};
+				cache.set(detailsCacheKey, details, 'PLACE_DETAILS');
+			}
+		}
+
+		cache.set(cacheKey, activities, 'GOOGLE_PLACES_ATTRACTIONS');
+		return activities;
+	} catch (error) {
+		const gpError = classifyError(error);
+		if (gpError.code !== 'MISSING_API_KEY') {
+			console.error(`[GooglePlaces] Attraction search failed for (${lat}, ${lon}):`, gpError.message);
+		}
+		throw gpError;
+	}
+}
+
+// =============================================================================
+// Google Place → Stay Conversion
+// =============================================================================
+
+const GOOGLE_LODGING_TYPE_MAP: Record<string, StayType> = {
+	'lodging': 'hotel',
+	'hotel': 'hotel',
+	'motel': 'hotel',
+	'resort_hotel': 'hotel',
+	'extended_stay_hotel': 'hotel',
+	'bed_and_breakfast': 'custom',
+	'hostel': 'hostel',
+	'guest_house': 'custom',
+	'campground': 'custom',
+	'camping_cabin': 'custom',
+	'cottage': 'airbnb',
+	'farmstay': 'airbnb',
+	'private_guest_room': 'airbnb',
+};
+
+function googlePlaceToStay(place: GooglePlace): Stay {
+	let stayType: StayType = 'hotel';
+	for (const t of place.types || []) {
+		if (GOOGLE_LODGING_TYPE_MAP[t]) {
+			stayType = GOOGLE_LODGING_TYPE_MAP[t];
+			break;
+		}
+	}
+
+	warnIfUnsafeUrl(place.websiteUri, 'Google Places Stay.website');
+
+	return {
+		id: `gp-${place.id}`,
+		type: stayType,
+		name: place.displayName?.text || '',
+		location: googlePlaceToLocation(place),
+		checkIn: '',
+		checkOut: '',
+		website: place.websiteUri,
+		phone: place.nationalPhoneNumber,
+		images: [],
+		notes: place.rating ? `Rating: ${place.rating.toFixed(1)}/5` : undefined,
+	} as Stay;
+}
+
+// =============================================================================
+// Text Search for Lodging
+// =============================================================================
+
+export interface GoogleLodgingSearchOptions {
+	query?: string;
+	limit?: number;
+	radius?: number;
+	lat?: number;
+	lon?: number;
+}
+
+/**
+ * Search for lodging using Google Places Text Search.
+ */
+export async function searchLodging(
+	options: GoogleLodgingSearchOptions = {}
+): Promise<Stay[]> {
+	if (!isConfigured()) {
+		return [];
+	}
+
+	if (!options.query) {
+		return [];
+	}
+
+	const lat = options.lat ?? 0;
+	const lon = options.lon ?? 0;
+	const cacheKey = `google:lodging:${options.query.toLowerCase().trim()}:${Math.round(lat * 1000)}:${Math.round(lon * 1000)}`;
+	const cached = cache.get<Stay[]>(cacheKey);
+	if (cached) {
+		return cached;
+	}
+
+	try {
+		const apiKey = getApiKey();
+		const textQuery = options.query;
+
+		const requestBody: Record<string, unknown> = {
+			textQuery,
+			maxResultCount: Math.min(options.limit ?? 20, 20)
+		};
+
+		if (lat !== 0 || lon !== 0) {
+			requestBody.locationBias = {
+				circle: {
+					center: { latitude: lat, longitude: lon },
+					radius: options.radius ?? 10000
+				}
+			};
+		}
+
+		const fieldMask = [
+			'places.id',
+			'places.displayName',
+			'places.formattedAddress',
+			'places.location',
+			'places.rating',
+			'places.userRatingCount',
+			'places.priceLevel',
+			'places.regularOpeningHours',
+			'places.websiteUri',
+			'places.nationalPhoneNumber',
+			'places.googleMapsUri',
+			'places.types'
+		].join(',');
+
+		const response = await fetchWithRetry(GOOGLE_PLACES_SEARCH_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Goog-Api-Key': apiKey,
+				'X-Goog-FieldMask': fieldMask
+			},
+			body: JSON.stringify(requestBody)
+		}, {
+			maxAttempts: 2,
+			onRetry: (attempt, delayMs) => {
+				console.log(`[GooglePlaces] Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
+			}
+		});
+
+		if (!response.ok) {
+			throw new HttpError(response.status, `Google Places API error: ${response.status}`);
+		}
+
+		const data = await response.json();
+
+		if (!data.places || data.places.length === 0) {
+			cache.set(cacheKey, [], 'GOOGLE_PLACES_LODGING');
+			return [];
+		}
+
+		const stays = (data.places as GooglePlace[]).map(googlePlaceToStay);
+		cache.set(cacheKey, stays, 'GOOGLE_PLACES_LODGING');
+		return stays;
+	} catch (error) {
+		const gpError = classifyError(error);
+		if (gpError.code !== 'MISSING_API_KEY') {
+			console.error(`[GooglePlaces] Lodging search failed:`, gpError.message);
+		}
+		throw gpError;
+	}
+}
+
+// =============================================================================
 // Export
 // =============================================================================
 
@@ -560,5 +1101,8 @@ export const googlePlacesAdapter = {
 	isConfigured,
 	findPlaceId,
 	getPlaceDetails,
-	getPlaceDetailsByNameAndLocation
+	getPlaceDetailsByNameAndLocation,
+	searchFoodVenues,
+	searchAttractions,
+	searchLodging
 };

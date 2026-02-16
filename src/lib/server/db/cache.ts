@@ -34,7 +34,10 @@ export const CACHE_TTL = {
 	PLACES_LODGING: 7 * 24 * 60 * 60 * 1000,   // 7 days (hotels may change)
 	PLACE_DETAILS: 14 * 24 * 60 * 60 * 1000,   // 14 days (individual place details)
 	// Google Places
-	GOOGLE_PLACE_ID_SEARCH: 30 * 24 * 60 * 60 * 1000  // 30 days (place ID lookups rarely change)
+	GOOGLE_PLACE_ID_SEARCH: 30 * 24 * 60 * 60 * 1000,  // 30 days (place ID lookups rarely change)
+	GOOGLE_PLACES_FOOD: 7 * 24 * 60 * 60 * 1000,       // 7 days (same as Foursquare food)
+	GOOGLE_PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000, // 14 days (same as Foursquare attractions)
+	GOOGLE_PLACES_LODGING: 7 * 24 * 60 * 60 * 1000     // 7 days (same as Foursquare lodging)
 } as const;
 
 export type CacheType = keyof typeof CACHE_TTL;
@@ -463,6 +466,20 @@ export function googlePlaceIdCacheKey(name: string, lat: number, lon: number): s
 	return `google:placeid:${name.toLowerCase().trim()}:${roundedLat}:${roundedLon}`;
 }
 
+export function googleFoodPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `google:food:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
+export function googleAttractionPlacesCacheKey(lat: number, lon: number, query?: string): string {
+	const roundedLat = Math.round(lat * 1000) / 1000;
+	const roundedLon = Math.round(lon * 1000) / 1000;
+	const queryPart = query ? `:${query.toLowerCase().trim()}` : '';
+	return `google:attractions:${roundedLat}:${roundedLon}${queryPart}`;
+}
+
 // Export as a cache service object
 export const cache = {
 	get,
@@ -491,6 +508,8 @@ export const cache = {
 	lodgingPlacesCacheKey,
 	placeDetailsCacheKey,
 	googlePlaceIdCacheKey,
+	googleFoodPlacesCacheKey,
+	googleAttractionPlacesCacheKey,
 	// TTL constants
 	TTL: CACHE_TTL
 };
