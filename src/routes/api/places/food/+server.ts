@@ -45,6 +45,14 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		);
 	}
 
+	// For Google source, validate that either both lat AND lon are provided, or neither
+	if (source === 'google' && ((latParam && !lonParam) || (!latParam && lonParam))) {
+		return json(
+			{ error: 'Both lat and lon must be provided together, or neither' },
+			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+		);
+	}
+
 	const lat = latParam ? parseFloat(latParam) : 0;
 	const lon = lonParam ? parseFloat(lonParam) : 0;
 

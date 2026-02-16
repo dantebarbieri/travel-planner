@@ -28,18 +28,19 @@ function attractionsCacheKey(lat: number, lon: number, query?: string, source: P
 	return `${srcPrefix}places:attractions:${roundedLat}:${roundedLon}${queryPart}`;
 }
 
-function lodgingCacheKey(query: string, lat?: number, lon?: number, near?: string): string {
+function lodgingCacheKey(query: string, lat?: number, lon?: number, near?: string, source: PlaceSource = 'foursquare'): string {
 	const queryPart = query.toLowerCase().trim();
+	const srcPrefix = source === 'google' ? 'google:' : '';
 	if (lat !== undefined && lon !== undefined) {
 		// Round to 3 decimal places (~100m precision)
 		const roundedLat = Math.round(lat * 1000) / 1000;
 		const roundedLon = Math.round(lon * 1000) / 1000;
-		return `places:lodging:${queryPart}:${roundedLat}:${roundedLon}`;
+		return `${srcPrefix}places:lodging:${queryPart}:${roundedLat}:${roundedLon}`;
 	}
 	if (near) {
-		return `places:lodging:${queryPart}:${near.toLowerCase().trim()}`;
+		return `${srcPrefix}places:lodging:${queryPart}:${near.toLowerCase().trim()}`;
 	}
-	return `places:lodging:${queryPart}`;
+	return `${srcPrefix}places:lodging:${queryPart}`;
 }
 
 // =============================================================================
@@ -215,9 +216,8 @@ export async function searchLodging(
 	}
 
 	const source = options.source || 'foursquare';
-	const srcPrefix = source === 'google' ? 'google:' : '';
-	const cacheKey = `${srcPrefix}${lodgingCacheKey(options.query, options.lat, options.lon, options.near)}`;
-	const cacheType = source === 'google' ? 'GOOGLE_PLACES_FOOD' as const : 'PLACES_LODGING' as const;
+	const cacheKey = lodgingCacheKey(options.query, options.lat, options.lon, options.near, source);
+	const cacheType = source === 'google' ? 'GOOGLE_PLACES_LODGING' as const : 'PLACES_LODGING' as const;
 
 	return clientCache.dedupeRequest(
 		cacheKey,
