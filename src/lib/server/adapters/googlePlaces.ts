@@ -9,7 +9,6 @@
 
 import type {
 	OperatingHours,
-	DayHours,
 	PlaceTag,
 	FoodTag,
 	FoodVenue,
@@ -820,7 +819,6 @@ export async function searchFoodVenues(
 
 export interface GoogleAttractionSearchOptions {
 	query?: string;
-	categories?: ActivityCategory[];
 	limit?: number;
 	radius?: number;
 }
@@ -1000,7 +998,6 @@ export interface GoogleLodgingSearchOptions {
 	radius?: number;
 	lat?: number;
 	lon?: number;
-	near?: string;
 }
 
 /**
@@ -1080,12 +1077,12 @@ export async function searchLodging(
 		const data = await response.json();
 
 		if (!data.places || data.places.length === 0) {
-			cache.set(cacheKey, [], 'GOOGLE_PLACES_FOOD');
+			cache.set(cacheKey, [], 'GOOGLE_PLACES_LODGING');
 			return [];
 		}
 
 		const stays = (data.places as GooglePlace[]).map(googlePlaceToStay);
-		cache.set(cacheKey, stays, 'GOOGLE_PLACES_FOOD');
+		cache.set(cacheKey, stays, 'GOOGLE_PLACES_LODGING');
 		return stays;
 	} catch (error) {
 		const gpError = classifyError(error);

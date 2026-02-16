@@ -36,7 +36,8 @@ export const CACHE_TTL = {
 	// Google Places
 	GOOGLE_PLACE_ID_SEARCH: 30 * 24 * 60 * 60 * 1000,  // 30 days (place ID lookups rarely change)
 	GOOGLE_PLACES_FOOD: 7 * 24 * 60 * 60 * 1000,       // 7 days (same as Foursquare food)
-	GOOGLE_PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000 // 14 days (same as Foursquare attractions)
+	GOOGLE_PLACES_ATTRACTIONS: 14 * 24 * 60 * 60 * 1000, // 14 days (same as Foursquare attractions)
+	GOOGLE_PLACES_LODGING: 7 * 24 * 60 * 60 * 1000     // 7 days (same as Foursquare lodging)
 } as const;
 
 export type CacheType = keyof typeof CACHE_TTL;

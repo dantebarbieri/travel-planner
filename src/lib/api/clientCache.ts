@@ -30,7 +30,8 @@ export const CLIENT_CACHE_TTL = {
 	PLACE_DETAILS: 30 * 60 * 1000,       // 30 minutes (individual place details)
 	// Google Places search (separate TTLs for source-specific caching)
 	GOOGLE_PLACES_FOOD: 15 * 60 * 1000,        // 15 minutes
-	GOOGLE_PLACES_ATTRACTIONS: 15 * 60 * 1000  // 15 minutes
+	GOOGLE_PLACES_ATTRACTIONS: 15 * 60 * 1000, // 15 minutes
+	GOOGLE_PLACES_LODGING: 15 * 60 * 1000      // 15 minutes
 } as const;
 
 export type ClientCacheType = keyof typeof CLIENT_CACHE_TTL;
