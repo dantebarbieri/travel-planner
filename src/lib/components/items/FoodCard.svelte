@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { FoodVenue, MealType } from '$lib/types/travel';
 	import { formatTime } from '$lib/utils/dates';
-	import { getVenueTypeLabel, getMealTypeLabel } from '$lib/utils/labels';
+	import { getVenueTypeLabel, getMealTypeLabel, getCurrencySymbol } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import BusinessHours from '$lib/components/places/BusinessHours.svelte';
 	import TagList from '$lib/components/places/TagList.svelte';
 	import ItemNotes from './ItemNotes.svelte';
-	import { getMapsUrl } from '$lib/services/mapService';
+	import { openInMaps } from '$lib/utils/cardHelpers';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { openSafeUrl } from '$lib/utils/url';
 
@@ -73,8 +73,8 @@
 		venue.userOverrides?.tags || venue.tags || []
 	);
 
-	function openInMaps() {
-		window.open(getMapsUrl(venue.location, mapApp), '_blank');
+	function handleOpenInMaps() {
+		openInMaps(venue.location, mapApp);
 	}
 
 	function openMenu() {
@@ -138,7 +138,7 @@
 		{/if}
 
 		<div class="card-details">
-			<button type="button" class="location-link" onclick={openInMaps} title="Open in Maps">
+			<button type="button" class="location-link" onclick={handleOpenInMaps} title="Open in Maps">
 				<Icon name="location" size={14} />
 				<span class="truncate">{venue.location.address.formatted}</span>
 			</button>
@@ -154,7 +154,7 @@
 					<span class="price-level">{priceLevel}</span>
 				{/if}
 				{#if venue.estimatedCost}
-					<span class="estimated-cost">~${venue.estimatedCost}</span>
+					<span class="estimated-cost">~{getCurrencySymbol(venue.currency || '')}{venue.estimatedCost}</span>
 				{/if}
 				{#if venue.rating}
 					<span class="rating">★ {venue.rating.toFixed(1)}</span>

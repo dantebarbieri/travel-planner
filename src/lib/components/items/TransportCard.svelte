@@ -4,7 +4,7 @@
 	import { getTransportModeLabel, getTransportSubTypeLabel, getCurrencySymbol } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
-	import { getDirectionsUrl } from '$lib/services/mapService';
+	import { openDirections } from '$lib/utils/cardHelpers';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
@@ -113,8 +113,8 @@
 		leg.origin.timezone !== leg.destination.timezone
 	);
 
-	function openDirections() {
-		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving', mapApp), '_blank');
+	function handleOpenDirections() {
+		openDirections(leg.origin, leg.destination, 'driving', mapApp);
 	}
 
 	// Display helpers for car rental
@@ -251,8 +251,8 @@
 						<div class="detail-item">
 							<span class="detail-label">Cost</span>
 							<span class="detail-value">
-								{#if leg.currency === 'EUR'}€{:else if leg.currency === 'JPY'}¥{:else}${/if}{leg.dailyRate}/day × {rentalDays} days = 
-								<strong>{#if leg.currency === 'EUR'}€{:else if leg.currency === 'JPY'}¥{:else}${/if}{totalCost}</strong>
+								{getCurrencySymbol(leg.currency || '')}{leg.dailyRate}/day × {rentalDays} days = 
+								<strong>{getCurrencySymbol(leg.currency || '')}{totalCost}</strong>
 							</span>
 						</div>
 					{/if}
@@ -382,7 +382,7 @@
 			{/if}
 
 			{#if !isLongDistance}
-				<button type="button" class="directions-link" onclick={openDirections}>
+				<button type="button" class="directions-link" onclick={handleOpenDirections}>
 					Get directions
 				</button>
 			{/if}

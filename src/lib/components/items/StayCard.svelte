@@ -5,7 +5,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import ItemNotes from './ItemNotes.svelte';
-	import { getMapsUrl } from '$lib/services/mapService';
+	import { openInMaps } from '$lib/utils/cardHelpers';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { openSafeUrl } from '$lib/utils/url';
 
@@ -71,8 +71,8 @@
 		return formatTime(effectiveCheckOutTime, use24h);
 	});
 
-	function openInMaps() {
-		window.open(getMapsUrl(stay.location, mapApp), '_blank');
+	function handleOpenInMaps() {
+		openInMaps(stay.location, mapApp);
 	}
 
 	// Title click handler - open website if available
@@ -136,7 +136,7 @@
 		</button>
 
 		<div class="card-details">
-			<button type="button" class="location-link" onclick={openInMaps} title="Open in Maps">
+			<button type="button" class="location-link" onclick={handleOpenInMaps} title="Open in Maps">
 				<Icon name="location" size={14} />
 				<span class="truncate">{stay.location.address.formatted}</span>
 			</button>

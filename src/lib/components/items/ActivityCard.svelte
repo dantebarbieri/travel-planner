@@ -8,7 +8,7 @@
 	import TagList from '$lib/components/places/TagList.svelte';
 	import CategoryTagList from '$lib/components/places/CategoryTagList.svelte';
 	import ItemNotes from './ItemNotes.svelte';
-	import { getMapsUrl } from '$lib/services/mapService';
+	import { openInMaps } from '$lib/utils/cardHelpers';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { openSafeUrl } from '$lib/utils/url';
 
@@ -123,8 +123,8 @@
 		activity.userOverrides?.categoryTags || activity.categoryTags || []
 	);
 
-	function openInMaps() {
-		window.open(getMapsUrl(activity.location, mapApp), '_blank');
+	function handleOpenInMaps() {
+		openInMaps(activity.location, mapApp);
 	}
 
 	// Title click handler - open website if available
@@ -177,7 +177,7 @@
 		{/if}
 
 		<div class="card-details">
-			<button type="button" class="location-link" onclick={openInMaps} title="Open in Maps">
+			<button type="button" class="location-link" onclick={handleOpenInMaps} title="Open in Maps">
 				<Icon name="location" size={14} />
 				<span class="truncate">{activity.location.address.formatted}</span>
 			</button>
