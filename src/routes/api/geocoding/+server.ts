@@ -7,24 +7,11 @@
 
 import { json } from '@sveltejs/kit';
 import { geocodeAddress, reverseGeocode, GeoapifyError } from '$lib/server/adapters/geoapify';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'geocoding')) {
-		const headers = rateLimit.getHeaders(ip, 'geocoding');
-		return json(
-			{ error: 'Too many requests' },
-			{
-				status: 429,
-				headers
-			}
-		);
-	}
-
+export const GET: RequestHandler = createApiHandler('geocoding', 'GeocodingAPI', 'Failed to process geocoding request', async ({ url, headers }) => {
 	const address = url.searchParams.get('address');
 	const lat = url.searchParams.get('lat');
 	const lon = url.searchParams.get('lon');
@@ -35,7 +22,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (address.length < 3) {
 				return json(
 					{ error: 'Address must be at least 3 characters' },
-					{ status: 400, headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ status: 400, headers: headers() }
 				);
 			}
 
@@ -44,13 +31,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (!result) {
 				return json(
 					{ result: null, message: 'No results found' },
-					{ headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ headers: headers() }
 				);
 			}
 
 			return json(
 				{ result },
-				{ headers: rateLimit.getHeaders(ip, 'geocoding') }
+				{ headers: headers() }
 			);
 		}
 
@@ -62,21 +49,21 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (isNaN(latitude) || isNaN(longitude)) {
 				return json(
 					{ error: 'Invalid lat/lon parameters' },
-					{ status: 400, headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ status: 400, headers: headers() }
 				);
 			}
 
 			if (latitude < -90 || latitude > 90) {
 				return json(
 					{ error: 'Latitude must be between -90 and 90' },
-					{ status: 400, headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ status: 400, headers: headers() }
 				);
 			}
 
 			if (longitude < -180 || longitude > 180) {
 				return json(
 					{ error: 'Longitude must be between -180 and 180' },
-					{ status: 400, headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ status: 400, headers: headers() }
 				);
 			}
 
@@ -85,32 +72,26 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (!location) {
 				return json(
 					{ location: null, message: 'No results found' },
-					{ headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ headers: headers() }
 				);
 			}
 
 			return json(
 				{ location },
-				{ headers: rateLimit.getHeaders(ip, 'geocoding') }
+				{ headers: headers() }
 			);
 		}
 
 		return json(
 			{ error: 'Missing required parameters. Provide either "address" or "lat" and "lon"' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'geocoding') }
+			{ status: 400, headers: headers() }
 		);
 	} catch (err) {
 		if (err instanceof GeoapifyError) {
 			if (err.code === 'RATE_LIMITED') {
 				return json(
 					{ error: 'External API rate limit exceeded' },
-					{
-						status: 503,
-						headers: {
-							'Retry-After': '60',
-							...rateLimit.getHeaders(ip, 'geocoding')
-						}
-					}
+					{ status: 503, headers: { 'Retry-After': '60', ...headers() } }
 				);
 			}
 
@@ -118,21 +99,17 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 				logger.error('GeocodingAPI', 'Geoapify API key not configured');
 				return json(
 					{ error: 'Geocoding service not configured' },
-					{ status: 500, headers: rateLimit.getHeaders(ip, 'geocoding') }
+					{ status: 500, headers: headers() }
 				);
 			}
 
 			logger.error('GeocodingAPI', 'Geocoding API error:', err.message);
 			return json(
 				{ error: 'Geocoding service error' },
-				{ status: 500, headers: rateLimit.getHeaders(ip, 'geocoding') }
+				{ status: 500, headers: headers() }
 			);
 		}
 
-		logger.error('GeocodingAPI', 'Geocoding API error:', err);
-		return json(
-			{ error: 'Failed to process geocoding request' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'geocoding') }
-		);
+		throw err;
 	}
-};
+});

@@ -9,39 +9,26 @@
 import { json } from '@sveltejs/kit';
 import { searchLodging, FoursquareError } from '$lib/server/adapters/foursquare';
 import { searchLodging as googleSearchLodging, GooglePlacesError, isConfigured as isGoogleConfigured } from '$lib/server/adapters/googlePlaces';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 import type { PlaceSource } from '$lib/types/travel';
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'places')) {
-		const headers = rateLimit.getHeaders(ip, 'places');
-		return json(
-			{ error: 'Too many requests' },
-			{
-				status: 429,
-				headers
-			}
-		);
-	}
-
+export const GET: RequestHandler = createApiHandler('places', 'LodgingAPI', 'Failed to search lodging', async ({ url, headers }) => {
 	// Parse required parameter
 	const query = url.searchParams.get('query');
 
 	if (!query) {
 		return json(
 			{ error: 'Missing required parameter: query' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (query.length < 2) {
 		return json(
 			{ error: 'Query must be at least 2 characters' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -64,21 +51,21 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		if (isNaN(lat) || isNaN(lon)) {
 			return json(
 				{ error: 'Invalid lat/lon parameters' },
-				{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 400, headers: headers() }
 			);
 		}
 
 		if (lat < -90 || lat > 90) {
 			return json(
 				{ error: 'Latitude must be between -90 and 90' },
-				{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 400, headers: headers() }
 			);
 		}
 
 		if (lon < -180 || lon > 180) {
 			return json(
 				{ error: 'Longitude must be between -180 and 180' },
-				{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 400, headers: headers() }
 			);
 		}
 	}
@@ -87,7 +74,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (isNaN(limit) || limit < 1 || limit > 50) {
 		return json(
 			{ error: 'Limit must be a number between 1 and 50' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -97,7 +84,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		if (isNaN(radius) || radius < 100 || radius > 50000) {
 			return json(
 				{ error: 'Radius must be a number between 100 and 50000 (meters)' },
-				{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 400, headers: headers() }
 			);
 		}
 	}
@@ -107,7 +94,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (!isGoogleConfigured()) {
 				return json(
 					{ error: 'Google Places API not configured' },
-					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+					{ status: 500, headers: headers() }
 				);
 			}
 
@@ -121,7 +108,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 			return json(
 				{ stays },
-				{ headers: rateLimit.getHeaders(ip, 'places') }
+				{ headers: headers() }
 			);
 		}
 
@@ -137,26 +124,20 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 		return json(
 			{ stays },
-			{ headers: rateLimit.getHeaders(ip, 'places') }
+			{ headers: headers() }
 		);
 	} catch (err) {
 		if (err instanceof GooglePlacesError) {
 			if (err.code === 'RATE_LIMITED') {
 				return json(
 					{ error: 'External API rate limit exceeded' },
-					{
-						status: 503,
-						headers: {
-							'Retry-After': '60',
-							...rateLimit.getHeaders(ip, 'places')
-						}
-					}
+					{ status: 503, headers: { 'Retry-After': '60', ...headers() } }
 				);
 			}
 			logger.error('LodgingAPI', 'Google Places lodging API error:', err.message);
 			return json(
 				{ error: 'Google Places service error' },
-				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 500, headers: headers() }
 			);
 		}
 
@@ -164,13 +145,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (err.code === 'RATE_LIMITED') {
 				return json(
 					{ error: 'External API rate limit exceeded' },
-					{
-						status: 503,
-						headers: {
-							'Retry-After': '60',
-							...rateLimit.getHeaders(ip, 'places')
-						}
-					}
+					{ status: 503, headers: { 'Retry-After': '60', ...headers() } }
 				);
 			}
 
@@ -178,21 +153,17 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 				logger.error('LodgingAPI', 'Foursquare API key not configured');
 				return json(
 					{ error: 'Places service not configured' },
-					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+					{ status: 500, headers: headers() }
 				);
 			}
 
 			logger.error('LodgingAPI', 'Lodging places API error:', err.message);
 			return json(
 				{ error: 'Places service error' },
-				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 500, headers: headers() }
 			);
 		}
 
-		logger.error('LodgingAPI', 'Lodging places API error:', err);
-		return json(
-			{ error: 'Failed to search lodging' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
-		);
+		throw err;
 	}
-};
+});

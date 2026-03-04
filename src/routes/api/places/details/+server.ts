@@ -9,24 +9,11 @@
 import { json } from '@sveltejs/kit';
 import { googlePlacesAdapter, GooglePlacesError, type PlaceDetails } from '$lib/server/adapters/googlePlaces';
 import { getPlaceDetails as getFoursquareDetails, FoursquareError } from '$lib/server/adapters/foursquare';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'places')) {
-		const headers = rateLimit.getHeaders(ip, 'places');
-		return json(
-			{ error: 'Too many requests' },
-			{
-				status: 429,
-				headers
-			}
-		);
-	}
-
+export const GET: RequestHandler = createApiHandler('places', 'PlaceDetailsAPI', 'Failed to fetch place details', async ({ url, headers }) => {
 	// Parse parameters - can use either placeId or name+lat+lon
 	const googlePlaceId = url.searchParams.get('googlePlaceId');
 	const foursquarePlaceId = url.searchParams.get('foursquarePlaceId');
@@ -118,15 +105,15 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (!details) {
 		return json(
 			{ details: null, message: 'No place details found' },
-			{ headers: rateLimit.getHeaders(ip, 'places') }
+			{ headers: headers() }
 		);
 	}
 
 	return json(
 		{ details },
-		{ headers: rateLimit.getHeaders(ip, 'places') }
+		{ headers: headers() }
 	);
-};
+});
 
 /**
  * Convert Foursquare hours format to our OperatingHours format.

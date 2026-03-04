@@ -8,7 +8,7 @@
 import { json } from '@sveltejs/kit';
 import { searchAttractions, FoursquareError } from '$lib/server/adapters/foursquare';
 import { searchAttractions as googleSearchAttractions, GooglePlacesError, isConfigured as isGoogleConfigured } from '$lib/server/adapters/googlePlaces';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 import type { ActivityCategory, PlaceSource } from '$lib/types/travel';
@@ -18,20 +18,7 @@ const VALID_CATEGORIES: ActivityCategory[] = [
 	'shopping', 'wellness', 'nightlife', 'sports', 'other'
 ];
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'places')) {
-		const headers = rateLimit.getHeaders(ip, 'places');
-		return json(
-			{ error: 'Too many requests' },
-			{
-				status: 429,
-				headers
-			}
-		);
-	}
-
+export const GET: RequestHandler = createApiHandler('places', 'AttractionsAPI', 'Failed to search attractions', async ({ url, headers }) => {
 	// Parse parameters - lat/lon required for Foursquare, optional for Google
 	const latParam = url.searchParams.get('lat');
 	const lonParam = url.searchParams.get('lon');
@@ -46,7 +33,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (source !== 'google' && (!latParam || !lonParam)) {
 		return json(
 			{ error: 'Missing required parameters: lat and lon' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -54,7 +41,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (source === 'google' && ((latParam && !lonParam) || (!latParam && lonParam))) {
 		return json(
 			{ error: 'Both lat and lon must be provided together, or neither' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -64,21 +51,21 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if ((latParam || lonParam) && (isNaN(lat) || isNaN(lon))) {
 		return json(
 			{ error: 'Invalid lat/lon parameters' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (latParam && (lat < -90 || lat > 90)) {
 		return json(
 			{ error: 'Latitude must be between -90 and 90' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (lonParam && (lon < -180 || lon > 180)) {
 		return json(
 			{ error: 'Longitude must be between -180 and 180' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -86,7 +73,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (isNaN(limit) || limit < 1 || limit > 50) {
 		return json(
 			{ error: 'Limit must be a number between 1 and 50' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -94,7 +81,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (isNaN(radius) || radius < 100 || radius > 50000) {
 		return json(
 			{ error: 'Radius must be a number between 100 and 50000 (meters)' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'places') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -114,7 +101,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (!isGoogleConfigured()) {
 				return json(
 					{ error: 'Google Places API not configured' },
-					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+					{ status: 500, headers: headers() }
 				);
 			}
 
@@ -126,7 +113,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 			return json(
 				{ activities },
-				{ headers: rateLimit.getHeaders(ip, 'places') }
+				{ headers: headers() }
 			);
 		}
 
@@ -140,26 +127,20 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 		return json(
 			{ activities },
-			{ headers: rateLimit.getHeaders(ip, 'places') }
+			{ headers: headers() }
 		);
 	} catch (err) {
 		if (err instanceof GooglePlacesError) {
 			if (err.code === 'RATE_LIMITED') {
 				return json(
 					{ error: 'External API rate limit exceeded' },
-					{
-						status: 503,
-						headers: {
-							'Retry-After': '60',
-							...rateLimit.getHeaders(ip, 'places')
-						}
-					}
+					{ status: 503, headers: { 'Retry-After': '60', ...headers() } }
 				);
 			}
 			logger.error('AttractionsAPI', 'Google Places attractions API error:', err.message);
 			return json(
 				{ error: 'Google Places service error' },
-				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 500, headers: headers() }
 			);
 		}
 
@@ -167,13 +148,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (err.code === 'RATE_LIMITED') {
 				return json(
 					{ error: 'External API rate limit exceeded' },
-					{
-						status: 503,
-						headers: {
-							'Retry-After': '60',
-							...rateLimit.getHeaders(ip, 'places')
-						}
-					}
+					{ status: 503, headers: { 'Retry-After': '60', ...headers() } }
 				);
 			}
 
@@ -181,21 +156,17 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 				logger.error('AttractionsAPI', 'Foursquare API key not configured');
 				return json(
 					{ error: 'Places service not configured' },
-					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+					{ status: 500, headers: headers() }
 				);
 			}
 
 			logger.error('AttractionsAPI', 'Attractions places API error:', err.message);
 			return json(
 				{ error: 'Places service error' },
-				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
+				{ status: 500, headers: headers() }
 			);
 		}
 
-		logger.error('AttractionsAPI', 'Attractions places API error:', err);
-		return json(
-			{ error: 'Failed to search attractions' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
-		);
+		throw err;
 	}
-};
+});

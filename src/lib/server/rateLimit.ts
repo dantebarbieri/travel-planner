@@ -21,7 +21,7 @@ const DEFAULT_WINDOW_MS = 60_000; // 1 minute
 const DEFAULT_MAX_REQUESTS = 100;
 
 // Endpoint-specific limits
-type EndpointType = 'weather' | 'flights' | 'routing' | 'geocoding' | 'cities' | 'places' | 'default';
+export type EndpointType = 'weather' | 'flights' | 'routing' | 'geocoding' | 'cities' | 'places' | 'default';
 
 function getMaxRequests(endpoint: EndpointType): number {
 	switch (endpoint) {

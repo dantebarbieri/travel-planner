@@ -5,24 +5,10 @@
 
 import { json } from '@sveltejs/kit';
 import { searchAirlines } from '$lib/server/adapters/flights';
-import { rateLimit } from '$lib/server/rateLimit';
-import { logger } from '$lib/server/logger';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'flights')) {
-		const headers = rateLimit.getHeaders(ip, 'flights');
-		return json(
-			{ error: 'Too many requests' },
-			{
-				status: 429,
-				headers
-			}
-		);
-	}
-
+export const GET: RequestHandler = createApiHandler('flights', 'AirlinesAPI', 'Failed to search airlines', async ({ url, headers }) => {
 	// Parse parameters
 	const query = url.searchParams.get('query');
 
@@ -30,24 +16,14 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (!query || query.length < 2) {
 		return json(
 			{ error: 'Query must be at least 2 characters' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'flights') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
-	try {
-		const airlines = await searchAirlines(query);
+	const airlines = await searchAirlines(query);
 
-		return json(
-			{ airlines },
-			{
-				headers: rateLimit.getHeaders(ip, 'flights')
-			}
-		);
-	} catch (err) {
-		logger.error('AirlinesAPI', 'Airline search error:', err);
-		return json(
-			{ error: 'Failed to search airlines' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'flights') }
-		);
-	}
-};
+	return json(
+		{ airlines },
+		{ headers: headers() }
+	);
+});
