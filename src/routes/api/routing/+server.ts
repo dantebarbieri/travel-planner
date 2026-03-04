@@ -6,6 +6,7 @@
 import { json } from '@sveltejs/kit';
 import { getRoute, getAllRoutes, type TravelMode } from '$lib/server/adapters/routing';
 import { rateLimit } from '$lib/server/rateLimit';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 import type { Location } from '$lib/types/travel';
 
@@ -16,13 +17,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'routing')) {
 		const headers = rateLimit.getHeaders(ip, 'routing');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
+		return json(
+			{ error: 'Too many requests' },
+			{
+				status: 429,
+				headers
 			}
-		});
+		);
 	}
 
 	// Parse parameters
@@ -90,7 +91,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			}
 		);
 	} catch (err) {
-		console.error('Routing API error:', err);
+		logger.error('RoutingAPI', 'Routing API error:', err);
 		return json(
 			{ error: 'Failed to calculate route' },
 			{ status: 500, headers: rateLimit.getHeaders(ip, 'routing') }

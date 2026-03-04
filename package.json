@@ -17,7 +17,6 @@
 		"docker:logs": "docker compose logs -f"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.53.0",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@types/better-sqlite3": "^7.6.13",

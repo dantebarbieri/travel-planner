@@ -11,6 +11,7 @@
 import type { Location, Airline, FlightSearchResult } from '$lib/types/travel';
 import { cache, flightStatusCacheKey, airlineCacheKey, airportCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
+import { logger } from '$lib/server/logger';
 
 // =============================================================================
 // AeroDataBox API Response Types
@@ -224,7 +225,7 @@ export async function getFlightByNumber(
 	date: string
 ): Promise<FlightSearchResult | null> {
 	if (!isConfigured()) {
-		console.warn('AeroDataBox API key not configured');
+		logger.warn('AeroDataBox', 'API key not configured');
 		return null;
 	}
 	
@@ -246,7 +247,7 @@ export async function getFlightByNumber(
 				// Flight not found - this is expected for invalid flights
 				return null;
 			}
-			console.error(`AeroDataBox API error: ${response.status} ${response.statusText}`);
+			logger.error('AeroDataBox', `API error: ${response.status} ${response.statusText}`);
 			return null;
 		}
 		
@@ -273,7 +274,7 @@ export async function getFlightByNumber(
 		// Return the first result for backwards compatibility
 		return results[0];
 	} catch (error) {
-		console.error('AeroDataBox flight search error:', error);
+		logger.error('AeroDataBox', 'Flight search error:', error);
 		return null;
 	}
 }
@@ -334,7 +335,7 @@ export async function getAllFlightsByNumber(
 	date: string
 ): Promise<FlightSearchResult[]> {
 	if (!isConfigured()) {
-		console.warn('AeroDataBox API key not configured');
+		logger.warn('AeroDataBox', 'API key not configured');
 		return [];
 	}
 	
@@ -348,7 +349,7 @@ export async function getAllFlightsByNumber(
 			if (response.status === 404) {
 				return [];
 			}
-			console.error(`AeroDataBox API error: ${response.status} ${response.statusText}`);
+			logger.error('AeroDataBox', `API error: ${response.status} ${response.statusText}`);
 			return [];
 		}
 		
@@ -360,7 +361,7 @@ export async function getAllFlightsByNumber(
 		
 		return parseFlightsToResults(flights, date);
 	} catch (error) {
-		console.error('AeroDataBox flight search error:', error);
+		logger.error('AeroDataBox', 'Flight search error:', error);
 		return [];
 	}
 }
@@ -370,7 +371,7 @@ export async function getAllFlightsByNumber(
  */
 export async function getAirport(code: string): Promise<AeroDataBoxAirportFull | null> {
 	if (!isConfigured()) {
-		console.warn('AeroDataBox API key not configured');
+		logger.warn('AeroDataBox', 'API key not configured');
 		return null;
 	}
 	
@@ -401,7 +402,7 @@ export async function getAirport(code: string): Promise<AeroDataBoxAirportFull |
 				cache.set(cacheKey, airport, 'AIRPORT_DATA');
 				return airport;
 			}
-			console.error(`AeroDataBox airport API error: ${response.status}`);
+			logger.error('AeroDataBox', `Airport API error: ${response.status}`);
 			return null;
 		}
 		
@@ -409,7 +410,7 @@ export async function getAirport(code: string): Promise<AeroDataBoxAirportFull |
 		cache.set(cacheKey, airport, 'AIRPORT_DATA');
 		return airport;
 	} catch (error) {
-		console.error('AeroDataBox airport fetch error:', error);
+		logger.error('AeroDataBox', 'Airport fetch error:', error);
 		return null;
 	}
 }

@@ -4,6 +4,8 @@ import { mapWmoCodeToCondition } from './weatherCodeMap';
 import { CACHE_CONFIG } from './types';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 
+const isDev = import.meta.env.DEV;
+
 const FORECAST_API_URL = 'https://api.open-meteo.com/v1/forecast';
 const HISTORICAL_API_URL = 'https://archive-api.open-meteo.com/v1/archive';
 
@@ -228,7 +230,7 @@ export async function fetchForecast(location: Location): Promise<WeatherConditio
 	const response = await fetchWithRetry(url, undefined, {
 		maxAttempts: 4,
 		onRetry: (attempt, delayMs) => {
-			console.log(`[OpenMeteo] Forecast retry ${attempt} for ${lat},${lon}, waiting ${delayMs}ms...`);
+			if (isDev) console.log(`[OpenMeteo] Forecast retry ${attempt} for ${lat},${lon}, waiting ${delayMs}ms...`);
 		}
 	});
 
@@ -277,7 +279,7 @@ export async function fetchHistorical(
 	const response = await fetchWithRetry(url, undefined, {
 		maxAttempts: 4,
 		onRetry: (attempt, delayMs) => {
-			console.log(`[OpenMeteo] Historical retry ${attempt} for ${lat},${lon}, waiting ${delayMs}ms...`);
+			if (isDev) console.log(`[OpenMeteo] Historical retry ${attempt} for ${lat},${lon}, waiting ${delayMs}ms...`);
 		}
 	});
 

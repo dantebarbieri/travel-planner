@@ -1,1 +1,2 @@
-// place files you want to import through the `$lib` alias in this folder.
+// This file is intentionally minimal.
+// Import directly from $lib/stores, $lib/types, $lib/utils, etc.

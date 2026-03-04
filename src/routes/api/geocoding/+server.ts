@@ -8,6 +8,7 @@
 import { json } from '@sveltejs/kit';
 import { geocodeAddress, reverseGeocode, GeoapifyError } from '$lib/server/adapters/geoapify';
 import { rateLimit } from '$lib/server/rateLimit';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
@@ -15,13 +16,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'geocoding')) {
 		const headers = rateLimit.getHeaders(ip, 'geocoding');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
+		return json(
+			{ error: 'Too many requests' },
+			{
+				status: 429,
+				headers
 			}
-		});
+		);
 	}
 
 	const address = url.searchParams.get('address');
@@ -101,32 +102,34 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	} catch (err) {
 		if (err instanceof GeoapifyError) {
 			if (err.code === 'RATE_LIMITED') {
-				return new Response(JSON.stringify({ error: 'External API rate limit exceeded' }), {
-					status: 503,
-					headers: {
-						'Content-Type': 'application/json',
-						'Retry-After': '60',
-						...rateLimit.getHeaders(ip, 'geocoding')
+				return json(
+					{ error: 'External API rate limit exceeded' },
+					{
+						status: 503,
+						headers: {
+							'Retry-After': '60',
+							...rateLimit.getHeaders(ip, 'geocoding')
+						}
 					}
-				});
+				);
 			}
 
 			if (err.code === 'MISSING_API_KEY') {
-				console.error('Geoapify API key not configured');
+				logger.error('GeocodingAPI', 'Geoapify API key not configured');
 				return json(
 					{ error: 'Geocoding service not configured' },
 					{ status: 500, headers: rateLimit.getHeaders(ip, 'geocoding') }
 				);
 			}
 
-			console.error('Geocoding API error:', err.message);
+			logger.error('GeocodingAPI', 'Geocoding API error:', err.message);
 			return json(
 				{ error: 'Geocoding service error' },
 				{ status: 500, headers: rateLimit.getHeaders(ip, 'geocoding') }
 			);
 		}
 
-		console.error('Geocoding API error:', err);
+		logger.error('GeocodingAPI', 'Geocoding API error:', err);
 		return json(
 			{ error: 'Failed to process geocoding request' },
 			{ status: 500, headers: rateLimit.getHeaders(ip, 'geocoding') }

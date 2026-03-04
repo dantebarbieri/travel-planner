@@ -13,6 +13,7 @@ import {
 	getAllFlightsByNumber,
 	searchAirlines as searchAirlinesAeroDataBox
 } from '$lib/server/adapters/aerodatabox';
+import { logger } from '$lib/server/logger';
 
 // =============================================================================
 // API Configuration Check
@@ -39,7 +40,7 @@ export async function searchFlight(
 	date: string
 ): Promise<FlightSearchResult | null> {
 	if (!hasKeyedApi()) {
-		console.warn('AeroDataBox API key not configured. Flight search unavailable.');
+		logger.warn('Flights', 'AeroDataBox API key not configured. Flight search unavailable.');
 		return null;
 	}
 
@@ -59,7 +60,7 @@ export async function searchAllFlights(
 	date: string
 ): Promise<FlightSearchResult[]> {
 	if (!hasKeyedApi()) {
-		console.warn('AeroDataBox API key not configured. Flight search unavailable.');
+		logger.warn('Flights', 'AeroDataBox API key not configured. Flight search unavailable.');
 		return [];
 	}
 

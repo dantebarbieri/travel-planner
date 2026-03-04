@@ -6,6 +6,7 @@
 import { json } from '@sveltejs/kit';
 import { searchAirlines } from '$lib/server/adapters/flights';
 import { rateLimit } from '$lib/server/rateLimit';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
@@ -13,13 +14,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'flights')) {
 		const headers = rateLimit.getHeaders(ip, 'flights');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
+		return json(
+			{ error: 'Too many requests' },
+			{
+				status: 429,
+				headers
 			}
-		});
+		);
 	}
 
 	// Parse parameters
@@ -43,7 +44,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			}
 		);
 	} catch (err) {
-		console.error('Airline search error:', err);
+		logger.error('AirlinesAPI', 'Airline search error:', err);
 		return json(
 			{ error: 'Failed to search airlines' },
 			{ status: 500, headers: rateLimit.getHeaders(ip, 'flights') }

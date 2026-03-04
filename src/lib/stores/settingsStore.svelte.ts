@@ -175,18 +175,18 @@ function deleteCustomColorScheme(schemeId: string): void {
 	updateUserSettings(updates);
 }
 
-function getEffectiveKindColors(): KindColors {
-	const scheme = state.userSettings.defaultColorSchemeId
-		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId)
+function getEffectiveColorScheme(): CustomColorScheme | null {
+	return state.userSettings.defaultColorSchemeId
+		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId) ?? null
 		: null;
-	return scheme?.kindColors ?? defaultKindColors;
+}
+
+function getEffectiveKindColors(): KindColors {
+	return getEffectiveColorScheme()?.kindColors ?? defaultKindColors;
 }
 
 function getEffectivePaletteColors(): string[] {
-	const scheme = state.userSettings.defaultColorSchemeId
-		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId)
-		: null;
-	return scheme?.paletteColors ?? defaultPaletteColors;
+	return getEffectiveColorScheme()?.paletteColors ?? defaultPaletteColors;
 }
 
 // ============ Theme Application ============

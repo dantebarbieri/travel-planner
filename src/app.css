@@ -60,6 +60,7 @@
 	--shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.1), 0 4px 6px -4px oklch(0 0 0 / 0.1);
 
 	/* Spacing Scale */
+	--space-0-5: 0.125rem;
 	--space-1: 0.25rem;
 	--space-2: 0.5rem;
 	--space-3: 0.75rem;
@@ -70,6 +71,13 @@
 	--space-10: 2.5rem;
 	--space-12: 3rem;
 	--space-16: 4rem;
+
+	/* Font Sizes */
+	--font-size-xs: 0.625rem;
+	--font-size-sm: 0.75rem;
+	--font-size-base: 0.875rem;
+	--font-size-lg: 1rem;
+	--font-size-xl: 1.25rem;
 
 	/* Border Radius */
 	--radius-sm: 0.25rem;
@@ -291,7 +299,10 @@ a {
 /* ============ Item Card Colors ============ */
 .item-card {
 	--item-color: var(--color-gray-200);
+	position: relative;
 	border-left: 4px solid var(--item-color);
+	border-radius: var(--radius-md);
+	padding: var(--space-3);
 	background: color-mix(in oklch, var(--item-color), var(--item-bg-mix) var(--item-bg-mix-amount));
 }
 
@@ -322,6 +333,142 @@ a {
 /* Color by Stay Mode - uses inline --item-color from stayColors map */
 [data-color-mode='by-stay'] .item-card {
 	/* --item-color is set via inline style on the item wrapper */
+}
+
+/* ============ Shared Item Card Layout ============ */
+
+.item-card .card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: var(--space-2);
+}
+
+.item-card .card-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	background: var(--item-color);
+	color: var(--text-inverse);
+	border-radius: var(--radius-md);
+}
+
+.item-card .card-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1);
+}
+
+.item-card .card-content {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.item-card .card-title-btn {
+	background: none;
+	border: none;
+	padding: 0;
+	text-align: left;
+	cursor: pointer;
+	font: inherit;
+	color: var(--text-primary);
+
+	&:disabled {
+		cursor: default;
+	}
+
+	&:hover:not(:disabled) .card-title {
+		color: var(--color-primary);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
+	}
+}
+
+.item-card .card-title {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	font-size: var(--font-size-lg);
+	font-weight: 600;
+	margin: 0;
+	transition: color var(--transition-fast);
+}
+
+.item-card .card-details {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.item-card .location-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: var(--font-size-sm);
+	color: var(--text-secondary);
+	cursor: pointer;
+	max-width: 100%;
+
+	&:hover {
+		color: var(--color-primary);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
+	}
+}
+
+.item-card .meta-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	font-size: var(--font-size-base);
+}
+
+.item-card .meta-row .time {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	color: var(--text-secondary);
+}
+
+.item-card .meta-row .price {
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.item-card .meta-row .price-level {
+	font-weight: 600;
+	color: var(--color-success);
+}
+
+.item-card .meta-row .rating {
+	color: var(--color-warning);
+	font-weight: 500;
+}
+
+.item-card .confirmation {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	font-size: var(--font-size-sm);
+	color: var(--text-secondary);
+	padding: var(--space-1) var(--space-2);
+	background: var(--surface-secondary);
+	border-radius: var(--radius-sm);
 }
 
 /* ============ :has() Utility Classes ============ */

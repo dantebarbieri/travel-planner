@@ -59,12 +59,12 @@ class StorageService {
 		}
 	}
 
-	saveTripsDebounced(trips: Trip[]): void {
+	saveTripsDebounced(getTrips: () => Trip[]): void {
 		if (this.saveTimeout) {
 			clearTimeout(this.saveTimeout);
 		}
 		this.saveTimeout = setTimeout(() => {
-			this.saveTrips(trips);
+			this.saveTrips(getTrips());
 		}, this.debounceMs);
 	}
 
@@ -223,9 +223,23 @@ class StorageService {
 
 	importFromJson(jsonString: string): ExportedTrip {
 		const trip = JSON.parse(jsonString);
-		if (!trip.id || !trip.name || !trip.startDate || !trip.endDate) {
-			throw new Error('Invalid trip format: missing required fields');
+
+		// Validate required string fields
+		const requiredStrings = ['id', 'name', 'startDate', 'endDate', 'createdAt', 'updatedAt'] as const;
+		for (const field of requiredStrings) {
+			if (!trip[field] || typeof trip[field] !== 'string') {
+				throw new Error(`Invalid trip format: missing required field "${field}"`);
+			}
 		}
+
+		// Provide defaults for required array fields so corrupt imports don't crash
+		const requiredArrays = ['cities', 'activities', 'foodVenues', 'transportLegs', 'itinerary'] as const;
+		for (const field of requiredArrays) {
+			if (!Array.isArray(trip[field])) {
+				trip[field] = [];
+			}
+		}
+
 		return trip as ExportedTrip;
 	}
 
@@ -235,6 +249,8 @@ class StorageService {
 	 * @param customSchemes The user's custom color schemes (to look up the embedded scheme)
 	 */
 	downloadJson(trip: Trip, customSchemes: CustomColorScheme[] = []): void {
+		if (typeof document === 'undefined') return;
+
 		const json = this.exportToJson(trip, customSchemes);
 		const blob = new Blob([json], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);

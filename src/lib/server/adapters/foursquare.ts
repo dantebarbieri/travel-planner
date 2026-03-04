@@ -22,6 +22,7 @@ import { cache, foodPlacesCacheKey, attractionPlacesCacheKey, placeDetailsCacheK
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 import { warnIfUnsafeUrl } from '$lib/utils/url';
+import { logger } from '$lib/server/logger';
 
 // API endpoints (new Foursquare Places API - migrated from v3)
 const FOURSQUARE_SEARCH_URL = 'https://places-api.foursquare.com/places/search';
@@ -429,7 +430,7 @@ export async function searchFoodVenues(
 		}, {
 			maxAttempts: 3,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[Foursquare] Food search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('Foursquare', `Food search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -439,10 +440,10 @@ export async function searchFoodVenues(
 
 		const data: FoursquareSearchResponse = await response.json();
 
-		// DEBUG: Log raw response to see if hours are included
+		// Log raw response sample in dev
 		if (data.results && data.results.length > 0) {
 			const sample = data.results[0];
-			console.log('[Foursquare] Food search raw response sample:', {
+			logger.debug('Foursquare', 'Food search raw response sample:', {
 				name: sample.name,
 				hasHours: !!sample.hours,
 				hours: sample.hours,
@@ -469,7 +470,7 @@ export async function searchFoodVenues(
 		return filtered;
 	} catch (error) {
 		const fsqError = classifyError(error);
-		console.error(`[Foursquare] Food search failed for (${lat}, ${lon}):`, fsqError.message);
+		logger.error('Foursquare', `Food search failed for (${lat}, ${lon}):`, fsqError.message);
 		throw fsqError;
 	}
 }
@@ -523,7 +524,7 @@ export async function searchAttractions(
 		}, {
 			maxAttempts: 3,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[Foursquare] Attraction search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('Foursquare', `Attraction search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -533,10 +534,10 @@ export async function searchAttractions(
 
 		const data: FoursquareSearchResponse = await response.json();
 
-		// DEBUG: Log raw response to see if hours are included
+		// Log raw response sample in dev
 		if (data.results && data.results.length > 0) {
 			const sample = data.results[0];
-			console.log('[Foursquare] Attraction search raw response sample:', {
+			logger.debug('Foursquare', 'Attraction search raw response sample:', {
 				name: sample.name,
 				hasHours: !!sample.hours,
 				hours: sample.hours,
@@ -563,7 +564,7 @@ export async function searchAttractions(
 		return filtered;
 	} catch (error) {
 		const fsqError = classifyError(error);
-		console.error(`[Foursquare] Attraction search failed for (${lat}, ${lon}):`, fsqError.message);
+		logger.error('Foursquare', `Attraction search failed for (${lat}, ${lon}):`, fsqError.message);
 		throw fsqError;
 	}
 }
@@ -635,7 +636,7 @@ export async function searchLodging(
 		}, {
 			maxAttempts: 3,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[Foursquare] Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('Foursquare', `Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -656,7 +657,7 @@ export async function searchLodging(
 		return stays;
 	} catch (error) {
 		const fsqError = classifyError(error);
-		console.error(`[Foursquare] Lodging search failed for query "${options.query}":`, fsqError.message);
+		logger.error('Foursquare', `Lodging search failed for query "${options.query}":`, fsqError.message);
 		throw fsqError;
 	}
 }
@@ -705,7 +706,7 @@ export async function getPlaceDetails(fsqId: string): Promise<FoursquarePlace | 
 		return place;
 	} catch (error) {
 		const fsqError = classifyError(error);
-		console.error(`[Foursquare] Get place details failed for ${fsqId}:`, fsqError.message);
+		logger.error('Foursquare', `Get place details failed for ${fsqId}:`, fsqError.message);
 		throw fsqError;
 	}
 }

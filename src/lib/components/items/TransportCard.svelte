@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { TransportLeg } from '$lib/types/travel';
 	import { formatTime, formatDuration, formatDateShort, formatDistance, getTimezoneAbbreviation, getTimezoneOffset, calculateRealDuration, parseISODate } from '$lib/utils/dates';
+	import { getTransportModeLabel, getTransportSubTypeLabel, getCurrencySymbol } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { getDirectionsUrl } from '$lib/services/mapService';
@@ -48,40 +49,15 @@
 	});
 
 	const modeLabel = $derived.by(() => {
-		// For ground_transit, use the sub-type label
 		if (leg.mode === 'ground_transit' && leg.groundTransitSubType) {
-			const subTypeLabels: Record<string, string> = {
-				train: 'Train',
-				bus: 'Bus',
-				metro: 'Metro',
-				tram: 'Tram',
-				coach: 'Coach'
-			};
-			return subTypeLabels[leg.groundTransitSubType] || 'Transit';
+			return getTransportSubTypeLabel(leg.groundTransitSubType);
 		}
-		
-		const labels: Record<string, string> = {
-			flight: 'Flight',
-			ground_transit: 'Transit',
-			car: 'Drive',
-			taxi: 'Taxi',
-			rideshare: 'Rideshare',
-			ferry: 'Ferry',
-			walking: 'Walk',
-			biking: 'Bike',
-			car_rental: 'Rental Car',
-			// Legacy modes (for backwards compatibility)
-			train: 'Train',
-			bus: 'Bus',
-			subway: 'Subway'
-		};
-		return labels[leg.mode] || 'Transport';
+		return getTransportModeLabel(leg.mode);
 	});
 
 	const priceDisplay = $derived.by(() => {
 		if (!leg.price) return null;
-		const symbol = leg.currency === 'EUR' ? '€' : leg.currency === 'JPY' ? '¥' : '$';
-		return `${symbol}${leg.price}`;
+		return `${getCurrencySymbol(leg.currency || '')}${leg.price}`;
 	});
 
 	const isFlight = $derived(leg.mode === 'flight');
@@ -416,44 +392,7 @@
 </div>
 
 <style>
-	.item-card {
-		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-transport)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
-		border-left: 4px solid var(--item-color, var(--color-kind-transport));
-		border-radius: var(--radius-md);
-		padding: var(--space-3);
-
-		&[data-kind='flight'] {
-			--item-color: var(--color-kind-flight);
-		}
-	}
-
-	.card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-2);
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: var(--item-color, var(--color-kind-transport));
-		color: var(--text-inverse);
-		border-radius: var(--radius-md);
-	}
-
-	.card-badges {
-		display: flex;
-		gap: var(--space-1);
-	}
-
 	.card-content {
-		display: flex;
-		flex-direction: column;
 		gap: var(--space-3);
 	}
 
@@ -533,20 +472,6 @@
 		z-index: 1;
 	}
 
-	.card-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.meta-row {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		font-size: 0.875rem;
-	}
-
 	.flight-number,
 	.transit-number {
 		font-weight: 600;
@@ -555,11 +480,6 @@
 
 	.distance {
 		color: var(--text-secondary);
-	}
-
-	.price {
-		font-weight: 600;
-		color: var(--text-primary);
 	}
 
 	.flight-details {

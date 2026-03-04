@@ -10,6 +10,7 @@ import { json } from '@sveltejs/kit';
 import { googlePlacesAdapter, GooglePlacesError, type PlaceDetails } from '$lib/server/adapters/googlePlaces';
 import { getPlaceDetails as getFoursquareDetails, FoursquareError } from '$lib/server/adapters/foursquare';
 import { rateLimit } from '$lib/server/rateLimit';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
@@ -17,13 +18,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'places')) {
 		const headers = rateLimit.getHeaders(ip, 'places');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
+		return json(
+			{ error: 'Too many requests' },
+			{
+				status: 429,
+				headers
 			}
-		});
+		);
 	}
 
 	// Parse parameters - can use either placeId or name+lat+lon
@@ -41,7 +42,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			details = await googlePlacesAdapter.getPlaceDetails(googlePlaceId);
 		} catch (err) {
 			if (err instanceof GooglePlacesError && err.code !== 'MISSING_API_KEY') {
-				console.warn('Google Places lookup failed:', err.message);
+				logger.warn('PlaceDetailsAPI', 'Google Places lookup failed:', err.message);
 			}
 		}
 	}
@@ -51,7 +52,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		const lat = parseFloat(latParam);
 		const lon = parseFloat(lonParam);
 
-		console.log('[PlaceDetails API] Attempting name search:', {
+		logger.debug('PlaceDetailsAPI', 'Attempting name search:', {
 			name,
 			lat,
 			lon,
@@ -63,24 +64,24 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			if (googlePlacesAdapter.isConfigured()) {
 				try {
 					details = await googlePlacesAdapter.getPlaceDetailsByNameAndLocation(name, lat, lon);
-					console.log('[PlaceDetails API] Google result:', {
+					logger.debug('PlaceDetailsAPI', 'Google result:', {
 						found: !!details,
 						hasHours: !!details?.openingHours
 					});
 				} catch (err) {
 					if (err instanceof GooglePlacesError && err.code !== 'MISSING_API_KEY') {
-						console.warn('Google Places name search failed:', err.message);
+						logger.warn('PlaceDetailsAPI', 'Google Places name search failed:', err.message);
 					}
 				}
 			} else {
-				console.log('[PlaceDetails API] Google Places not configured, skipping');
+				logger.debug('PlaceDetailsAPI', 'Google Places not configured, skipping');
 			}
 		}
 	}
 
 	// Fallback to Foursquare if we have a Foursquare ID
 	if (!details && foursquarePlaceId) {
-		console.log('[PlaceDetails API] Trying Foursquare fallback for:', foursquarePlaceId);
+		logger.debug('PlaceDetailsAPI', 'Trying Foursquare fallback for:', foursquarePlaceId);
 		try {
 			// Extract FSQ ID from our prefixed format (e.g., "fsq-abc123" -> "abc123")
 			const fsqId = foursquarePlaceId.startsWith('fsq-')
@@ -108,7 +109,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			}
 		} catch (err) {
 			if (err instanceof FoursquareError && err.code !== 'MISSING_API_KEY') {
-				console.warn('Foursquare fallback failed:', err.message);
+				logger.warn('PlaceDetailsAPI', 'Foursquare fallback failed:', err.message);
 			}
 		}
 	}

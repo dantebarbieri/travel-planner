@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Stay } from '$lib/types/travel';
 	import { formatDateShort, formatTime } from '$lib/utils/dates';
+	import { getStayTypeLabel, getCurrencySymbol } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import ItemNotes from './ItemNotes.svelte';
@@ -39,21 +40,11 @@
 	// Get time format preference (12h vs 24h)
 	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
 
-	const stayTypeLabel = $derived.by(() => {
-		const labels: Record<string, string> = {
-			hotel: 'Hotel',
-			airbnb: 'Airbnb',
-			vrbo: 'VRBO',
-			hostel: 'Hostel',
-			custom: 'Accommodation'
-		};
-		return labels[stay.type] || 'Stay';
-	});
+	const stayTypeLabel = $derived(getStayTypeLabel(stay.type));
 
 	const priceDisplay = $derived.by(() => {
 		if (!stay.pricePerNight) return null;
-		const symbol = stay.currency === 'EUR' ? '€' : stay.currency === 'JPY' ? '¥' : '$';
-		return `${symbol}${stay.pricePerNight}/night`;
+		return `${getCurrencySymbol(stay.currency || '')}${stay.pricePerNight}/night`;
 	});
 
 	// Get effective check-in/out times (user override or API data)
@@ -233,107 +224,6 @@
 </div>
 
 <style>
-	.item-card {
-		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-stay)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
-		border-left: 4px solid var(--item-color, var(--color-kind-stay));
-		border-radius: var(--radius-md);
-		padding: var(--space-3);
-	}
-
-	.card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-2);
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: var(--item-color, var(--color-kind-stay));
-		color: var(--text-inverse);
-		border-radius: var(--radius-md);
-	}
-
-	.card-badges {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-1);
-	}
-
-	.card-content {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.card-title-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-		color: var(--text-primary);
-
-		&:disabled {
-			cursor: default;
-		}
-
-		&:hover:not(:disabled) .card-title {
-			color: var(--color-primary);
-		}
-	}
-
-	.card-title {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 1rem;
-		font-weight: 600;
-		margin: 0;
-		transition: color var(--transition-fast);
-	}
-
-	.card-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.location-link {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		background: none;
-		border: none;
-		padding: 0;
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-		max-width: 100%;
-
-		&:hover {
-			color: var(--color-primary);
-		}
-	}
-
-	.meta-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		font-size: 0.875rem;
-	}
-
-	.price {
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
 	.dates {
 		color: var(--text-secondary);
 	}
@@ -384,17 +274,6 @@
 			outline: none;
 			border-color: var(--color-primary);
 		}
-	}
-
-	.confirmation {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		padding: var(--space-1) var(--space-2);
-		background: var(--surface-secondary);
-		border-radius: var(--radius-sm);
 	}
 
 	.amenities {

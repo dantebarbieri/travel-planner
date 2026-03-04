@@ -9,6 +9,7 @@ import { json } from '@sveltejs/kit';
 import { searchAttractions, FoursquareError } from '$lib/server/adapters/foursquare';
 import { searchAttractions as googleSearchAttractions, GooglePlacesError, isConfigured as isGoogleConfigured } from '$lib/server/adapters/googlePlaces';
 import { rateLimit } from '$lib/server/rateLimit';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 import type { ActivityCategory, PlaceSource } from '$lib/types/travel';
 
@@ -22,13 +23,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'places')) {
 		const headers = rateLimit.getHeaders(ip, 'places');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
+		return json(
+			{ error: 'Too many requests' },
+			{
+				status: 429,
+				headers
 			}
-		});
+		);
 	}
 
 	// Parse parameters - lat/lon required for Foursquare, optional for Google
@@ -144,16 +145,18 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	} catch (err) {
 		if (err instanceof GooglePlacesError) {
 			if (err.code === 'RATE_LIMITED') {
-				return new Response(JSON.stringify({ error: 'External API rate limit exceeded' }), {
-					status: 503,
-					headers: {
-						'Content-Type': 'application/json',
-						'Retry-After': '60',
-						...rateLimit.getHeaders(ip, 'places')
+				return json(
+					{ error: 'External API rate limit exceeded' },
+					{
+						status: 503,
+						headers: {
+							'Retry-After': '60',
+							...rateLimit.getHeaders(ip, 'places')
+						}
 					}
-				});
+				);
 			}
-			console.error('Google Places attractions API error:', err.message);
+			logger.error('AttractionsAPI', 'Google Places attractions API error:', err.message);
 			return json(
 				{ error: 'Google Places service error' },
 				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
@@ -162,32 +165,34 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 		if (err instanceof FoursquareError) {
 			if (err.code === 'RATE_LIMITED') {
-				return new Response(JSON.stringify({ error: 'External API rate limit exceeded' }), {
-					status: 503,
-					headers: {
-						'Content-Type': 'application/json',
-						'Retry-After': '60',
-						...rateLimit.getHeaders(ip, 'places')
+				return json(
+					{ error: 'External API rate limit exceeded' },
+					{
+						status: 503,
+						headers: {
+							'Retry-After': '60',
+							...rateLimit.getHeaders(ip, 'places')
+						}
 					}
-				});
+				);
 			}
 
 			if (err.code === 'MISSING_API_KEY') {
-				console.error('Foursquare API key not configured');
+				logger.error('AttractionsAPI', 'Foursquare API key not configured');
 				return json(
 					{ error: 'Places service not configured' },
 					{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
 				);
 			}
 
-			console.error('Attractions places API error:', err.message);
+			logger.error('AttractionsAPI', 'Attractions places API error:', err.message);
 			return json(
 				{ error: 'Places service error' },
 				{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }
 			);
 		}
 
-		console.error('Attractions places API error:', err);
+		logger.error('AttractionsAPI', 'Attractions places API error:', err);
 		return json(
 			{ error: 'Failed to search attractions' },
 			{ status: 500, headers: rateLimit.getHeaders(ip, 'places') }

@@ -7,6 +7,7 @@ import { json } from '@sveltejs/kit';
 import { getWeather } from '$lib/server/adapters/weather';
 import { rateLimit } from '$lib/server/rateLimit';
 import { isValidTimezone } from '$lib/utils/dates';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 import type { Location } from '$lib/types/travel';
 
@@ -15,13 +16,13 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	const ip = rateLimit.getClientIp(request, getClientAddress);
 	if (!rateLimit.check(ip, 'weather')) {
 		const headers = rateLimit.getHeaders(ip, 'weather');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
+		return json(
+			{ error: 'Too many requests' },
+			{
+				status: 429,
+				headers
 			}
-		});
+		);
 	}
 
 	// Parse parameters
@@ -87,7 +88,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 			headers: rateLimit.getHeaders(ip, 'weather')
 		});
 	} catch (err) {
-		console.error('Weather API error:', err);
+		logger.error('WeatherAPI', 'Weather API error:', err);
 		return json(
 			{ error: 'Failed to fetch weather data' },
 			{ status: 500, headers: rateLimit.getHeaders(ip, 'weather') }

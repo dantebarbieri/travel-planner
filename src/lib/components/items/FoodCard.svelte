@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FoodVenue, MealType } from '$lib/types/travel';
 	import { formatTime } from '$lib/utils/dates';
+	import { getVenueTypeLabel, getMealTypeLabel } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import BusinessHours from '$lib/components/places/BusinessHours.svelte';
@@ -38,33 +39,9 @@
 	// Get time format preference (12h vs 24h)
 	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
 
-	const mealLabel = $derived.by(() => {
-		const labels: Record<MealType, string> = {
-			breakfast: 'Breakfast',
-			brunch: 'Brunch',
-			lunch: 'Lunch',
-			tea: 'Tea',
-			dinner: 'Dinner',
-			dessert: 'Dessert',
-			drinks: 'Drinks'
-		};
-		return mealSlot ? labels[mealSlot] : null;
-	});
+	const mealLabel = $derived(mealSlot ? getMealTypeLabel(mealSlot) : null);
 
-	const venueTypeLabel = $derived.by(() => {
-		const labels: Record<string, string> = {
-			restaurant: 'Restaurant',
-			cafe: 'Café',
-			bar: 'Bar',
-			bakery: 'Bakery',
-			street_food: 'Street Food',
-			food_market: 'Food Market',
-			fine_dining: 'Fine Dining',
-			fast_food: 'Fast Food',
-			other: 'Food'
-		};
-		return labels[venue.venueType] || 'Restaurant';
-	});
+	const venueTypeLabel = $derived(getVenueTypeLabel(venue.venueType));
 
 	// Get effective price level (user override or API data)
 	const effectivePriceLevel = $derived(
@@ -223,138 +200,13 @@
 </div>
 
 <style>
-	.item-card {
-		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-food)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
-		border-left: 4px solid var(--item-color, var(--color-kind-food));
-		border-radius: var(--radius-md);
-		padding: var(--space-3);
-	}
-
-	.card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-2);
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: var(--item-color, var(--color-kind-food));
-		color: var(--text-inverse);
-		border-radius: var(--radius-md);
-	}
-
-	.card-badges {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-1);
-	}
-
-	.card-content {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.card-title-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-		color: var(--text-primary);
-
-		&:disabled {
-			cursor: default;
-		}
-
-		&:hover:not(:disabled) .card-title {
-			color: var(--color-primary);
-		}
-	}
-
-	.card-title {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 1rem;
-		font-weight: 600;
-		margin: 0;
-		transition: color var(--transition-fast);
-	}
-
 	.cuisines {
 		font-size: 0.875rem;
 		color: var(--text-secondary);
 	}
 
-	.card-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.location-link {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		background: none;
-		border: none;
-		padding: 0;
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-		max-width: 100%;
-
-		&:hover {
-			color: var(--color-primary);
-		}
-	}
-
-	.meta-row {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		font-size: 0.875rem;
-	}
-
-	.time {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		color: var(--text-secondary);
-	}
-
-	.price-level {
-		font-weight: 600;
-		color: var(--color-success);
-	}
-
 	.estimated-cost {
 		color: var(--text-secondary);
-	}
-
-	.rating {
-		color: var(--color-warning);
-		font-weight: 500;
-	}
-
-	.confirmation {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		padding: var(--space-1) var(--space-2);
-		background: var(--surface-secondary);
-		border-radius: var(--radius-sm);
 	}
 
 	.action-links {

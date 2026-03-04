@@ -11,6 +11,7 @@ import type { GeoLocation, Address, Location } from '$lib/types/travel';
 import { cache, cityCacheKey, geocodeCacheKey, reverseGeocodeCacheKey, timezoneCacheKey } from '$lib/server/db/cache';
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
+import { logger } from '$lib/server/logger';
 
 // API endpoints
 const GEOAPIFY_GEOCODING_URL = 'https://api.geoapify.com/v1/geocode/search';
@@ -248,7 +249,7 @@ export async function searchCities(query: string, limit = 10): Promise<CitySearc
 		const response = await fetchWithRetry(url, undefined, {
 			maxAttempts: 3,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[Geoapify] City search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('Geoapify', `City search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -279,7 +280,7 @@ export async function searchCities(query: string, limit = 10): Promise<CitySearc
 		return results;
 	} catch (error) {
 		const geoapifyError = classifyError(error);
-		console.error(`[Geoapify] City search failed for "${query}":`, geoapifyError.message);
+		logger.error('Geoapify', `City search failed for "${query}":`, geoapifyError.message);
 		throw geoapifyError;
 	}
 }
@@ -318,7 +319,7 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
 		const response = await fetchWithRetry(url, undefined, {
 			maxAttempts: 3,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[Geoapify] Geocode retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('Geoapify', `Geocode retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -344,7 +345,7 @@ export async function geocodeAddress(address: string): Promise<GeocodingResult |
 		return result;
 	} catch (error) {
 		const geoapifyError = classifyError(error);
-		console.error(`[Geoapify] Geocoding failed for "${address}":`, geoapifyError.message);
+		logger.error('Geoapify', `Geocoding failed for "${address}":`, geoapifyError.message);
 		throw geoapifyError;
 	}
 }
@@ -379,7 +380,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Location
 		const response = await fetchWithRetry(url, undefined, {
 			maxAttempts: 3,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[Geoapify] Reverse geocode retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('Geoapify', `Reverse geocode retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -401,7 +402,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Location
 		return location;
 	} catch (error) {
 		const geoapifyError = classifyError(error);
-		console.error(`[Geoapify] Reverse geocoding failed for (${lat}, ${lon}):`, geoapifyError.message);
+		logger.error('Geoapify', `Reverse geocoding failed for (${lat}, ${lon}):`, geoapifyError.message);
 		throw geoapifyError;
 	}
 }
@@ -454,7 +455,7 @@ export async function getTimezone(lat: number, lon: number): Promise<string> {
 				}
 			}
 		} catch (error) {
-			console.warn('[Geoapify] TimezoneDB fallback failed:', error);
+			logger.warn('Geoapify', 'TimezoneDB fallback failed:', error);
 		}
 	}
 
@@ -463,7 +464,7 @@ export async function getTimezone(lat: number, lon: number): Promise<string> {
 	const roughOffset = Math.round(lon / 15);
 	const fallbackTz = roughOffset >= 0 ? `Etc/GMT-${roughOffset}` : `Etc/GMT+${Math.abs(roughOffset)}`;
 
-	console.warn(`[Geoapify] Using rough timezone estimate ${fallbackTz} for (${lat}, ${lon})`);
+	logger.warn('Geoapify', `Using rough timezone estimate ${fallbackTz} for (${lat}, ${lon})`);
 
 	return fallbackTz;
 }
