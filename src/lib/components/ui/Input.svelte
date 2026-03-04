@@ -87,36 +87,6 @@
 		color: var(--color-error);
 	}
 
-	.input {
-		display: block;
-		width: 100%;
-		padding: var(--space-2) var(--space-3);
-		font-size: 0.875rem;
-		line-height: 1.5;
-		color: var(--text-primary);
-		background: var(--surface-primary);
-		border: 1px solid var(--border-color);
-		border-radius: var(--radius-md);
-		transition:
-			border-color var(--transition-fast),
-			box-shadow var(--transition-fast);
-
-		&::placeholder {
-			color: var(--text-tertiary);
-		}
-
-		&:focus {
-			border-color: var(--color-primary);
-			box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary), transparent 75%);
-			outline: none;
-		}
-
-		&:disabled {
-			background: var(--surface-secondary);
-			cursor: not-allowed;
-		}
-	}
-
 	.has-error .input {
 		border-color: var(--color-error);
 

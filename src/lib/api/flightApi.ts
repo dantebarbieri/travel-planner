@@ -9,8 +9,8 @@ import { clientCache } from './clientCache';
 /**
  * Generate a cache key for flight routes.
  */
-function flightCacheKey(airlineCode: string, flightNumber: string): string {
-	return `flight:${airlineCode.toUpperCase()}${flightNumber}`;
+function flightCacheKey(airlineCode: string, flightNumber: string, date: string): string {
+	return `flight:${airlineCode.toUpperCase()}${flightNumber}:${date}`;
 }
 
 /**
@@ -35,12 +35,11 @@ export async function searchFlight(
 	flightNumber: string,
 	date: string
 ): Promise<FlightSearchResult | null> {
-	const cacheKey = flightCacheKey(airlineCode, flightNumber);
+	const cacheKey = flightCacheKey(airlineCode, flightNumber, date);
 
-	// Check cache (route doesn't change, just update date)
 	const cached = clientCache.get<FlightSearchResult>(cacheKey);
 	if (cached) {
-		return { ...cached, departureDate: date };
+		return cached;
 	}
 
 	const params = new URLSearchParams({
@@ -142,7 +141,8 @@ export async function searchAirlines(query: string): Promise<Airline[]> {
  * Clear flight-related cache.
  */
 export function clearFlightCache(): void {
-	clientCache.clear();
+	clientCache.clearByPrefix('flight:');
+	clientCache.clearByPrefix('airline:');
 }
 
 // Export as a flight API object

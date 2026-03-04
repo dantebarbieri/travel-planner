@@ -218,7 +218,7 @@
 		background: none;
 		border: none;
 		padding: 0;
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--color-primary);
 		cursor: pointer;
 		text-decoration: underline;

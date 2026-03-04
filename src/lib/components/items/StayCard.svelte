@@ -261,7 +261,7 @@
 	}
 
 	.time-input {
-		padding: 2px 6px;
+		padding: var(--space-0-5) var(--space-1-5);
 		border: 1px solid var(--border-color);
 		border-radius: var(--radius-sm);
 		font-size: 0.8125rem;
@@ -283,16 +283,16 @@
 	}
 
 	.amenity {
-		font-size: 0.75rem;
-		padding: 2px 6px;
+		font-size: var(--font-size-sm);
+		padding: var(--space-0-5) var(--space-1-5);
 		background: var(--surface-primary);
 		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
 	}
 
 	.amenity-more {
-		font-size: 0.75rem;
-		padding: 2px 6px;
+		font-size: var(--font-size-sm);
+		padding: var(--space-0-5) var(--space-1-5);
 		color: var(--text-tertiary);
 	}
 </style>

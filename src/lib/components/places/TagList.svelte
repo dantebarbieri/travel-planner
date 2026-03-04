@@ -73,8 +73,8 @@
 	.tag {
 		display: inline-flex;
 		align-items: center;
-		gap: 3px;
-		padding: 2px 6px;
+		gap: var(--space-1);
+		padding: var(--space-0-5) var(--space-1-5);
 		background: var(--surface-secondary);
 		border-radius: var(--radius-sm);
 		color: var(--text-secondary);
@@ -87,8 +87,8 @@
 	}
 
 	.size-md .tag {
-		font-size: 0.75rem;
-		padding: 2px 6px;
+		font-size: var(--font-size-sm);
+		padding: var(--space-0-5) var(--space-1-5);
 	}
 
 	.tag.more {

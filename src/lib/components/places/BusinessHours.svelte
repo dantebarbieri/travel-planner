@@ -121,7 +121,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 	}
 
 	.today-hours {
@@ -147,7 +147,7 @@
 	.week-hours {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 		padding: var(--space-2);
 		background: var(--surface-secondary);
 		border-radius: var(--radius-sm);
@@ -156,7 +156,7 @@
 	.day-row {
 		display: flex;
 		justify-content: space-between;
-		padding: 2px 0;
+		padding: var(--space-0-5) 0;
 
 		&.current {
 			font-weight: 600;
@@ -195,7 +195,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-1);
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 	}
 </style>

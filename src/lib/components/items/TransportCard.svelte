@@ -405,7 +405,7 @@
 	.route-point {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.route-name {
@@ -414,15 +414,15 @@
 	}
 
 	.route-time {
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 	}
 
 	.timezone {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		color: var(--text-tertiary);
 		cursor: help;
 		padding: 1px 3px;
@@ -466,8 +466,8 @@
 
 	.route-duration {
 		background: var(--surface-primary);
-		padding: 2px 6px;
-		font-size: 0.75rem;
+		padding: var(--space-0-5) var(--space-1-5);
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		z-index: 1;
 	}
@@ -485,17 +485,17 @@
 	.flight-details {
 		display: flex;
 		gap: var(--space-3);
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 	}
 
 	.booking-ref {
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 	}
 
 	.notes {
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		font-style: italic;
 		padding: var(--space-2);
@@ -512,7 +512,7 @@
 		background: none;
 		border: none;
 		padding: 0;
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--color-primary);
 		cursor: pointer;
 		text-decoration: underline;
@@ -532,11 +532,11 @@
 	.primary-point {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.primary-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -555,7 +555,7 @@
 		color: var(--text-primary);
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 	}
 
 	.secondary-point {
@@ -567,7 +567,7 @@
 	}
 
 	.secondary-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -593,11 +593,11 @@
 	.rental-location {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.rental-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -639,11 +639,11 @@
 	.detail-item {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.detail-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

@@ -282,11 +282,11 @@
 	.price.editable {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 		background: none;
 		border: 1px dashed var(--border-color);
 		border-radius: var(--radius-sm);
-		padding: 2px 6px;
+		padding: var(--space-0-5) var(--space-1-5);
 		cursor: pointer;
 		font: inherit;
 		font-weight: 600;
@@ -312,8 +312,7 @@
 	.entry-fee-edit {
 		display: inline-flex;
 		align-items: center;
-		gap: 2px;
-	}
+		gap: var(--space-0-5);	}
 
 	.currency-symbol {
 		color: var(--text-secondary);
@@ -322,7 +321,7 @@
 
 	.entry-fee-input {
 		width: 60px;
-		padding: 2px 4px;
+		padding: var(--space-0-5) var(--space-1);
 		border: 1px solid var(--color-primary);
 		border-radius: var(--radius-sm);
 		font: inherit;
