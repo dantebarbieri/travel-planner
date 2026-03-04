@@ -5,26 +5,13 @@
 
 import { json } from '@sveltejs/kit';
 import { getRoute, getAllRoutes, type TravelMode } from '$lib/server/adapters/routing';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import type { RequestHandler } from './$types';
 import type { Location } from '$lib/types/travel';
 
 const VALID_MODES: TravelMode[] = ['driving', 'walking', 'bicycling', 'transit'];
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'routing')) {
-		const headers = rateLimit.getHeaders(ip, 'routing');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
-			}
-		});
-	}
-
+export const GET: RequestHandler = createApiHandler('routing', 'RoutingAPI', 'Failed to calculate route', async ({ url, headers }) => {
 	// Parse parameters
 	const fromLat = parseFloat(url.searchParams.get('fromLat') ?? '');
 	const fromLon = parseFloat(url.searchParams.get('fromLon') ?? '');
@@ -37,14 +24,14 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (isNaN(fromLat) || isNaN(fromLon)) {
 		return json(
 			{ error: 'Missing or invalid fromLat/fromLon parameters' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'routing') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (isNaN(toLat) || isNaN(toLon)) {
 		return json(
 			{ error: 'Missing or invalid toLat/toLon parameters' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'routing') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -61,39 +48,27 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 		geo: { latitude: toLat, longitude: toLon }
 	};
 
-	try {
-		// If 'all' is requested, return all travel modes
-		if (all) {
-			const routes = await getAllRoutes(from, to);
-			return json(
-				{ routes },
-				{
-					headers: rateLimit.getHeaders(ip, 'routing')
-				}
-			);
-		}
-
-		// Single mode request
-		if (!mode || !VALID_MODES.includes(mode)) {
-			return json(
-				{ error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}` },
-				{ status: 400, headers: rateLimit.getHeaders(ip, 'routing') }
-			);
-		}
-
-		const route = await getRoute(from, to, mode);
-
+	// If 'all' is requested, return all travel modes
+	if (all) {
+		const routes = await getAllRoutes(from, to);
 		return json(
-			{ route },
-			{
-				headers: rateLimit.getHeaders(ip, 'routing')
-			}
-		);
-	} catch (err) {
-		console.error('Routing API error:', err);
-		return json(
-			{ error: 'Failed to calculate route' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'routing') }
+			{ routes },
+			{ headers: headers() }
 		);
 	}
-};
+
+	// Single mode request
+	if (!mode || !VALID_MODES.includes(mode)) {
+		return json(
+			{ error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}` },
+			{ status: 400, headers: headers() }
+		);
+	}
+
+	const route = await getRoute(from, to, mode);
+
+	return json(
+		{ route },
+		{ headers: headers() }
+	);
+});

@@ -8,6 +8,7 @@
 import type { Location, WeatherCondition, WeatherConditionType } from '$lib/types/travel';
 import { cache, weatherCacheKey, type CacheType } from '$lib/server/db/cache';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
+import { logger } from '$lib/server/logger';
 
 // API endpoints
 const FORECAST_API_URL = 'https://api.open-meteo.com/v1/forecast';
@@ -168,7 +169,7 @@ function validateTimezone(timezone: string | undefined): string | undefined {
 		Intl.DateTimeFormat('en-CA', { timeZone: timezone });
 		return timezone;
 	} catch {
-		console.warn(`[Weather] Invalid timezone '${timezone}' rejected during validation`);
+		logger.warn('Weather', `Invalid timezone '${timezone}' rejected during validation`);
 		return undefined;
 	}
 }
@@ -262,7 +263,7 @@ async function fetchForecast(location: Location): Promise<WeatherCondition[]> {
 	const response = await fetchWithRetry(url, undefined, {
 		maxAttempts: 4,
 		onRetry: (attempt, delayMs) => {
-			console.log(`[Weather] Forecast retry ${attempt}, waiting ${delayMs}ms...`);
+			logger.debug('Weather', `Forecast retry ${attempt}, waiting ${delayMs}ms...`);
 		}
 	});
 	
@@ -318,7 +319,7 @@ async function fetchHistorical(location: Location, startDate: string, endDate: s
 	const response = await fetchWithRetry(url, undefined, {
 		maxAttempts: 4,
 		onRetry: (attempt, delayMs) => {
-			console.log(`[Weather] Historical retry ${attempt}, waiting ${delayMs}ms...`);
+			logger.debug('Weather', `Historical retry ${attempt}, waiting ${delayMs}ms...`);
 		}
 	});
 	
@@ -427,7 +428,7 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 				const missingForecastDates = uncachedDates.filter(d => !fetchedDates.has(d));
 				
 				if (missingForecastDates.length > 0) {
-					console.log(`[Weather] Dates ${missingForecastDates.join(', ')} not in forecast, fetching from historical API`);
+					logger.info('Weather', `Dates ${missingForecastDates.join(', ')} not in forecast, fetching from historical API`);
 					try {
 						const startDate = missingForecastDates[0];
 						const endDate = missingForecastDates[missingForecastDates.length - 1];
@@ -447,7 +448,7 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 						}
 					} catch (histError) {
 						const weatherError = classifyError(histError, 'historical-fallback');
-						console.error(`[Weather] Historical fallback failed for ${missingForecastDates.join(', ')}: ${weatherError.code} - ${weatherError.message}`);
+						logger.error('Weather', `Historical fallback failed for ${missingForecastDates.join(', ')}: ${weatherError.code} - ${weatherError.message}`);
 						// Don't re-throw - we can continue with partial forecast data
 					}
 				}
@@ -475,14 +476,14 @@ export async function getWeather(location: Location, dates: string[]): Promise<W
 			
 			// Log with appropriate detail based on error type
 			if (weatherError.code === 'RATE_LIMITED') {
-				console.warn(`[Weather] Rate limited while fetching ${category} data for ${uncachedDates.length} dates`);
+				logger.warn('Weather', `Rate limited while fetching ${category} data for ${uncachedDates.length} dates`);
 				throw weatherError;
 			} else if (weatherError.code === 'NETWORK_ERROR') {
-				console.error(`[Weather] Network error fetching ${category} data:`, weatherError.message);
+				logger.error('Weather', `Network error fetching ${category} data:`, weatherError.message);
 			} else if (weatherError.code === 'API_ERROR') {
-				console.error(`[Weather] API error (${weatherError.statusCode}) fetching ${category} data for dates ${uncachedDates.join(', ')}:`, weatherError.message);
+				logger.error('Weather', `API error (${weatherError.statusCode}) fetching ${category} data for dates ${uncachedDates.join(', ')}:`, weatherError.message);
 			} else {
-				console.error(`[Weather] Error fetching ${category} data:`, weatherError.message, error);
+				logger.error('Weather', `Error fetching ${category} data:`, weatherError.message, error);
 			}
 			// Continue processing other categories - partial results are better than none
 		}
@@ -521,7 +522,7 @@ async function getHistoricalPredictions(location: Location, dates: string[]): Pr
 				lastError = classifyError(error, 'prediction');
 				// Rate limit errors should stop immediately
 				if (lastError.code === 'RATE_LIMITED') {
-					console.warn(`[Weather] Rate limited while fetching prediction data for ${date}`);
+					logger.warn('Weather', `Rate limited while fetching prediction data for ${date}`);
 					break;
 				}
 			}
@@ -529,7 +530,7 @@ async function getHistoricalPredictions(location: Location, dates: string[]): Pr
 
 		// Log if we couldn't get any historical data for predictions
 		if (historicalConditions.length === 0 && lastError) {
-			console.warn(`[Weather] No historical data available for prediction on ${date}: ${lastError.code}`);
+			logger.warn('Weather', `No historical data available for prediction on ${date}: ${lastError.code}`);
 		}
 
 		if (historicalConditions.length > 0) {

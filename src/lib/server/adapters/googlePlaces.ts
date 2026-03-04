@@ -23,6 +23,7 @@ import { cache, placeDetailsCacheKey, googlePlaceIdCacheKey, googleFoodPlacesCac
 import { env } from '$env/dynamic/private';
 import { fetchWithRetry, HttpError } from '$lib/utils/retry';
 import { warnIfUnsafeUrl } from '$lib/utils/url';
+import { logger } from '$lib/server/logger';
 
 // Google Places API (New) endpoints
 const GOOGLE_PLACES_DETAILS_URL = 'https://places.googleapis.com/v1/places';
@@ -396,7 +397,7 @@ export async function findPlaceId(
 		}, {
 			maxAttempts: 2,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[GooglePlaces] Search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('GooglePlaces', `Search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -424,7 +425,7 @@ export async function findPlaceId(
 		const gpError = classifyError(error);
 		// Don't log if it's just missing API key - that's expected
 		if (gpError.code !== 'MISSING_API_KEY') {
-			console.warn(`[GooglePlaces] Find place ID failed for "${name}":`, gpError.message);
+			logger.warn('GooglePlaces', `Find place ID failed for "${name}":`, gpError.message);
 		}
 		return null;
 	}
@@ -481,7 +482,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 		}, {
 			maxAttempts: 2,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[GooglePlaces] Details retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('GooglePlaces', `Details retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -522,7 +523,7 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails | n
 	} catch (error) {
 		const gpError = classifyError(error);
 		if (gpError.code !== 'MISSING_API_KEY') {
-			console.error(`[GooglePlaces] Get details failed for ${placeId}:`, gpError.message);
+			logger.error('GooglePlaces', `Get details failed for ${placeId}:`, gpError.message);
 		}
 		return null;
 	}
@@ -760,7 +761,7 @@ export async function searchFoodVenues(
 		}, {
 			maxAttempts: 2,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[GooglePlaces] Food search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('GooglePlaces', `Food search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -807,7 +808,7 @@ export async function searchFoodVenues(
 	} catch (error) {
 		const gpError = classifyError(error);
 		if (gpError.code !== 'MISSING_API_KEY') {
-			console.error(`[GooglePlaces] Food search failed for (${lat}, ${lon}):`, gpError.message);
+			logger.error('GooglePlaces', `Food search failed for (${lat}, ${lon}):`, gpError.message);
 		}
 		throw gpError;
 	}
@@ -890,7 +891,7 @@ export async function searchAttractions(
 		}, {
 			maxAttempts: 2,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[GooglePlaces] Attraction search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('GooglePlaces', `Attraction search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -937,7 +938,7 @@ export async function searchAttractions(
 	} catch (error) {
 		const gpError = classifyError(error);
 		if (gpError.code !== 'MISSING_API_KEY') {
-			console.error(`[GooglePlaces] Attraction search failed for (${lat}, ${lon}):`, gpError.message);
+			logger.error('GooglePlaces', `Attraction search failed for (${lat}, ${lon}):`, gpError.message);
 		}
 		throw gpError;
 	}
@@ -1066,7 +1067,7 @@ export async function searchLodging(
 		}, {
 			maxAttempts: 2,
 			onRetry: (attempt, delayMs) => {
-				console.log(`[GooglePlaces] Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
+				logger.debug('GooglePlaces', `Lodging search retry ${attempt}, waiting ${delayMs}ms...`);
 			}
 		});
 
@@ -1087,7 +1088,7 @@ export async function searchLodging(
 	} catch (error) {
 		const gpError = classifyError(error);
 		if (gpError.code !== 'MISSING_API_KEY') {
-			console.error(`[GooglePlaces] Lodging search failed:`, gpError.message);
+			logger.error('GooglePlaces', 'Lodging search failed:', gpError.message);
 		}
 		throw gpError;
 	}

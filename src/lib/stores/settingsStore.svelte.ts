@@ -175,18 +175,18 @@ function deleteCustomColorScheme(schemeId: string): void {
 	updateUserSettings(updates);
 }
 
-function getEffectiveKindColors(): KindColors {
-	const scheme = state.userSettings.defaultColorSchemeId
-		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId)
+function getEffectiveColorScheme(): CustomColorScheme | null {
+	return state.userSettings.defaultColorSchemeId
+		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId) ?? null
 		: null;
-	return scheme?.kindColors ?? defaultKindColors;
+}
+
+function getEffectiveKindColors(): KindColors {
+	return getEffectiveColorScheme()?.kindColors ?? defaultKindColors;
 }
 
 function getEffectivePaletteColors(): string[] {
-	const scheme = state.userSettings.defaultColorSchemeId
-		? state.userSettings.customColorSchemes.find(s => s.id === state.userSettings.defaultColorSchemeId)
-		: null;
-	return scheme?.paletteColors ?? defaultPaletteColors;
+	return getEffectiveColorScheme()?.paletteColors ?? defaultPaletteColors;
 }
 
 // ============ Theme Application ============
@@ -211,8 +211,8 @@ function applyThemeToDOM(): void {
  * Initialize theme system and listen for system preference changes.
  * Call this once on app startup.
  */
-function initThemeListener(): void {
-	if (typeof window === 'undefined') return;
+function initThemeListener(): (() => void) | undefined {
+	if (typeof window === 'undefined') return undefined;
 
 	const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -220,15 +220,18 @@ function initThemeListener(): void {
 	systemPrefersDark = mediaQuery.matches;
 
 	// Listen for changes
-	mediaQuery.addEventListener('change', (e) => {
+	const handler = (e: MediaQueryListEvent) => {
 		systemPrefersDark = e.matches;
 		if (state.userSettings.theme === 'system') {
 			applyThemeToDOM();
 		}
-	});
+	};
+	mediaQuery.addEventListener('change', handler);
 
 	// Apply initial theme
 	applyThemeToDOM();
+
+	return () => mediaQuery.removeEventListener('change', handler);
 }
 
 // ============ Trip Settings Resolution ============

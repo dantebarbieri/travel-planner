@@ -1,13 +1,14 @@
 <script lang="ts">
 	import type { Activity } from '$lib/types/travel';
 	import { formatTime, formatDuration } from '$lib/utils/dates';
+	import { getActivityCategoryLabel, getCurrencySymbol } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import BusinessHours from '$lib/components/places/BusinessHours.svelte';
 	import TagList from '$lib/components/places/TagList.svelte';
 	import CategoryTagList from '$lib/components/places/CategoryTagList.svelte';
 	import ItemNotes from './ItemNotes.svelte';
-	import { getMapsUrl } from '$lib/services/mapService';
+	import { openInMaps } from '$lib/utils/cardHelpers';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import { openSafeUrl } from '$lib/utils/url';
 
@@ -39,21 +40,7 @@
 	// Get time format preference (12h vs 24h)
 	const use24h = $derived(settingsStore.userSettings.timeFormat === '24h');
 
-	const categoryLabel = $derived.by(() => {
-		const labels: Record<string, string> = {
-			sightseeing: 'Sightseeing',
-			museum: 'Museum',
-			tour: 'Tour',
-			outdoor: 'Outdoor',
-			entertainment: 'Entertainment',
-			shopping: 'Shopping',
-			wellness: 'Wellness',
-			nightlife: 'Nightlife',
-			sports: 'Sports',
-			other: 'Activity'
-		};
-		return labels[activity.category] || 'Activity';
-	});
+	const categoryLabel = $derived(getActivityCategoryLabel(activity.category));
 
 	// Get effective entry fee (user override or API data)
 	const effectiveEntryFee = $derived(
@@ -65,8 +52,7 @@
 		const price = effectiveEntryFee ?? activity.price;
 		if (price === undefined) return null;
 		if (price === 0) return 'Free';
-		const symbol = activity.currency === 'EUR' ? '€' : activity.currency === 'JPY' ? '¥' : '$';
-		return `${symbol}${price}`;
+		return `${getCurrencySymbol(activity.currency || '')}${price}`;
 	});
 
 	// Price level display ($-$$$$)
@@ -137,8 +123,8 @@
 		activity.userOverrides?.categoryTags || activity.categoryTags || []
 	);
 
-	function openInMaps() {
-		window.open(getMapsUrl(activity.location, mapApp), '_blank');
+	function handleOpenInMaps() {
+		openInMaps(activity.location, mapApp);
 	}
 
 	// Title click handler - open website if available
@@ -191,7 +177,7 @@
 		{/if}
 
 		<div class="card-details">
-			<button type="button" class="location-link" onclick={openInMaps} title="Open in Maps">
+			<button type="button" class="location-link" onclick={handleOpenInMaps} title="Open in Maps">
 				<Icon name="location" size={14} />
 				<span class="truncate">{activity.location.address.formatted}</span>
 			</button>
@@ -274,72 +260,6 @@
 </div>
 
 <style>
-	.item-card {
-		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-activity)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
-		border-left: 4px solid var(--item-color, var(--color-kind-activity));
-		border-radius: var(--radius-md);
-		padding: var(--space-3);
-	}
-
-	.card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-2);
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: var(--item-color, var(--color-kind-activity));
-		color: var(--text-inverse);
-		border-radius: var(--radius-md);
-	}
-
-	.card-badges {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-1);
-	}
-
-	.card-content {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.card-title-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-		color: var(--text-primary);
-
-		&:disabled {
-			cursor: default;
-		}
-
-		&:hover:not(:disabled) .card-title {
-			color: var(--color-primary);
-		}
-	}
-
-	.card-title {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 1rem;
-		font-weight: 600;
-		margin: 0;
-		transition: color var(--transition-fast);
-	}
-
 	.description {
 		font-size: 0.875rem;
 		color: var(--text-secondary);
@@ -351,73 +271,30 @@
 		overflow: hidden;
 	}
 
-	.card-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.location-link {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
-		background: none;
-		border: none;
-		padding: 0;
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		cursor: pointer;
-		max-width: 100%;
-
-		&:hover {
-			color: var(--color-primary);
-		}
-	}
-
-	.meta-row {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		font-size: 0.875rem;
-	}
-
-	.time {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		color: var(--text-secondary);
-	}
-
 	.duration {
 		color: var(--text-tertiary);
 	}
 
-	.price {
+	.price.free {
+		color: var(--color-success);
+	}
+
+	.price.editable {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		background: none;
+		border: 1px dashed var(--border-color);
+		border-radius: var(--radius-sm);
+		padding: var(--space-0-5) var(--space-1-5);
+		cursor: pointer;
+		font: inherit;
 		font-weight: 600;
 		color: var(--text-primary);
 
-		&.free {
-			color: var(--color-success);
-		}
-
-		&.editable {
-			display: inline-flex;
-			align-items: center;
-			gap: 4px;
-			background: none;
-			border: 1px dashed var(--border-secondary);
-			border-radius: var(--radius-sm);
-			padding: 2px 6px;
-			cursor: pointer;
-			font: inherit;
-			font-weight: 600;
-			color: var(--text-primary);
-
-			&:hover {
-				border-color: var(--color-primary);
-				background: var(--surface-secondary);
-			}
+		&:hover {
+			border-color: var(--color-primary);
+			background: var(--surface-secondary);
 		}
 	}
 
@@ -435,7 +312,7 @@
 	.entry-fee-edit {
 		display: inline-flex;
 		align-items: center;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.currency-symbol {
@@ -445,7 +322,7 @@
 
 	.entry-fee-input {
 		width: 60px;
-		padding: 2px 4px;
+		padding: var(--space-0-5) var(--space-1);
 		border: 1px solid var(--color-primary);
 		border-radius: var(--radius-sm);
 		font: inherit;
@@ -457,26 +334,5 @@
 			outline: none;
 			box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-primary), transparent 70%);
 		}
-	}
-
-	.price-level {
-		font-weight: 600;
-		color: var(--color-success);
-	}
-
-	.rating {
-		color: var(--color-warning);
-		font-weight: 500;
-	}
-
-	.confirmation {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		padding: var(--space-1) var(--space-2);
-		background: var(--surface-secondary);
-		border-radius: var(--radius-sm);
 	}
 </style>

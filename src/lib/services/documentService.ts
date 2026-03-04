@@ -156,14 +156,19 @@ function generateTripHTML(trip: Trip, use24h: boolean = false): string {
 }
 
 function escapeHtml(text: string): string {
-	const div = document.createElement('div');
-	div.textContent = text;
-	return div.innerHTML;
+	return text
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 }
 
 // ============ PDF Export ============
 
 export async function exportToPDF(trip: Trip, use24h: boolean = false): Promise<void> {
+	if (typeof document === 'undefined') return;
+
 	// Dynamic import html2pdf to avoid SSR issues
 	const html2pdf = (await import('html2pdf.js')).default;
 
@@ -194,6 +199,8 @@ export async function exportToPDF(trip: Trip, use24h: boolean = false): Promise<
 // ============ DOCX Export ============
 
 export async function exportToDOCX(trip: Trip, use24h: boolean = false): Promise<void> {
+	if (typeof document === 'undefined') return;
+
 	const allStays = trip.cities.flatMap((c) => c.stays);
 
 	const children: (Paragraph | Table)[] = [];
@@ -378,6 +385,8 @@ export async function exportToDOCX(trip: Trip, use24h: boolean = false): Promise
 // ============ Print-friendly HTML ============
 
 export function openPrintView(trip: Trip, use24h: boolean = false): void {
+	if (typeof window === 'undefined') return;
+
 	const html = generateTripHTML(trip, use24h);
 	const printWindow = window.open('', '_blank');
 	if (printWindow) {

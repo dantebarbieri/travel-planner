@@ -6,23 +6,10 @@
 
 import { json } from '@sveltejs/kit';
 import { searchFlight, searchAllFlights } from '$lib/server/adapters/flights';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'flights')) {
-		const headers = rateLimit.getHeaders(ip, 'flights');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
-			}
-		});
-	}
-
+export const GET: RequestHandler = createApiHandler('flights', 'FlightsAPI', 'Failed to search for flight', async ({ url, headers }) => {
 	// Parse parameters
 	const airlineCode = url.searchParams.get('airline');
 	const flightNumber = url.searchParams.get('flight');
@@ -33,61 +20,46 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (!airlineCode) {
 		return json(
 			{ error: 'Missing airline parameter' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'flights') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (!flightNumber) {
 		return json(
 			{ error: 'Missing flight parameter' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'flights') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
 		return json(
 			{ error: 'Missing or invalid date parameter (expected YYYY-MM-DD format)' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'flights') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
-	try {
-		// If all=true, return all matching flights
-		if (all) {
-			const results = await searchAllFlights(airlineCode, flightNumber, date);
-			
-			return json(
-				{ found: results.length > 0, flights: results },
-				{
-					headers: rateLimit.getHeaders(ip, 'flights')
-				}
-			);
-		}
-		
-		// Default: return first matching flight
-		const result = await searchFlight(airlineCode, flightNumber, date);
-
-		if (!result) {
-			return json(
-				{ found: false, message: 'Flight not found' },
-				{
-					status: 404,
-					headers: rateLimit.getHeaders(ip, 'flights')
-				}
-			);
-		}
+	// If all=true, return all matching flights
+	if (all) {
+		const results = await searchAllFlights(airlineCode, flightNumber, date);
 
 		return json(
-			{ found: true, flight: result },
-			{
-				headers: rateLimit.getHeaders(ip, 'flights')
-			}
-		);
-	} catch (err) {
-		console.error('Flight search error:', err);
-		return json(
-			{ error: 'Failed to search for flight' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'flights') }
+			{ found: results.length > 0, flights: results },
+			{ headers: headers() }
 		);
 	}
-};
+
+	// Default: return first matching flight
+	const result = await searchFlight(airlineCode, flightNumber, date);
+
+	if (!result) {
+		return json(
+			{ found: false, message: 'Flight not found' },
+			{ status: 404, headers: headers() }
+		);
+	}
+
+	return json(
+		{ found: true, flight: result },
+		{ headers: headers() }
+	);
+});

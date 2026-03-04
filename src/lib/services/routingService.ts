@@ -13,6 +13,7 @@
  */
 
 import type { Location, TravelMode, TravelEstimate } from '$lib/types/travel';
+import { calculateHaversineDistance } from '$lib/services/geoService';
 
 // OSRM servers with dedicated profiles at routing.openstreetmap.de
 const OSRM_SERVERS: Record<TravelMode, string | null> = {
@@ -59,18 +60,7 @@ function getCacheKey(from: Location, to: Location, mode: TravelMode): string {
  * Used as fallback when API is unavailable or for unsupported modes (transit).
  */
 function calculateEstimate(from: Location, to: Location, mode: TravelMode): TravelEstimate {
-	// Haversine formula for straight-line distance
-	const R = 6371; // Earth's radius in km
-	const dLat = ((to.geo.latitude - from.geo.latitude) * Math.PI) / 180;
-	const dLon = ((to.geo.longitude - from.geo.longitude) * Math.PI) / 180;
-	const a =
-		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-		Math.cos((from.geo.latitude * Math.PI) / 180) *
-			Math.cos((to.geo.latitude * Math.PI) / 180) *
-			Math.sin(dLon / 2) *
-			Math.sin(dLon / 2);
-	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-	const straightLineDistance = R * c;
+	const straightLineDistance = calculateHaversineDistance(from.geo, to.geo);
 
 	// Apply a "road factor" to account for non-straight routes
 	// Typically roads are 20-40% longer than straight-line distance

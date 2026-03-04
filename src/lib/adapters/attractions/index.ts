@@ -16,7 +16,7 @@ export const attractionAdapter: AttractionAdapter = {
 	async search(params: ActivitySearchParams): Promise<Activity[]> {
 		const isGoogle = params.source === 'google';
 		if (!isGoogle && !params.location) {
-			console.log('[AttractionAdapter] No location provided');
+			if (import.meta.env.DEV) console.log('[AttractionAdapter] No location provided');
 			return [];
 		}
 

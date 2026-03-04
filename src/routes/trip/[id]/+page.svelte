@@ -528,7 +528,7 @@
 
 	function handleRemoveEntireTransport(transportLegId: string) {
 		if (trip) {
-			tripStore.removeAllTransportItems(trip.id, transportLegId);
+			tripStore.removeTransportLeg(trip.id, transportLegId);
 		}
 	}
 

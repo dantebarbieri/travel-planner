@@ -178,9 +178,9 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Location
  * Clear all geocoding-related caches.
  */
 export function clearGeocodingCache(): void {
-	// Note: This clears the entire client cache, not just geocoding.
-	// For selective clearing, we'd need to add prefix-based clearing to clientCache.
-	clientCache.clear();
+	clientCache.clearByPrefix('city:');
+	clientCache.clearByPrefix('geocode:');
+	clientCache.clearByPrefix('reverse-geocode:');
 }
 
 /**

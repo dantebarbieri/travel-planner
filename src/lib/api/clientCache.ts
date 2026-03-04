@@ -123,6 +123,22 @@ class ClientCache {
 	}
 
 	/**
+	 * Clear cache entries whose keys start with the given prefix.
+	 */
+	clearByPrefix(prefix: string): void {
+		for (const key of this.cache.keys()) {
+			if (key.startsWith(prefix)) {
+				this.cache.delete(key);
+			}
+		}
+		for (const key of this.pendingRequests.keys()) {
+			if (key.startsWith(prefix)) {
+				this.pendingRequests.delete(key);
+			}
+		}
+	}
+
+	/**
 	 * Remove expired entries.
 	 */
 	cleanup(): number {

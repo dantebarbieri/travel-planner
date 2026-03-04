@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { tripStore } from '$lib/stores/tripStore.svelte';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 	import UserSettingsModal from '$lib/components/settings/UserSettingsModal.svelte';
@@ -8,6 +8,7 @@
 	let { children } = $props();
 
 	let showSettingsModal = $state(false);
+	let cleanupThemeListener: (() => void) | undefined;
 
 	onMount(() => {
 		// Load data stores
@@ -15,7 +16,11 @@
 		settingsStore.loadSettings();
 
 		// Initialize theme system
-		settingsStore.initThemeListener();
+		cleanupThemeListener = settingsStore.initThemeListener();
+	});
+
+	onDestroy(() => {
+		cleanupThemeListener?.();
 	});
 
 	function openSettings() {

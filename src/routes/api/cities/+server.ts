@@ -7,37 +7,25 @@
 
 import { json } from '@sveltejs/kit';
 import { searchCities, GeoapifyError } from '$lib/server/adapters/geoapify';
-import { rateLimit } from '$lib/server/rateLimit';
+import { createApiHandler } from '$lib/server/apiHelpers';
+import { logger } from '$lib/server/logger';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ url, request, getClientAddress }) => {
-	// Rate limiting
-	const ip = rateLimit.getClientIp(request, getClientAddress);
-	if (!rateLimit.check(ip, 'cities')) {
-		const headers = rateLimit.getHeaders(ip, 'cities');
-		return new Response(JSON.stringify({ error: 'Too many requests' }), {
-			status: 429,
-			headers: {
-				'Content-Type': 'application/json',
-				...headers
-			}
-		});
-	}
-
+export const GET: RequestHandler = createApiHandler('cities', 'CitiesAPI', 'Failed to search cities', async ({ url, headers }) => {
 	const query = url.searchParams.get('q');
 	const limitParam = url.searchParams.get('limit');
 
 	if (!query) {
 		return json(
 			{ error: 'Missing required parameter: q' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'cities') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
 	if (query.length < 2) {
 		return json(
 			{ error: 'Query must be at least 2 characters' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'cities') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -45,7 +33,7 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 	if (isNaN(limit) || limit < 1 || limit > 50) {
 		return json(
 			{ error: 'Limit must be a number between 1 and 50' },
-			{ status: 400, headers: rateLimit.getHeaders(ip, 'cities') }
+			{ status: 400, headers: headers() }
 		);
 	}
 
@@ -54,40 +42,32 @@ export const GET: RequestHandler = async ({ url, request, getClientAddress }) =>
 
 		return json(
 			{ results },
-			{ headers: rateLimit.getHeaders(ip, 'cities') }
+			{ headers: headers() }
 		);
 	} catch (err) {
 		if (err instanceof GeoapifyError) {
 			if (err.code === 'RATE_LIMITED') {
-				return new Response(JSON.stringify({ error: 'External API rate limit exceeded' }), {
-					status: 503,
-					headers: {
-						'Content-Type': 'application/json',
-						'Retry-After': '60',
-						...rateLimit.getHeaders(ip, 'cities')
-					}
-				});
-			}
-
-			if (err.code === 'MISSING_API_KEY') {
-				console.error('Geoapify API key not configured');
 				return json(
-					{ error: 'City search service not configured' },
-					{ status: 500, headers: rateLimit.getHeaders(ip, 'cities') }
+					{ error: 'External API rate limit exceeded' },
+					{ status: 503, headers: { 'Retry-After': '60', ...headers() } }
 				);
 			}
 
-			console.error('City search API error:', err.message);
+			if (err.code === 'MISSING_API_KEY') {
+				logger.error('CitiesAPI', 'Geoapify API key not configured');
+				return json(
+					{ error: 'City search service not configured' },
+					{ status: 500, headers: headers() }
+				);
+			}
+
+			logger.error('CitiesAPI', 'City search API error:', err.message);
 			return json(
 				{ error: 'City search service error' },
-				{ status: 500, headers: rateLimit.getHeaders(ip, 'cities') }
+				{ status: 500, headers: headers() }
 			);
 		}
 
-		console.error('City search API error:', err);
-		return json(
-			{ error: 'Failed to search cities' },
-			{ status: 500, headers: rateLimit.getHeaders(ip, 'cities') }
-		);
+		throw err;
 	}
-};
+});

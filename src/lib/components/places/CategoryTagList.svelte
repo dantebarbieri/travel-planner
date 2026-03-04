@@ -32,7 +32,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 		color: var(--text-secondary);
 	}
 

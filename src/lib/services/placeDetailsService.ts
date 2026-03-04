@@ -8,6 +8,8 @@
 import type { Activity, FoodVenue, OperatingHours, PlaceTag, FoodTag } from '$lib/types/travel';
 import { fetchPlaceDetails, type PlaceDetails } from '$lib/api/placeDetailsApi';
 
+const isDev = import.meta.env.DEV;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -172,7 +174,7 @@ export async function enrichActivity(activity: Activity): Promise<{
 	try {
 		// Try to get details using available identifiers
 		const fsqId = extractFoursquareId(activity.id);
-		console.log('[PlaceDetailsService] Enriching activity:', {
+		if (isDev) console.log('[PlaceDetailsService] Enriching activity:', {
 			name: activity.name,
 			fsqId,
 			lat: activity.location.geo.latitude,
@@ -186,7 +188,7 @@ export async function enrichActivity(activity: Activity): Promise<{
 			lon: activity.location.geo.longitude
 		});
 
-		console.log('[PlaceDetailsService] Got details:', {
+		if (isDev) console.log('[PlaceDetailsService] Got details:', {
 			found: !!details,
 			source: details?.source,
 			hasOpeningHours: !!details?.openingHours,
@@ -207,7 +209,7 @@ export async function enrichActivity(activity: Activity): Promise<{
 		const updates = mergeActivityDetails(activity, details);
 		const updatedFields = Object.keys(updates).filter(k => k !== 'lastFetched');
 		
-		console.log('[PlaceDetailsService] Applied updates:', {
+		if (isDev) console.log('[PlaceDetailsService] Applied updates:', {
 			updatedFields,
 			hasOpeningHoursInUpdates: 'openingHours' in updates
 		});

@@ -16,7 +16,7 @@ export const foodAdapter: FoodAdapter = {
 	async search(params: FoodSearchParams): Promise<FoodVenue[]> {
 		const isGoogle = params.source === 'google';
 		if (!isGoogle && !params.location) {
-			console.log('[FoodAdapter] No location provided');
+			if (import.meta.env.DEV) console.log('[FoodAdapter] No location provided');
 			return [];
 		}
 

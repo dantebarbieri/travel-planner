@@ -1,6 +1,11 @@
 // ============ Core Date Parsing ============
 // These must be defined first as other functions depend on them
 
+/**
+ * Parse an ISO date string (YYYY-MM-DD) to a Date object.
+ * The date is interpreted in the user's local timezone, which is intentional
+ * for display purposes (the date shown matches the date string).
+ */
 export function parseISODate(isoDate: string): Date {
 	return new Date(isoDate + 'T00:00:00');
 }

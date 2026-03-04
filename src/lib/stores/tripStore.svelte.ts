@@ -75,7 +75,7 @@ function loadTrips(): void {
 }
 
 function saveTrips(): void {
-	storageService.saveTripsDebounced(state.trips);
+	storageService.saveTripsDebounced(() => state.trips);
 	state.lastSaved = new Date();
 }
 
@@ -653,10 +653,14 @@ function removeTransportLeg(tripId: string, legId: string): void {
 		return {
 			...t,
 			transportLegs: t.transportLegs.filter((l) => l.id !== legId),
-			itinerary: t.itinerary.map((day) => ({
-				...day,
-				items: day.items.filter((item) => !(item.kind === 'transport' && item.transportLegId === legId))
-			})),
+			itinerary: t.itinerary.map((day) => {
+				const filtered = day.items.filter((item) => !(item.kind === 'transport' && item.transportLegId === legId));
+				if (filtered.length === day.items.length) return day;
+				return {
+					...day,
+					items: filtered.map((it, idx) => ({ ...it, sortOrder: idx }))
+				};
+			}),
 			updatedAt: new Date().toISOString()
 		};
 	});
@@ -747,24 +751,6 @@ function removeAllStayItems(tripId: string, stayId: string): void {
 				...day,
 				items: day.items
 					.filter((item) => !(item.kind === 'stay' && item.stayId === stayId))
-					.map((it, idx) => ({ ...it, sortOrder: idx }))
-			})),
-			updatedAt: new Date().toISOString()
-		};
-	});
-	saveTrips();
-}
-
-function removeAllTransportItems(tripId: string, transportLegId: string): void {
-	state.trips = state.trips.map((t) => {
-		if (t.id !== tripId) return t;
-		return {
-			...t,
-			transportLegs: t.transportLegs.filter((l) => l.id !== transportLegId),
-			itinerary: t.itinerary.map((day) => ({
-				...day,
-				items: day.items
-					.filter((item) => !(item.kind === 'transport' && item.transportLegId === transportLegId))
 					.map((it, idx) => ({ ...it, sortOrder: idx }))
 			})),
 			updatedAt: new Date().toISOString()
@@ -1263,7 +1249,6 @@ export const tripStore = {
 	addTransportLeg,
 	updateTransportLeg,
 	removeTransportLeg,
-	removeAllTransportItems,
 	addTransportWithDailyItems,
 
 	// Daily Items

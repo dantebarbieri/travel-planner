@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { TransportLeg } from '$lib/types/travel';
 	import { formatTime, formatDuration, formatDateShort, formatDistance, getTimezoneAbbreviation, getTimezoneOffset, calculateRealDuration, parseISODate } from '$lib/utils/dates';
+	import { getTransportModeLabel, getTransportSubTypeLabel, getCurrencySymbol } from '$lib/utils/labels';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
-	import { getDirectionsUrl } from '$lib/services/mapService';
+	import { openDirections } from '$lib/utils/cardHelpers';
 	import { settingsStore } from '$lib/stores/settingsStore.svelte';
 
 	interface Props {
@@ -48,40 +49,15 @@
 	});
 
 	const modeLabel = $derived.by(() => {
-		// For ground_transit, use the sub-type label
 		if (leg.mode === 'ground_transit' && leg.groundTransitSubType) {
-			const subTypeLabels: Record<string, string> = {
-				train: 'Train',
-				bus: 'Bus',
-				metro: 'Metro',
-				tram: 'Tram',
-				coach: 'Coach'
-			};
-			return subTypeLabels[leg.groundTransitSubType] || 'Transit';
+			return getTransportSubTypeLabel(leg.groundTransitSubType);
 		}
-		
-		const labels: Record<string, string> = {
-			flight: 'Flight',
-			ground_transit: 'Transit',
-			car: 'Drive',
-			taxi: 'Taxi',
-			rideshare: 'Rideshare',
-			ferry: 'Ferry',
-			walking: 'Walk',
-			biking: 'Bike',
-			car_rental: 'Rental Car',
-			// Legacy modes (for backwards compatibility)
-			train: 'Train',
-			bus: 'Bus',
-			subway: 'Subway'
-		};
-		return labels[leg.mode] || 'Transport';
+		return getTransportModeLabel(leg.mode);
 	});
 
 	const priceDisplay = $derived.by(() => {
 		if (!leg.price) return null;
-		const symbol = leg.currency === 'EUR' ? '€' : leg.currency === 'JPY' ? '¥' : '$';
-		return `${symbol}${leg.price}`;
+		return `${getCurrencySymbol(leg.currency || '')}${leg.price}`;
 	});
 
 	const isFlight = $derived(leg.mode === 'flight');
@@ -137,8 +113,8 @@
 		leg.origin.timezone !== leg.destination.timezone
 	);
 
-	function openDirections() {
-		window.open(getDirectionsUrl(leg.origin, leg.destination, 'driving', mapApp), '_blank');
+	function handleOpenDirections() {
+		openDirections(leg.origin, leg.destination, 'driving', mapApp);
 	}
 
 	// Display helpers for car rental
@@ -275,8 +251,8 @@
 						<div class="detail-item">
 							<span class="detail-label">Cost</span>
 							<span class="detail-value">
-								{#if leg.currency === 'EUR'}€{:else if leg.currency === 'JPY'}¥{:else}${/if}{leg.dailyRate}/day × {rentalDays} days = 
-								<strong>{#if leg.currency === 'EUR'}€{:else if leg.currency === 'JPY'}¥{:else}${/if}{totalCost}</strong>
+								{getCurrencySymbol(leg.currency || '')}{leg.dailyRate}/day × {rentalDays} days = 
+								<strong>{getCurrencySymbol(leg.currency || '')}{totalCost}</strong>
 							</span>
 						</div>
 					{/if}
@@ -406,7 +382,7 @@
 			{/if}
 
 			{#if !isLongDistance}
-				<button type="button" class="directions-link" onclick={openDirections}>
+				<button type="button" class="directions-link" onclick={handleOpenDirections}>
 					Get directions
 				</button>
 			{/if}
@@ -416,44 +392,7 @@
 </div>
 
 <style>
-	.item-card {
-		position: relative;
-		background: color-mix(in oklch, var(--item-color, var(--color-kind-transport)), var(--item-bg-mix, white) var(--item-bg-mix-amount, 90%));
-		border-left: 4px solid var(--item-color, var(--color-kind-transport));
-		border-radius: var(--radius-md);
-		padding: var(--space-3);
-
-		&[data-kind='flight'] {
-			--item-color: var(--color-kind-flight);
-		}
-	}
-
-	.card-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: var(--space-2);
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: var(--item-color, var(--color-kind-transport));
-		color: var(--text-inverse);
-		border-radius: var(--radius-md);
-	}
-
-	.card-badges {
-		display: flex;
-		gap: var(--space-1);
-	}
-
 	.card-content {
-		display: flex;
-		flex-direction: column;
 		gap: var(--space-3);
 	}
 
@@ -466,7 +405,7 @@
 	.route-point {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.route-name {
@@ -475,15 +414,15 @@
 	}
 
 	.route-time {
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 	}
 
 	.timezone {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		color: var(--text-tertiary);
 		cursor: help;
 		padding: 1px 3px;
@@ -527,24 +466,10 @@
 
 	.route-duration {
 		background: var(--surface-primary);
-		padding: 2px 6px;
-		font-size: 0.75rem;
+		padding: var(--space-0-5) var(--space-1-5);
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		z-index: 1;
-	}
-
-	.card-details {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-
-	.meta-row {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		font-size: 0.875rem;
 	}
 
 	.flight-number,
@@ -557,25 +482,20 @@
 		color: var(--text-secondary);
 	}
 
-	.price {
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
 	.flight-details {
 		display: flex;
 		gap: var(--space-3);
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 	}
 
 	.booking-ref {
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 	}
 
 	.notes {
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--text-secondary);
 		font-style: italic;
 		padding: var(--space-2);
@@ -592,7 +512,7 @@
 		background: none;
 		border: none;
 		padding: 0;
-		font-size: 0.75rem;
+		font-size: var(--font-size-sm);
 		color: var(--color-primary);
 		cursor: pointer;
 		text-decoration: underline;
@@ -612,11 +532,11 @@
 	.primary-point {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.primary-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -635,7 +555,7 @@
 		color: var(--text-primary);
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: var(--space-1);
 	}
 
 	.secondary-point {
@@ -647,7 +567,7 @@
 	}
 
 	.secondary-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -673,11 +593,11 @@
 	.rental-location {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.rental-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -719,11 +639,11 @@
 	.detail-item {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-0-5);
 	}
 
 	.detail-label {
-		font-size: 0.625rem;
+		font-size: var(--font-size-xs);
 		font-weight: 500;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

@@ -7,6 +7,7 @@
 
 import type { Location } from '$lib/types/travel';
 import { cache, routingCacheKey } from '$lib/server/db/cache';
+import { logger } from '$lib/server/logger';
 
 export type TravelMode = 'driving' | 'walking' | 'bicycling' | 'transit';
 
@@ -150,7 +151,7 @@ export async function getRoute(from: Location, to: Location, mode: TravelMode): 
 		cache.set(cacheKey, result, 'ROUTING');
 		return result;
 	} catch (error) {
-		console.warn(`Route fetch failed for ${mode}, using estimate:`, error);
+		logger.warn('Routing', `Route fetch failed for ${mode}, using estimate:`, error);
 		const estimate = calculateEstimate(from, to, mode);
 		cache.set(cacheKey, estimate, 'ROUTING');
 		return estimate;
