@@ -312,7 +312,8 @@
 	.entry-fee-edit {
 		display: inline-flex;
 		align-items: center;
-		gap: var(--space-0-5);	}
+		gap: var(--space-0-5);
+	}
 
 	.currency-symbol {
 		color: var(--text-secondary);
